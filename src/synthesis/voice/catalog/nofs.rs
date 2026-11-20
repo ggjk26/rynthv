@@ -24,6 +24,8 @@ pub(super) fn entry(path: &Path) -> Result<VoiceCatalogEntry> {
         genres: Vec::new(),
         pitch_range: None,
         languages: Vec::new(),
+        styles: Vec::new(),
+        model_dependencies: Vec::new(),
         icon_path,
         availability: VoiceAvailability::Loadable,
     };
@@ -39,6 +41,7 @@ pub(super) fn entry(path: &Path) -> Result<VoiceCatalogEntry> {
             entry.display_name = configuration.name;
             entry.vendor = configuration.vendor;
             entry.languages = vec![configuration.default_language];
+            entry.styles = configuration.styles;
         }
         Err(error) => entry.availability = VoiceAvailability::Unsupported(error.to_string()),
     }
