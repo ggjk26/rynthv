@@ -55,9 +55,7 @@ pub(super) fn entry(path: &Path) -> Result<VoiceCatalogEntry> {
     };
     match metadata(path) {
         Ok(metadata) => {
-            let value = metadata.as_object().ok_or_else(|| VoiceError::new(
-                "Flat NOFS-JSON 根节点必须是 JSON 对象"
-            ))?;
+            let value = metadata.as_object().expect("validated JSON object");
             let string = |key: &str| value.get(key).and_then(Value::as_str);
             if let Some(name) = string("name").filter(|name| !name.is_empty()) {
                 result.display_name = name.to_owned();
@@ -109,9 +107,17 @@ fn metadata(path: &Path) -> Result<Value> {
     if !metadata.is_file() || metadata.len() > MAX_FLAT_METADATA {
         return Err(VoiceError::new("Flat JSON 文件大小超过 1 MiB 限制"));
     }
-    let bytes = fs::read(path)?;
+    let mut bytes = Vec::new();
+    File::open(path)?.take(MAX_FLAT_METADATA + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_FLAT_METADATA {
+        return Err(VoiceError::new("Flat JSON 文件在读取时超过 1 MiB 限制"));
+    }
     let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes);
-    serde_json::from_slice(bytes).map_err(|error| {
+    let value: Value = serde_json::from_slice(bytes).map_err(|error| {
         VoiceError::new(format!("Flat JSON 格式无效：{error}"))
-    })
+    })?;
+    if !value.is_object() {
+        return Err(VoiceError::new("Flat NOFS-JSON 根节点必须是 JSON 对象"));
+    }
+    Ok(value)
 }
