@@ -14,7 +14,7 @@ use mandarin::MandarinLexicon;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
 };
 
 /// Immutable resource dictionaries are loaded on first use of a language, not
@@ -26,10 +26,14 @@ pub struct LyricFrontend {
 }
 
 enum Lexicon {
-    Mandarin(MandarinLexicon),
-    Japanese(japanese::Japanese),
-    Dictionary(Dictionary),
+    Mandarin(Arc<MandarinLexicon>),
+    Japanese(Arc<japanese::Japanese>),
+    Dictionary(Arc<Dictionary>),
 }
+
+static BUILTIN_MANDARIN: OnceLock<Arc<MandarinLexicon>> = OnceLock::new();
+static BUILTIN_JAPANESE: OnceLock<Arc<japanese::Japanese>> = OnceLock::new();
+static BUILTIN_ENGLISH: OnceLock<Arc<Dictionary>> = OnceLock::new();
 
 impl LyricFrontend {
     pub fn new(
@@ -83,12 +87,21 @@ impl LyricFrontend {
             .get(&language)
             .ok_or_else(|| VoiceError::new(format!("当前声库不支持{}", language.label())))?
             .get_or_init(|| match (self.directory.as_deref(), language) {
-                (Some(directory), Language::Mandarin) => MandarinLexicon::load(directory).map(Lexicon::Mandarin),
-                (Some(directory), Language::Japanese) => japanese::Japanese::load(directory).map(Lexicon::Japanese),
-                (Some(directory), language) => Dictionary::load(directory, language).map(Lexicon::Dictionary),
-                (None, Language::Mandarin) => Ok(Lexicon::Mandarin(MandarinLexicon::builtin())),
-                (None, Language::Japanese) => Ok(Lexicon::Japanese(japanese::Japanese::builtin())),
-                (None, Language::English) => Ok(Lexicon::Dictionary(Dictionary::builtin_english())),
+                (Some(directory), Language::Mandarin) =>
+                    MandarinLexicon::load(directory).map(Arc::new).map(Lexicon::Mandarin),
+                (Some(directory), Language::Japanese) =>
+                    japanese::Japanese::load(directory).map(Arc::new).map(Lexicon::Japanese),
+                (Some(directory), language) =>
+                    Dictionary::load(directory, language).map(Arc::new).map(Lexicon::Dictionary),
+                (None, Language::Mandarin) => Ok(Lexicon::Mandarin(Arc::clone(
+                    BUILTIN_MANDARIN.get_or_init(|| Arc::new(MandarinLexicon::builtin()))
+                ))),
+                (None, Language::Japanese) => Ok(Lexicon::Japanese(Arc::clone(
+                    BUILTIN_JAPANESE.get_or_init(|| Arc::new(japanese::Japanese::builtin()))
+                ))),
+                (None, Language::English) => Ok(Lexicon::Dictionary(Arc::clone(
+                    BUILTIN_ENGLISH.get_or_init(|| Arc::new(Dictionary::builtin_english()))
+                ))),
                 (None, language) => Err(VoiceError::new(format!(
                     "{}尚无内置字词词典，请指定 clf-data 词典目录或为音符输入显式音素",
                     language.label()
