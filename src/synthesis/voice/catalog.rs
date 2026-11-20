@@ -1,6 +1,7 @@
 //! Lightweight discovery of installed voice revisions, without loading model weights.
 
 mod dnni;
+pub(super) mod flat;
 mod metadata;
 mod nofs;
 mod resource;
@@ -56,11 +57,11 @@ impl VoiceCatalog {
     pub fn scan(root: &Path) -> Result<Self> {
         let mut catalog = Self::default();
         if super::nofs::is_file(root) {
-            catalog.entries.push(nofs::entry(root)?);
+            catalog.entries.push(entry_nofs(root)?);
             return Ok(catalog);
         }
         for path in super::nofs::paths(root)? {
-            catalog.entries.push(nofs::entry(&path)?);
+            catalog.entries.push(entry_nofs(&path)?);
         }
         let metadata = MetadataIndex::load(root);
         for database in fs::read_dir(root)? {
@@ -75,13 +76,32 @@ impl VoiceCatalog {
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
                     for path in paths {
-                        catalog.entries.push(nofs::entry(&path)?);
+                        catalog.entries.push(entry_nofs(&path)?);
                     }
                 }
                 Err(error) => catalog.warnings.push(format!(
                     "无法读取声库目录 {}：{error}",
                     database.path().display()
                 )),
+            }
+            // Flat managers may install a voice in a revision subdirectory,
+            // while SV2 uses the same nesting for DNNI files.
+            for revision in fs::read_dir(database.path())? {
+                let revision = revision?;
+                if !revision.file_type()?.is_dir() {
+                    continue;
+                }
+                match super::nofs::paths(&revision.path()) {
+                    Ok(paths) => {
+                        for path in paths {
+                            catalog.entries.push(entry_nofs(&path)?);
+                        }
+                    }
+                    Err(error) => catalog.warnings.push(format!(
+                        "无法读取声库版本目录 {}：{error}",
+                        revision.path().display()
+                    )),
+                }
             }
         }
         let mut counts = std::collections::BTreeMap::new();
@@ -104,5 +124,14 @@ impl VoiceCatalog {
                 .then_with(|| right.revision.cmp(&left.revision))
         });
         Ok(catalog)
+    }
+}
+
+
+fn entry_nofs(path: &Path) -> Result<VoiceCatalogEntry> {
+    if flat::is_flat(path) {
+        flat::entry(path)
+    } else {
+        nofs::entry(path)
     }
 }
