@@ -88,6 +88,7 @@ impl LyricFrontend {
                 (Some(directory), language) => Dictionary::load(directory, language).map(Lexicon::Dictionary),
                 (None, Language::Mandarin) => Ok(Lexicon::Mandarin(MandarinLexicon::builtin())),
                 (None, Language::Japanese) => Ok(Lexicon::Japanese(japanese::Japanese::builtin())),
+                (None, Language::English) => Ok(Lexicon::Dictionary(Dictionary::builtin_english())),
                 (None, language) => Err(VoiceError::new(format!(
                     "{}尚无内置字词词典，请指定 clf-data 词典目录或为音符输入显式音素",
                     language.label()
