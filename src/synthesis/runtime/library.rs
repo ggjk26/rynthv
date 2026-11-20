@@ -210,6 +210,13 @@ impl Runtime {
             self.clear_voices();
         }
     }
+    pub fn use_builtin_dictionaries(&mut self) {
+        let mut settings = self.library.settings.clone();
+        settings.dictionaries = None;
+        if self.library.update(settings) {
+            self.clear_voices();
+        }
+    }
     pub fn rescan_voices(&mut self) {
         self.clear_voices();
         self.library.rescan(self.repaint.clone());
