@@ -51,7 +51,6 @@ fn inspect() -> Result<(), String> {
             "manifest": FlatManifest::open(&path).map_err(|error| error.to_string())?,
         })
     } else if file_name_is(&path, "info.nofs")
-        && path.parent().is_some_and(|dir| dir.join("config.json").is_file())
         && !is_json(&path)
     {
         json!({
