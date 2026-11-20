@@ -33,11 +33,25 @@ cargo build --release --locked --bins
 
 ## 声库与配置
 
-首次使用需要在设置中指定声库目录。**普通话（常用字、拼音）及日语（假名、罗马音）已有内置发音表**，不再强制要求指定外部 `clf-data` 路径。外部词典目录仍可手动指定，供其他语言使用或覆盖内置资源。工程中的自定义发音词典和音符显式音素仍优先于自动推导。
+首次使用需要在设置中指定声库目录。**普通话（常用字、拼音）、日语（假名、罗马音）和英语（CMUdict）已有内置发音表**，不再强制要求指定外部 `clf-data` 路径。外部词典目录仍可手动指定，供其他语言使用，或覆盖内置资源。工程中的自定义发音词典和音符显式音素仍优先于自动推导。
 
-普通话内置常用字读音取自 `mozillazg/pinyin-data` 的《通用规范汉字表》数据（MIT 许可，参见 `licenses/pinyin-data-MIT.txt`）；部分多音词可在工程词典里指定准确读音。日语内置资源支持常见假名及罗马音，但**不包含汉字自动注音**，需要外部 EDICT 或显式音素。内置音素映射尚需用实际声库核对，遇到未覆盖音素会报错而非静默替代。
+普通话内置常用字读音取自 `mozillazg/pinyin-data` 的《通用规范汉字表》数据（MIT 许可，参见 `licenses/pinyin-data-MIT.txt`）；部分多音词可在工程词典里指定准确读音。英文词典来自 CMU Pronouncing Dictionary，保留未编号的主读音，许可证见 licenses/cmudict-license.txt。日语内置资源支持常见假名及罗马音，但**不包含汉字自动注音**，需要外部 EDICT 或显式音素。内置音素映射尚需用实际声库核对，遇到未覆盖音素会报错而非静默替代。
 
-声库列表现在能**识别 SV Flat 的纯文本 NOFS-JSON**，展示名称、厂商、语言、版本和模型引用缺失情况。Flat 声库依赖独立的 `base_model` / `sing_model` / `timing_model` / `f0_model` 等资源；当前仅完成元数据识别与检查，**尚不能使用 Flat 声库合成或试听**。Flat 的 `.sfpk` 安装包解包及模型推理仍需后续适配。为防误用，这些声库在列表中标为“不可用”，且不会按 SV1 NOFS 解析。
+声库列表现在能识别 SV Flat 的纯文本 NOFS-JSON，也支持识别相邻 config.json + info.nofs 的安装清单。设置中可单独选择 Flat 声库目录、Flat 模型目录（后者仅供依赖扫描）。目前可以读取元数据、唱法、部分 Float32 音色/音高/时长向量与模型标识，但模型文件存在并不代表引擎支持推理。
+
+**重要：SV Flat 目前只有只读识别与诊断功能，不能合成/试听/导出。** .sfpk 安装包解包和 Flat 原生合成模型加载尚未实现，识别到的 Flat 声库会明确显示为不可用，不会误当作 SV1 声库加载。
+
+### SV Flat 命令行诊断
+
+命令可用于检查原始 JSON NOFS、解包后配套 config.json 的 info.nofs，以及声库目录：
+
+```powershell
+cargo run --release --locked --bin rynthv-flat-inspect -- "D:\FlatVoice\voice.nofs" --models "D:\FlatModels"
+cargo run --release --locked --bin rynthv-flat-inspect -- "D:\FlatVoice\info.nofs"
+cargo run --release --locked --bin rynthv-flat-inspect -- "D:\FlatDatabases"
+```
+
+此命令不会解密模型或生成音频。用于模型格式适配前的元数据与资源诊断。
 
 程序仍不自动探测模型目录，不附带商业声库或用户模型上下文。
 
@@ -45,7 +59,7 @@ cargo build --release --locked --bins
 | --- | --- | --- |
 | 一代声库 | 支持 | 支持 |
 | 二代声库 | 需要导入模型上下文 | 需要导入模型上下文 |
-| SV Flat（NOFS-JSON） | 仅元数据识别，尚不可合成 | 仅元数据识别，尚不可合成 |
+| SV Flat（NOFS-JSON / 清单） | 只读诊断，尚不可合成 | 只读诊断，尚不可合成 |
 
 配置目录：Windows 为 `%LOCALAPPDATA%/RynthV`，Linux 为 `$XDG_CONFIG_HOME/RynthV`（未设置时为 `$HOME/.config/RynthV`）。模型上下文在 Windows 保存在 `%APPDATA%/RynthV/context.json`，Linux 保存在上述配置目录的 `context.json`。
 
