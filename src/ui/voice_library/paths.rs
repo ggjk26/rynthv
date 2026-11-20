@@ -42,7 +42,7 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
         choose_flat_models(app);
     }
     ui.add_space(8.0);
-    text(ui, "可选外部发音词典（不设置则使用内置普通话 / 日语词典）");
+    text(ui, "可选外部发音词典（不设置则使用内置普通话 / 日语 / 英语词典）");
     path_label(ui, app.synthesis.dictionaries());
     ui.horizontal(|ui| {
         if ui.button("选择词典目录…").clicked() {
@@ -59,7 +59,7 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
     }
     weak(
         ui,
-        "声库目录需要手动选择；普通话和日语词典随程序提供，其他语言需外部词典或显式音素。",
+        "声库目录需要手动选择；普通话、日语和英语词典随程序提供，其他语言需外部词典或显式音素。",
     );
 }
 
