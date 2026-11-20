@@ -20,6 +20,8 @@ pub struct VoiceSelection {
 pub struct SynthesisSettings {
     pub databases: Option<PathBuf>,
     pub sv1_databases: Option<PathBuf>,
+    pub flat_databases: Option<PathBuf>,
+    pub flat_models: Option<PathBuf>,
     pub dictionaries: Option<PathBuf>,
     pub selected_voice: Option<VoiceSelection>,
 }
@@ -29,13 +31,14 @@ impl SynthesisSettings {
         [
             ("SV2", self.databases.as_deref()),
             ("SV1", self.sv1_databases.as_deref()),
+            ("SV Flat", self.flat_databases.as_deref()),
         ]
         .into_iter()
         .filter_map(|(label, path)| path.map(|path| (label, path)))
     }
 
     pub fn has_databases(&self) -> bool {
-        self.databases.is_some() || self.sv1_databases.is_some()
+        self.databases.is_some() || self.sv1_databases.is_some() || self.flat_databases.is_some()
     }
 
     pub fn path() -> Result<PathBuf, String> {
@@ -90,7 +93,7 @@ impl SynthesisSettings {
         let mut directories = Vec::new();
         let mut errors = Vec::new();
         for (label, root) in self.database_roots() {
-            match VoiceCatalog::scan(root) {
+            match VoiceCatalog::scan_with_models(root, self.flat_models.as_deref()) {
                 Ok(catalog) => {
                     directories.extend(catalog.entries.into_iter().filter_map(|entry| {
                         (entry.database_id == selected.database_id
