@@ -47,6 +47,8 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
         genres: Vec::new(),
         pitch_range: None,
         languages: Vec::new(),
+        styles: Vec::new(),
+        model_dependencies: Vec::new(),
         icon_path,
         availability: VoiceAvailability::Unsupported(
             "SV Flat 声库尚不支持合成".to_owned()
@@ -59,7 +61,11 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                 entry.display_name = voice.name;
                 entry.vendor = voice.vendor;
                 entry.languages = voice.supported_languages;
-                entry.genres.push(format!("{} 个唱法", voice.styles.len()));
+                entry.styles = voice.styles.iter().map(|style| style.name.clone()).collect();
+                entry.model_dependencies = voice.models.iter()
+                    .map(|model| format!("{}：{}{}", model.role, model.id,
+                        if model.installed { "（已找到文件）" } else { "（未验证）" }))
+                    .collect();
                 let installed = voice.models.iter().filter(|item| item.installed).count();
                 let checks = if let Some(root) = model_root {
                     format!("模型检查 {installed}/{}（{}）", voice.models.len(), root.display())
@@ -86,6 +92,9 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                 entry.revision = revision(&manifest.version);
                 entry.display_name = manifest.name;
                 entry.languages = manifest.phonesets;
+                entry.model_dependencies = manifest.model_ids.iter().enumerate()
+                    .map(|(i, id)| format!("{}：{}", manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown"), id))
+                    .collect();
                 entry.availability = VoiceAvailability::Unsupported(format!(
                     "Flat SFPK 安装清单 v{}：{} 个模型记录。{}。info.nofs 二进制格式未解码；暂不能试听/导出",
                     manifest.version, manifest.model_ids.len(), manifest.notes.join("；")
