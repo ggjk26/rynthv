@@ -55,6 +55,20 @@ impl PhoneTable {
         Ok(table)
     }
 
+    /// Insert a bundled phonetic syllable (not a user override).
+    pub(super) fn insert_reading(&mut self, key: &str, phones: &str) {
+        let key = key.to_lowercase();
+        let tokens = phones.split_whitespace().map(str::to_owned).collect::<Vec<_>>();
+        if tokens.is_empty() {
+            return;
+        }
+        self.max_key_bytes = self.max_key_bytes.max(key.len());
+        let alternatives = self.entries.entry(key).or_default();
+        if !alternatives.contains(&tokens) {
+            alternatives.push(tokens);
+        }
+    }
+
     pub(super) fn contains(&self, key: &str) -> bool {
         self.entries.contains_key(key)
     }
