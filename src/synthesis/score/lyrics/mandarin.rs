@@ -61,6 +61,47 @@ impl MandarinLexicon {
         })
     }
 
+
+    /// Offline dictionary of common Hanzi readings. Single-character readings
+    /// are supplemented by a short list of context-sensitive polyphonic words.
+    /// Unknown readings remain errors instead of silently choosing bad phones.
+    pub fn builtin() -> Self {
+        const DATA: &str = include_str!("mandarin/kMandarin_8105.txt");
+        let pinyin = pinyin::Pinyin::builtin(DATA);
+        let mut words = HashMap::new();
+        for line in DATA.lines() {
+            let Some((code, reading)) = line.split_once(": ") else {
+                continue;
+            };
+            let Some(character) = code.strip_prefix("U+")
+                .and_then(|code| u32::from_str_radix(code, 16).ok())
+                .and_then(char::from_u32)
+            else {
+                continue;
+            };
+            let spelling = reading.split('#').next().unwrap_or_default()
+                .trim().split(',').next().unwrap_or_default().trim();
+            if pinyin.syllable(spelling).is_ok() {
+                words.insert(character.to_string(), vec![vec![spelling.to_owned()]]);
+            }
+        }
+        for (word, pinyin_text) in [
+            ("音乐", "yin yue"), ("快乐", "kuai le"), ("银行", "yin hang"),
+            ("重庆", "chong qing"), ("长大", "zhang da"),
+            ("重量", "zhong liang"), ("重要", "zhong yao"),
+            ("成长", "cheng zhang"), ("重新", "chong xin"),
+            ("行走", "xing zou"), ("睡觉", "shui jiao"),
+            ("了解", "liao jie"), ("便宜", "pian yi"),
+            ("朝阳", "zhao yang"), ("结果", "jie guo"),
+        ] {
+            let syllables: Vec<String> = pinyin_text.split_whitespace().map(str::to_owned).collect();
+            if syllables.iter().all(|syllable| pinyin.syllable(syllable).is_ok()) {
+                words.insert(word.to_owned(), vec![syllables]);
+            }
+        }
+        Self { pinyin, words, longest_word: 2 }
+    }
+
     /// Returns one phoneme list per syllable, preserving lyric order.
     pub fn resolve(&self, lyrics: &str) -> Result<Vec<Vec<String>>> {
         let lyrics = lyrics.trim();
