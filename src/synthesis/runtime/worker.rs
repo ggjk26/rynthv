@@ -97,7 +97,7 @@ pub(super) struct Worker {
 impl Worker {
     pub fn spawn(
         path: PathBuf,
-        dictionaries: PathBuf,
+        dictionaries: Option<PathBuf>,
         repaint: eframe::egui::Context,
     ) -> Result<Self, String> {
         let (tx, commands) = mpsc::channel();

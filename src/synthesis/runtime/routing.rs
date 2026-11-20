@@ -85,13 +85,16 @@ impl Runtime {
             }
             let worker = (|| {
                 let entry = self.library.entry(&key).ok_or("声库不在当前目录中")?;
-                let dictionaries = self
-                    .dictionaries()
-                    .filter(|p| p.is_dir())
-                    .ok_or("请设置有效的 clf-data 词典目录")?;
+                let dictionaries = self.dictionaries().map(|path| {
+                    if path.is_dir() {
+                        Ok(path.to_owned())
+                    } else {
+                        Err(format!("配置的词典目录无效：{}", path.display()))
+                    }
+                }).transpose()?;
                 worker::Worker::spawn(
                     entry.directory.clone(),
-                    dictionaries.to_owned(),
+                    dictionaries,
                     self.repaint.clone(),
                 )
             })();

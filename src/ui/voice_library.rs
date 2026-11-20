@@ -26,6 +26,9 @@ fn selected_entry(app: &App) -> Option<&VoiceCatalogEntry> {
 }
 
 fn family_name(entry: &VoiceCatalogEntry) -> &'static str {
+    if entry.database_id.starts_with("svflat:") {
+        return "SV Flat · NOFS-JSON";
+    }
     match entry.family {
         Some(VoiceFamily::Sv1) => "SV1 原生",
         Some(VoiceFamily::Sv2Compatible) => "SV2 · 版本 1 兼容",

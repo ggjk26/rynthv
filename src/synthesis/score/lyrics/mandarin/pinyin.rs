@@ -44,6 +44,32 @@ impl Pinyin {
         })
     }
 
+
+    /// Offline mappings are admitted only for syllables found in the bundled Hanzi data.
+    pub(super) fn builtin(source: &str) -> Self {
+        let mut entries = HashMap::new();
+        let mut max_key_bytes = 0;
+        for line in source.lines() {
+            let Some((_, reading)) = line.split_once(": ") else {
+                continue;
+            };
+            let spelling = reading
+                .split('#').next().unwrap_or_default().trim()
+                .split(',').next().unwrap_or_default().trim();
+            let Some(mut key) = normalize(spelling) else {
+                continue;
+            };
+            if key.ends_with(['0', '1', '2', '3', '4', '5']) {
+                key.pop();
+            }
+            if let Some(phones) = builtin_phonemes(&key) {
+                max_key_bytes = max_key_bytes.max(key.len());
+                entries.entry(key).or_insert(phones);
+            }
+        }
+        Self { entries, max_key_bytes }
+    }
+
     pub fn syllable(&self, text: &str) -> Result<Vec<String>> {
         let mut key = normalize(text).ok_or_else(|| super::unknown(text))?;
         if key.ends_with(['0', '1', '2', '3', '4', '5']) {
@@ -112,4 +138,64 @@ fn normalize(text: &str) -> Option<String> {
         });
     }
     (!key.is_empty()).then_some(key)
+}
+
+
+/// Pinyin uses a fixed, known SV Mandarin X-SAMPA inventory.
+fn builtin_phonemes(spelling: &str) -> Option<Vec<String>> {
+    let rewritten = match spelling {
+        "yi" => "i", "ya" => "ia", "yao" => "iao", "ye" => "ie",
+        "you" => "iu", "yan" => "ian", "yang" => "iang",
+        "yin" => "in", "ying" => "ing", "yong" => "iong",
+        "yu" => "v", "yue" => "ve", "yuan" => "van", "yun" => "vn",
+        "wu" => "u", "wa" => "ua", "wai" => "uai", "wan" => "uan",
+        "wang" => "uang", "wei" => "ui", "wen" => "un",
+        "weng" => "ueng", "wo" => "uo",
+        _ => spelling,
+    };
+    let (initial, mut final_spelling) = [
+        ("zh", r"ts`"), ("ch", r"ts`h"), ("sh", r"s`"),
+        ("b", "p"), ("p", "ph"), ("m", "m"), ("f", "f"),
+        ("d", "t"), ("t", "th"), ("n", "n"), ("l", "l"),
+        ("g", "k"), ("k", "kh"), ("h", "x"),
+        ("j", r"ts\"), ("q", r"ts\h"), ("x", r"s\"),
+        ("r", r"z`"), ("z", "ts"), ("c", "tsh"), ("s", "s"),
+    ]
+    .into_iter()
+    .find_map(|(pinyin, phone)| rewritten.strip_prefix(pinyin).map(|rest| (phone, rest)))
+    .unwrap_or(("", rewritten));
+    if matches!(initial, r"ts`" | r"ts`h" | r"s`" | r"z`") && final_spelling == "i" {
+        final_spelling = "retroflex-i";
+    } else if matches!(initial, "ts" | "tsh" | "s") && final_spelling == "i" {
+        final_spelling = "apical-i";
+    } else if matches!(initial, r"ts\" | r"ts\h" | r"s\") {
+        final_spelling = match final_spelling {
+            "u" => "v", "ue" => "ve", "uan" => "van", "un" => "vn",
+            other => other,
+        };
+    }
+    let final_phones = match final_spelling {
+        "a" => "a", "o" => "o", "e" => "7", "i" => "i",
+        "u" => "u", "v" => "y",
+        "retroflex-i" => "i`", "apical-i" => r"i\",
+        "ai" => r"a :\i", "ei" => r"e :\i",
+        "ao" => "AU", "ou" => "@U",
+        "an" => "a :n", "en" => "@ :n",
+        "ang" => "A N", "eng" => "@ N", "ong" => "U N",
+        "ia" => "ia", "ie" => "ie", "iao" => "iAU", "iu" => "i@U",
+        "ian" => "iE :n", "in" => "i :n",
+        "iang" => "iA N", "ing" => "i N", "iong" => "iU N",
+        "ua" => "ua", "uo" => "uo", "uai" => r"ua :\i",
+        "ui" => r"ue :\i", "uan" => "ua :n", "un" => "u@ :n",
+        "uang" => "uA N", "ueng" => "u@ N",
+        "ve" => "yE", "van" => "y{ :n", "vn" => "yE :n",
+        "er" => "a r\\`",
+        _ => return None,
+    };
+    Some(
+        initial.split_whitespace()
+            .chain(final_phones.split_whitespace())
+            .filter(|phone| !phone.is_empty())
+            .map(str::to_owned).collect(),
+    )
 }

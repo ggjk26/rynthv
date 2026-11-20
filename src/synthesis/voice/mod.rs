@@ -9,6 +9,7 @@ mod config;
 mod duration_frontend;
 pub(crate) mod embedded;
 mod family;
+pub mod flat;
 mod format;
 mod inventory;
 mod nofs;

@@ -39,6 +39,8 @@ pub(super) fn scan(
             genres: Vec::new(),
             pitch_range: None,
             languages: Vec::new(),
+            styles: Vec::new(),
+            model_dependencies: Vec::new(),
             icon_path: None,
             availability: VoiceAvailability::Loadable,
         };

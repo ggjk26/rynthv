@@ -27,7 +27,7 @@ fn scan_roots(settings: &SynthesisSettings) -> LibraryScan {
     let mut catalog = VoiceCatalog::default();
     let mut errors = Vec::new();
     for (label, root) in settings.database_roots() {
-        match VoiceCatalog::scan(root) {
+        match VoiceCatalog::scan_with_models(root, settings.flat_models.as_deref()) {
             Ok(found) => {
                 catalog.entries.extend(found.entries);
                 catalog.warnings.extend(
@@ -203,9 +203,30 @@ impl Runtime {
             self.rescan_voices();
         }
     }
+    pub fn set_flat_databases(&mut self, path: PathBuf) {
+        let mut settings = self.library.settings.clone();
+        settings.flat_databases = Some(path);
+        if self.library.update(settings) {
+            self.rescan_voices();
+        }
+    }
+    pub fn set_flat_models(&mut self, path: PathBuf) {
+        let mut settings = self.library.settings.clone();
+        settings.flat_models = Some(path);
+        if self.library.update(settings) {
+            self.rescan_voices();
+        }
+    }
     pub fn set_dictionaries(&mut self, path: PathBuf) {
         let mut settings = self.library.settings.clone();
         settings.dictionaries = Some(path);
+        if self.library.update(settings) {
+            self.clear_voices();
+        }
+    }
+    pub fn use_builtin_dictionaries(&mut self) {
+        let mut settings = self.library.settings.clone();
+        settings.dictionaries = None;
         if self.library.update(settings) {
             self.clear_voices();
         }

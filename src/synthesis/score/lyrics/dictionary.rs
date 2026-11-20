@@ -55,6 +55,20 @@ impl PhoneTable {
         Ok(table)
     }
 
+    /// Insert a bundled phonetic syllable (not a user override).
+    pub(super) fn insert_reading(&mut self, key: &str, phones: &str) {
+        let key = key.to_lowercase();
+        let tokens = phones.split_whitespace().map(str::to_owned).collect::<Vec<_>>();
+        if tokens.is_empty() {
+            return;
+        }
+        self.max_key_bytes = self.max_key_bytes.max(key.len());
+        let alternatives = self.entries.entry(key).or_default();
+        if !alternatives.contains(&tokens) {
+            alternatives.push(tokens);
+        }
+    }
+
     pub(super) fn contains(&self, key: &str) -> bool {
         self.entries.contains_key(key)
     }
@@ -109,6 +123,37 @@ pub(super) struct Dictionary {
 }
 
 impl Dictionary {
+    /// Bundled CMU Pronouncing Dictionary; the unnumbered base pronunciation
+    /// is kept, and numbered alternative pronunciations are omitted in the
+    /// packaged data. Explicit note phonemes can override any reading.
+    pub(super) fn builtin_english() -> Self {
+        let mut phones = PhoneTable::default();
+        for line in include_str!("cmudict.dict").lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let Some(key) = parts.next() else {
+                continue;
+            };
+            let reading = parts.map(|phone| {
+                phone.trim_end_matches(['0', '1', '2']).to_lowercase()
+            }).collect::<Vec<_>>().join(" ");
+            phones.insert_reading(key, &reading);
+        }
+        let nuclei = [
+            "aa", "ae", "ah", "ao", "aw", "ax", "ay", "eh",
+            "er", "ey", "ih", "iy", "ow", "oy", "uh", "uw",
+        ].into_iter().map(str::to_owned).collect();
+        Self {
+            language: Language::English,
+            phones,
+            words: WordReadings::default(),
+            nuclei,
+        }
+    }
+
     pub(super) fn load(directory: &Path, language: Language) -> Result<Self> {
         let english = language == Language::English;
         let name = if english {

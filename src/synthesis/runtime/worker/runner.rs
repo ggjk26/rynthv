@@ -24,7 +24,7 @@ use std::{
 
 pub(super) fn run(
     path: PathBuf,
-    dictionaries: PathBuf,
+    dictionaries: Option<PathBuf>,
     commands: Receiver<Command>,
     events: Events,
     alive: Arc<AtomicBool>,
@@ -72,7 +72,7 @@ pub(super) fn run(
         .ok_or_else(|| VoiceError::new("声库缺少语言配置"))
         .and_then(|config| {
             LyricFrontend::new(
-                &dictionaries,
+                dictionaries.as_deref(),
                 &config.default_language,
                 &config.supported_languages,
             )

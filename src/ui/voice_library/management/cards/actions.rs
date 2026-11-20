@@ -1,4 +1,4 @@
-use super::super::{super::paths, ACCENT, CARD, SURFACE, State, catalog};
+use super::super::{ACCENT, CARD, SURFACE, State, catalog};
 use crate::{
     app::App,
     synthesis::{
@@ -25,7 +25,6 @@ pub(super) fn primary(
     let problem =
         matches!(voice, VoiceState::Loaded(_)) && app.synthesis.voice_error(&key).is_some();
     let loaded = matches!(voice, VoiceState::Loaded(_)) && !problem;
-    let missing_dictionary = app.synthesis.dictionaries().is_none();
     let label = if !entry.availability.is_loadable() {
         "不可用"
     } else if current && loading {
@@ -38,8 +37,6 @@ pub(super) fn primary(
         "取消当前音轨歌声"
     } else if loaded {
         "用于当前音轨"
-    } else if missing_dictionary {
-        "设置词典目录"
     } else if current && matches!(voice, VoiceState::Failed(_)) {
         "重试加载"
     } else {
@@ -51,7 +48,7 @@ pub(super) fn primary(
         && !app.editor.current_track().is_instrumental()
         && !app.synthesis.library.is_scanning()
         && app.synthesis.library.settings_error().is_none();
-    let outline = loaded || problem || missing_dictionary;
+    let outline = loaded || problem;
     let button = Button::new(RichText::new(label).size(13.0).color(if !enabled {
         MUTED
     } else if outline {
@@ -72,8 +69,6 @@ pub(super) fn primary(
             state.expanded = Some(entry.database_id.clone());
         } else if current && loaded {
             app.unload_voice();
-        } else if missing_dictionary {
-            paths::choose_dictionaries(app);
         } else if current {
             app.reload_voice();
         } else {
