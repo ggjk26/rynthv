@@ -159,6 +159,11 @@ impl VoiceInventory {
     /// the model loader, resolves a database root and its installed revisions.
     pub fn load(directory: &Path) -> Result<Self> {
         if super::nofs::is_file(directory) {
+            if super::catalog::flat::is_flat(directory) {
+                return Err(VoiceError::new(
+                    "SV Flat NOFS-JSON 仅包含声库配置与模型引用；尚未实现 Flat 基础模型推理，无法直接加载合成"
+                ));
+            }
             return nofs::load(directory);
         }
         let nofs_files = super::nofs::paths(directory)?;
