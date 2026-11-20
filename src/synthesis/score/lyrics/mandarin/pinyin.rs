@@ -189,7 +189,7 @@ fn builtin_phonemes(spelling: &str) -> Option<Vec<String>> {
         "ui" => r"ue :\i", "uan" => "ua :n", "un" => "u@ :n",
         "uang" => "uA N", "ueng" => "u@ N",
         "ve" => "yE", "van" => "y{ :n", "vn" => "yE :n",
-        "er" => r"a r\",
+        "er" => "a r\\`",
         _ => return None,
     };
     Some(
