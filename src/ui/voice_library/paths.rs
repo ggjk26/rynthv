@@ -24,10 +24,22 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
         }
     });
     ui.add_space(8.0);
-    text(ui, "SV1 / SV Flat 声库目录（支持已解包的 .nofs 元数据）");
+    text(ui, "SV1 原生声库根目录");
     path_label(ui, app.synthesis.library.settings.sv1_databases.as_deref());
     if ui.button("选择 SV1 databases…").clicked() {
         choose_sv1_databases(app);
+    }
+    ui.add_space(8.0);
+    text(ui, "SV Flat 声库根目录（已解包的 NOFS-JSON 或 info.nofs）");
+    path_label(ui, app.synthesis.library.settings.flat_databases.as_deref());
+    if ui.button("选择 Flat databases…").clicked() {
+        choose_flat_databases(app);
+    }
+    ui.add_space(8.0);
+    text(ui, "Flat 模型根目录（可选，仅用于依赖扫描）");
+    path_label(ui, app.synthesis.library.settings.flat_models.as_deref());
+    if ui.button("选择 Flat models…").clicked() {
+        choose_flat_models(app);
     }
     ui.add_space(8.0);
     text(ui, "可选外部发音词典（不设置则使用内置普通话 / 日语词典）");
@@ -67,6 +79,22 @@ pub(super) fn choose_sv1_databases(app: &mut App) {
     }
 }
 
+pub(super) fn choose_flat_databases(app: &mut App) {
+    if let Some(path) =
+        folder_dialog(app.synthesis.library.settings.flat_databases.as_deref()).pick_folder()
+    {
+        app.synthesis.set_flat_databases(path);
+    }
+}
+
+pub(super) fn choose_flat_models(app: &mut App) {
+    if let Some(path) =
+        folder_dialog(app.synthesis.library.settings.flat_models.as_deref()).pick_folder()
+    {
+        app.synthesis.set_flat_models(path);
+    }
+}
+
 pub(super) fn directory_menu(app: &mut App, ui: &mut Ui) {
     if ui.button("SV2 声库目录…").clicked() {
         ui.close();
@@ -75,6 +103,10 @@ pub(super) fn directory_menu(app: &mut App, ui: &mut Ui) {
     if ui.button("SV1 原生声库目录…").clicked() {
         ui.close();
         choose_sv1_databases(app);
+    }
+    if ui.button("SV Flat 声库目录…").clicked() {
+        ui.close();
+        choose_flat_databases(app);
     }
 }
 
@@ -87,7 +119,7 @@ pub(super) fn choose_dictionaries(app: &mut App) {
 fn path_label(ui: &mut Ui, path: Option<&Path>) {
     match path {
         Some(path) => weak(ui, path.display().to_string()),
-        None => weak(ui, "未指定（词典使用内置资源）"),
+        None => weak(ui, "未指定"),
     }
 }
 
