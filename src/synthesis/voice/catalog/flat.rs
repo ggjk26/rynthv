@@ -24,10 +24,9 @@ pub(in crate::synthesis::voice) fn is_flat(path: &Path) -> bool {
         .find(|byte| !byte.is_ascii_whitespace()) == Some(b'{')
 }
 
-/// A binary info.nofs accompanied by a Flat config.json is not SV1 native NOFS.
+/// Flat info.nofs is a Flat container even if its package manifest is absent.
 pub(in crate::synthesis::voice) fn is_flat_package(path: &Path) -> bool {
     path.file_name().is_some_and(|name| name.eq_ignore_ascii_case("info.nofs"))
-        && path.parent().is_some_and(|dir| dir.join("config.json").is_file())
 }
 
 pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatalogEntry> {
