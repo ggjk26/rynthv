@@ -188,6 +188,11 @@ impl VoiceInventory {
                     "目录同时包含 SV1 与 SV2 模型，请选择明确的声库文件或版本目录",
                 ));
             }
+            if super::catalog::flat::is_flat(&nofs_files[0]) {
+                return Err(VoiceError::new(
+                    "SV Flat NOFS-JSON 已识别；必须实现其外部基础模型推理才能合成"
+                ));
+            }
             return nofs::load(&nofs_files[0]);
         }
         let context = FormatContext::dnni_v3();
