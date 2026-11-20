@@ -32,9 +32,16 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
     ui.add_space(8.0);
     text(ui, "可选外部发音词典（不设置则使用内置普通话 / 日语词典）");
     path_label(ui, app.synthesis.dictionaries());
-    if ui.button("选择词典目录…").clicked() {
-        choose_dictionaries(app);
-    }
+    ui.horizontal(|ui| {
+        if ui.button("选择词典目录…").clicked() {
+            choose_dictionaries(app);
+        }
+        if app.synthesis.dictionaries().is_some()
+            && ui.button("恢复内置词典").clicked()
+        {
+            app.synthesis.use_builtin_dictionaries();
+        }
+    });
     if let Some(error) = app.synthesis.library.settings_error() {
         error_label(ui, error);
     }
