@@ -41,6 +41,8 @@ pub struct VoiceCatalogEntry {
     pub genres: Vec<String>,
     pub pitch_range: Option<String>,
     pub languages: Vec<String>,
+    pub styles: Vec<String>,
+    pub model_dependencies: Vec<String>,
     pub icon_path: Option<PathBuf>,
     pub availability: VoiceAvailability,
 }
