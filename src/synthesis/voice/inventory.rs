@@ -159,7 +159,8 @@ impl VoiceInventory {
     /// the model loader, resolves a database root and its installed revisions.
     pub fn load(directory: &Path) -> Result<Self> {
         if super::nofs::is_file(directory) {
-            if super::catalog::flat::is_flat(directory) {
+            if super::catalog::flat::is_flat(directory)
+                || super::catalog::flat::is_flat_package(directory) {
                 return Err(VoiceError::new(
                     "SV Flat NOFS-JSON 仅包含声库配置与模型引用；尚未实现 Flat 基础模型推理，无法直接加载合成"
                 ));
@@ -188,7 +189,8 @@ impl VoiceInventory {
                     "目录同时包含 SV1 与 SV2 模型，请选择明确的声库文件或版本目录",
                 ));
             }
-            if super::catalog::flat::is_flat(&nofs_files[0]) {
+            if super::catalog::flat::is_flat(&nofs_files[0])
+                || super::catalog::flat::is_flat_package(&nofs_files[0]) {
                 return Err(VoiceError::new(
                     "SV Flat NOFS-JSON 已识别；必须实现其外部基础模型推理才能合成"
                 ));
