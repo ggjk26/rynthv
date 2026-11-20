@@ -55,13 +55,18 @@ impl VoiceCatalog {
     /// Discover supported DNNI revisions and original SV1 AI NOFS files without
     /// reading weights. A root can also be one SV1 voice folder or NOFS file.
     pub fn scan(root: &Path) -> Result<Self> {
+        Self::scan_with_models(root, None)
+    }
+
+    /// Optional separate Flat model directory is for diagnostics, not synthesis.
+    pub fn scan_with_models(root: &Path, flat_models: Option<&Path>) -> Result<Self> {
         let mut catalog = Self::default();
         if super::nofs::is_file(root) {
-            catalog.entries.push(entry_nofs(root)?);
+            catalog.entries.push(entry_nofs(root, flat_models)?);
             return Ok(catalog);
         }
         for path in super::nofs::paths(root)? {
-            catalog.entries.push(entry_nofs(&path)?);
+            catalog.entries.push(entry_nofs(&path, flat_models)?);
         }
         let metadata = MetadataIndex::load(root);
         for database in fs::read_dir(root)? {
@@ -76,7 +81,7 @@ impl VoiceCatalog {
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
                     for path in paths {
-                        catalog.entries.push(entry_nofs(&path)?);
+                        catalog.entries.push(entry_nofs(&path, flat_models)?);
                     }
                 }
                 Err(error) => catalog.warnings.push(format!(
@@ -94,7 +99,7 @@ impl VoiceCatalog {
                 match super::nofs::paths(&revision.path()) {
                     Ok(paths) => {
                         for path in paths {
-                            catalog.entries.push(entry_nofs(&path)?);
+                            catalog.entries.push(entry_nofs(&path, flat_models)?);
                         }
                     }
                     Err(error) => catalog.warnings.push(format!(
@@ -128,9 +133,9 @@ impl VoiceCatalog {
 }
 
 
-fn entry_nofs(path: &Path) -> Result<VoiceCatalogEntry> {
-    if flat::is_flat(path) {
-        flat::entry(path)
+fn entry_nofs(path: &Path, models: Option<&Path>) -> Result<VoiceCatalogEntry> {
+    if flat::is_flat(path) || flat::is_flat_package(path) {
+        flat::entry(path, models)
     } else {
         nofs::entry(path)
     }
