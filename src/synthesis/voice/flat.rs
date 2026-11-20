@@ -65,10 +65,10 @@ impl FlatVoice {
         let mut notes = Vec::new();
         let mut models = Vec::new();
         for (key, role, folder) in [
-            ("base_model", "acoustic", "acoustic"),
-            ("sing_model", "singing", "pitch"),
-            ("timing_model", "duration", "duration"),
-            ("f0_model", "f0", "f0"),
+            ("base_model", "base_model", "acoustic"),
+            ("sing_model", "sing_model", "pitch"),
+            ("timing_model", "timing_model", "duration"),
+            ("f0_model", "f0_model", "f0"),
         ] {
             let Some(id) = optional_text(object, key)? else {
                 notes.push(format!("{key} 未指定；需要根据具体 Flat 版本确认默认值"));
@@ -264,16 +264,25 @@ fn verify_model_id(text: &str, field: &str) -> Result<String> {
     Ok(text.to_ascii_lowercase())
 }
 
-fn locate_model(root: &Path, id: &str, folder: &str) -> Option<PathBuf> {
-    // Model ID is validated before it becomes part of a path; no traversal.
-    for relative in [
-        PathBuf::from(folder).join(format!("{id}.dnni")),
-        PathBuf::from(format!("{id}.dnni")),
-        PathBuf::from(folder).join(id),
-    ] {
-        let path = root.join(relative);
-        if path.is_file() {
-            return Some(path);
+fn locate_model(root: &Path, id: &str, preferred_folder: &str) -> Option<PathBuf> {
+    // The Flat field name is not a guaranteed DNNI stage role. Search common
+    // install layouts without assuming which executable stage consumes it.
+    // The validated 32-hex ID cannot escape the configured directory.
+    let folders = [
+        preferred_folder, "acoustic", "duration", "pitch",
+        "f0", "vocoder", "sing", "timing", "base_model", "models",
+    ];
+    let direct = root.join(format!("{id}.dnni"));
+    if direct.is_file() {
+        return Some(direct);
+    }
+    for folder in folders {
+        let parent = root.join(folder);
+        for name in [format!("{id}.dnni"), id.to_owned()] {
+            let candidate = parent.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
         }
     }
     None
