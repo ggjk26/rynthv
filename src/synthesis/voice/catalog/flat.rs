@@ -110,6 +110,6 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
 fn revision(version: &str) -> u32 {
     // Handles e.g. 106b1 without falsely claiming that its full release
     // identifier is represented by the integer field.
-    version.chars().take_while(char::is_ascii_digit)
+    version.chars().take_while(|ch| ch.is_ascii_digit())
         .collect::<String>().parse().unwrap_or(0)
 }
