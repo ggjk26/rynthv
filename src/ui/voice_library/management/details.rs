@@ -49,6 +49,15 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             ),
         );
     }
+    if !entry.styles.is_empty() {
+        text(ui, format!("可识别唱法：{}", entry.styles.join(" · ")));
+    }
+    if !entry.model_dependencies.is_empty() {
+        text(ui, "模型依赖（仅文件识别，不代表能够合成）：");
+        for dependency in &entry.model_dependencies {
+            weak(ui, dependency);
+        }
+    }
     if let VoiceAvailability::Unsupported(reason) = &entry.availability {
         super::super::error_label(ui, reason);
     }
