@@ -46,6 +46,8 @@ struct State {
     expanded: Option<String>,
     root: Option<PathBuf>,
     sv1_root: Option<PathBuf>,
+    flat_root: Option<PathBuf>,
+    flat_models: Option<PathBuf>,
 }
 
 pub fn dialogs(app: &mut App, ctx: &Context) {
@@ -56,10 +58,14 @@ pub fn dialogs(app: &mut App, ctx: &Context) {
             .unwrap_or_default();
         if state.root != app.synthesis.library.settings.databases
             || state.sv1_root != app.synthesis.library.settings.sv1_databases
+            || state.flat_root != app.synthesis.library.settings.flat_databases
+            || state.flat_models != app.synthesis.library.settings.flat_models
         {
             state = State {
                 root: app.synthesis.library.settings.databases.clone(),
                 sv1_root: app.synthesis.library.settings.sv1_databases.clone(),
+                flat_root: app.synthesis.library.settings.flat_databases.clone(),
+                flat_models: app.synthesis.library.settings.flat_models.clone(),
                 ..Default::default()
             };
         }
