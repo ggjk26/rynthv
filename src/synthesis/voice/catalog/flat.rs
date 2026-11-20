@@ -14,7 +14,7 @@ use std::{
 const MAX_FLAT_METADATA: u64 = 1024 * 1024;
 
 /// JSON NOFS and binary SV1 NOFS share a file extension, not a container.
-pub(super) fn is_flat(path: &Path) -> bool {
+pub(in crate::synthesis::voice) fn is_flat(path: &Path) -> bool {
     let Ok(mut file) = File::open(path) else {
         return false;
     };
