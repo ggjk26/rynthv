@@ -7,13 +7,14 @@ use crate::{
 use eframe::egui::*;
 
 pub(super) fn show(app: &mut App, ui: &mut Ui, selection: &PerformanceSelection, enabled: bool) {
+    let lang = app.preferences.language;
     let accent_enabled = selected_mandarin(app);
     ui.add_enabled_ui(enabled, |ui| {
-        ui.weak("说唱声调");
+        ui.weak(lang.text("说唱声调", "Rap tone", "ラップの声調"));
         let label = if accent_enabled {
             match selection.accent.as_deref() {
-                None => "多个值",
-                Some("") => "自动",
+                None => lang.text("多个值", "Multiple values", "複数の値"),
+                Some("") => lang.text("自动", "Automatic", "自動"),
                 Some(value) => value,
             }
         } else {
@@ -26,7 +27,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, selection: &PerformanceSelection,
                 .selected_text(label)
                 .show_ui(ui, |ui| {
                     if ui
-                        .selectable_label(selection.accent.as_deref() == Some(""), "自动")
+                        .selectable_label(selection.accent.as_deref() == Some(""), lang.text("自动", "Automatic", "自動"))
                         .clicked()
                     {
                         clicked = Some(None);
@@ -46,7 +47,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, selection: &PerformanceSelection,
                 })
                 .response
                 .on_disabled_hover_text(
-                    "说唱声调仅用于汉语普通话，请选择语言均为汉语普通话的音符。",
+                    lang.text("说唱声调仅用于汉语普通话，请选择语言均为汉语普通话的音符。", "Rap tones apply only to Mandarin. Select notes all using Mandarin.", "ラップの声調は中国語（普通話）のみ対応します。普通話のノートを選択してください。"),
                 );
         });
         if let Some(value) = clicked {
@@ -56,14 +57,14 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, selection: &PerformanceSelection,
         for (parameter, label, current, minimum, maximum) in [
             (
                 PerformanceParameter::RapIntonation,
-                "语调",
+                lang.text("语调", "Intonation", "イントネーション"),
                 selection.r_intonation,
                 NotePerformance::RAP_INTONATION_MIN,
                 NotePerformance::RAP_INTONATION_MAX,
             ),
             (
                 PerformanceParameter::RapTone,
-                "音调",
+                lang.text("音调", "Tone", "トーン"),
                 selection.r_tone,
                 NotePerformance::RAP_TONE_MIN,
                 NotePerformance::RAP_TONE_MAX,
@@ -74,8 +75,8 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, selection: &PerformanceSelection,
             let span = f64::from(maximum) - minimum;
             let mut value = (f64::from(current.flatten().unwrap_or(0.0)) - minimum) / span;
             let text = match current {
-                None => "多个值".into(),
-                Some(None) => "自动".into(),
+                None => lang.text("多个值", "Multiple values", "複数の値").into(),
+                Some(None) => lang.text("自动", "Automatic", "自動").into(),
                 Some(Some(value)) => format!("{value:+.2}"),
             };
             let response = widgets::labeled_slider(
