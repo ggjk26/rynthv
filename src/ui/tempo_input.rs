@@ -1,4 +1,4 @@
-use crate::{app::App, editor::Editor, ui::theme::*};
+use crate::{app::App, editor::Editor, ui::{settings::UiLanguage, theme::*}};
 use eframe::egui::{
     text::{CCursor, CCursorRange},
     *,
@@ -14,7 +14,7 @@ pub struct BpmEdit {
     error: Option<String>,
 }
 impl BpmEdit {
-    fn commit(&self, editor: &mut Editor) -> Result<(), String> {
+    fn commit(&self, editor: &mut Editor, lang: UiLanguage) -> Result<(), String> {
         // Merely entering and leaving a rounded readout must preserve full precision.
         if self.text == self.initial_text {
             return Ok(());
@@ -26,13 +26,13 @@ impl BpmEdit {
             .iter()
             .any(|t| t.position == self.position)
         {
-            return Err("所编辑的曲速事件已不存在".into());
+            return Err(lang.text("所编辑的曲速事件已不存在", "The tempo event being edited no longer exists", "編集対象のテンポイベントは存在しません").into());
         }
         let bpm = self
             .text
             .trim()
             .parse::<f64>()
-            .map_err(|_| "请输入有效的 BPM 数值")?;
+            .map_err(|_| lang.text("请输入有效的 BPM 数值", "Enter a valid BPM value", "有効な BPM 値を入力してください"))?;
         editor.set_tempo(self.position, bpm)
     }
 }
@@ -62,7 +62,7 @@ pub fn open(app: &mut App, position: i64, ctx: &Context) {
 /// Finish before saving, switching projects or opening another time-event editor.
 pub fn finish(app: &mut App) {
     if let Some(edit) = app.bpm_edit.take()
-        && let Err(error) = edit.commit(&mut app.editor)
+        && let Err(error) = edit.commit(&mut app.editor, app.preferences.language)
     {
         app.status = error;
     }
