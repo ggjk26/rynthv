@@ -33,8 +33,17 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
     let canonical = fs::canonicalize(path)?;
     let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
     let id = format!("svflat:{}", crate::synthesis::voice::hex(&digest[..12]));
-    let icon_path = path.parent().map(|parent| parent.join("profile.png"))
-        .filter(|path| path.is_file());
+    let icon_path = path.parent().and_then(|parent| {
+        let exact = parent.join("profile.png");
+        if exact.is_file() {
+            Some(exact)
+        } else {
+            fs::read_dir(parent).ok()?.take(512).flatten()
+                .find(|item| item.file_name().eq_ignore_ascii_case("profile.png")
+                    && item.path().is_file())
+                .map(|item| item.path())
+        }
+    });
     let mut entry = VoiceCatalogEntry {
         database_id: id,
         revision: 0,
@@ -42,7 +51,12 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
         model_version: None,
         family: None,
         directory: path.to_owned(),
-        display_name: path.file_stem().unwrap_or_default().to_string_lossy().into_owned(),
+        display_name: if is_flat_package(path) {
+            path.parent().and_then(Path::file_name).unwrap_or_default()
+                .to_string_lossy().into_owned()
+        } else {
+            path.file_stem().unwrap_or_default().to_string_lossy().into_owned()
+        },
         vendor: String::new(),
         genres: Vec::new(),
         pitch_range: None,
@@ -85,9 +99,22 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
             ),
         }
     } else if is_flat_package(path) {
-        let manifest_path = path.parent().ok_or_else(|| {
+        let parent = path.parent().ok_or_else(|| {
             VoiceError::new("Flat info.nofs 没有可用的上级目录")
-        })?.join("config.json");
+        })?;
+        let manifest_path = parent.join("config.json");
+        let manifest_path = if manifest_path.is_file() {
+            manifest_path
+        } else {
+            // Some cross-platform archives retain Config.JSON casing. Only
+            // look in the same install folder; never follow manifest paths.
+            fs::read_dir(parent).ok().and_then(|items| {
+                items.take(512).flatten()
+                    .find(|item| item.file_name().eq_ignore_ascii_case("config.json")
+                        && item.path().is_file())
+                    .map(|item| item.path())
+            }).unwrap_or(manifest_path)
+        };
         match FlatManifest::open(&manifest_path) {
             Ok(manifest) => {
                 entry.revision = revision(&manifest.version);
