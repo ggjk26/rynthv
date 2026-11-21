@@ -91,7 +91,7 @@ pub fn draw(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
 
 /// A double click on a rendered pronunciation label opens its source note,
 /// never the empty-canvas note creation handler.
-pub(super) fn begin_text_edit(
+pub(crate) fn begin_text_edit(
     app: &mut App,
     canvas: Rect,
     groups: &[SceneGroup],
@@ -164,7 +164,7 @@ pub(super) fn begin_text_edit(
 
 /// Inline text editor matches the corresponding rendered note label, uses the
 /// active track theme accent as an outline, and widens with the input text.
-pub(super) fn text_editor(app: &mut App, ui: &mut Ui, canvas: Rect) {
+pub(crate) fn text_editor(app: &mut App, ui: &mut Ui, canvas: Rect) {
     let Some(mut edit) = app.phoneme_text.take() else {
         return;
     };
@@ -213,7 +213,7 @@ pub(super) fn text_editor(app: &mut App, ui: &mut Ui, canvas: Rect) {
     if escape {
         response.surrender_focus();
     } else if confirm || response.lost_focus() {
-        app.editor.set_note_phonemes(edit.id, edit.text);
+        app.editor.set_single_note_phonemes(edit.id, edit.text);
         response.surrender_focus();
     } else {
         app.phoneme_text = Some(edit);
