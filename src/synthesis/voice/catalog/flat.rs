@@ -78,8 +78,16 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                 entry.languages = voice.supported_languages;
                 entry.styles = voice.styles.iter().map(|style| style.name.clone()).collect();
                 entry.model_dependencies = voice.models.iter()
-                    .map(|model| format!("{}：{}{}", model.role, model.id,
-                        if model.installed { "（已找到文件）" } else { "（未验证）" }))
+                    .map(|model| {
+                        let status = if model.installed {
+                            "已找到文件"
+                        } else if model_root.is_some() {
+                            "未找到文件"
+                        } else {
+                            "未检查：未配置模型目录"
+                        };
+                        format!("{}：{}（{status}）", model.role, model.id)
+                    })
                     .collect();
                 let installed = voice.models.iter().filter(|item| item.installed).count();
                 let checks = if let Some(root) = model_root {
@@ -127,7 +135,14 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                         let role = manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown");
                         let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id));
                         if found { installed += 1; }
-                        format!("{role}：{id}（{}）", if found { "已找到文件" } else { "未定位到文件" })
+                        let status = if found {
+                            "已找到文件"
+                        } else if model_root.is_some() {
+                            "未找到文件"
+                        } else {
+                            "未检查：未配置模型目录"
+                        };
+                        format!("{role}：{id}（{status}）")
                     })
                     .collect();
                 let check = if model_root.is_some() {
