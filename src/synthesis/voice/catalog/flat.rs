@@ -91,12 +91,23 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                 entry.revision = revision(&manifest.version);
                 entry.display_name = manifest.name;
                 entry.languages = manifest.phonesets;
+                let mut installed = 0usize;
                 entry.model_dependencies = manifest.model_ids.iter().enumerate()
-                    .map(|(i, id)| format!("{}：{}", manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown"), id))
+                    .map(|(i, id)| {
+                        let role = manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown");
+                        let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id));
+                        if found { installed += 1; }
+                        format!("{role}：{id}（{}）", if found { "已找到文件" } else { "未定位到文件" })
+                    })
                     .collect();
+                let check = if model_root.is_some() {
+                    format!("依赖模型 {installed}/{} 已找到", manifest.model_ids.len())
+                } else {
+                    "未配置 Flat 模型目录".to_owned()
+                };
                 entry.availability = VoiceAvailability::Unsupported(format!(
-                    "Flat SFPK 安装清单 v{}：{} 个模型记录。{}。info.nofs 二进制格式未解码；暂不能试听/导出",
-                    manifest.version, manifest.model_ids.len(), manifest.notes.join("；")
+                    "Flat SFPK 安装清单 v{}：{check}。{}。info.nofs 二进制格式未解码；暂不能试听/导出",
+                    manifest.version, manifest.notes.join("；")
                 ));
             }
             Err(error) => entry.availability = VoiceAvailability::Unsupported(
@@ -112,4 +123,40 @@ fn revision(version: &str) -> u32 {
     // identifier is represented by the integer field.
     version.chars().take_while(|ch| ch.is_ascii_digit())
         .collect::<String>().parse().unwrap_or(0)
+}
+
+/// Read-only, bounded lookup: never use arbitrary manifest strings as paths.
+fn manifest_model_exists(root: &Path, role: &str, id: &str) -> bool {
+    if id.is_empty() || id.len() > 128
+        || !id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return false;
+    }
+    let folder = match role.to_ascii_lowercase().as_str() {
+        "acoustic" | "base_model" | "timbre" => Some("acoustic"),
+        "pitch" | "sing_model" | "f0" => Some("pitch"),
+        "duration" | "timing_model" => Some("duration"),
+        "vocoder" => Some("vocoder"),
+        _ => None,
+    };
+    let names = [format!("{id}.dnni"), id.to_owned()];
+    names.iter().any(|name| root.join(name).is_file())
+        || folder.is_some_and(|folder| names.iter().any(|name| root.join(folder).join(name).is_file()))
+}
+
+#[cfg(test)]
+mod recognition_tests {
+    use super::manifest_model_exists;
+    use std::fs;
+
+    #[test]
+    fn finds_flat_dependencies_without_path_traversal() {
+        let root = std::env::temp_dir().join(format!("rynthv-flat-{}", std::process::id()));
+        fs::create_dir_all(root.join("pitch")).unwrap();
+        fs::write(root.join("pitch").join("test-model.dnni"), b"fixture").unwrap();
+        assert!(manifest_model_exists(&root, "sing_model", "test-model"));
+        assert!(!manifest_model_exists(&root, "sing_model", "../test-model"));
+        assert!(!manifest_model_exists(&root, "sing_model", "/tmp/test-model"));
+        let _ = fs::remove_dir_all(root);
+    }
 }
