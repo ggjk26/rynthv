@@ -172,7 +172,7 @@ pub fn show(app: &mut App, ui: &mut Ui, id: u64) {
             .add_enabled(!app.editor.is_editing(), Button::new(lang.text("清空此参数的控制点", "Clear control points for this parameter", "このパラメーターの制御点をすべて削除")))
             .clicked()
         {
-            app.editor.begin("清空参数控制点");
+            app.editor.begin(app.preferences.language.text("清空参数控制点", "Clear parameter points", "パラメーター制御点をすべて消去"));
             match app
                 .editor
                 .replace_automation_points(&lane.foreground, Vec::new())
