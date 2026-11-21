@@ -11,12 +11,13 @@ pub struct AudioDrag {
 }
 
 pub fn create_menu(app: &mut App, ui: &mut Ui) {
-    if ui.button("创建新的音轨").clicked() {
+    let lang = app.preferences.language;
+    if ui.button(lang.text("创建新的音轨", "Create new track", "新しいトラックを作成")).clicked() {
         app.commit_lyric();
         app.editor.add_track();
         ui.close();
     }
-    if ui.button("创建新的伴奏轨").clicked() {
+    if ui.button(lang.text("创建新的伴奏轨", "Create new instrumental track", "新しい伴奏トラックを作成")).clicked() {
         app.commit_lyric();
         let id = app.editor.add_instrumental_track();
         ui.close();
