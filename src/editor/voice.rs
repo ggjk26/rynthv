@@ -48,6 +48,50 @@ impl Editor {
         Ok(())
     }
 
+    /// Apply one singer to several vocal tracks in a single undo transaction.
+    /// Existing per-reference values follow the standard track voice operation.
+    pub fn set_tracks_voice(
+        &mut self,
+        ids: &std::collections::BTreeSet<crate::model::EntityId>,
+        singer: Option<(&str, &str, u32)>,
+    ) -> Result<(), String> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let affected = self.project.tracks.iter()
+            .filter(|track| ids.contains(&track.id))
+            .collect::<Vec<_>>();
+        if affected.len() != ids.len() || affected.iter().any(|track| track.is_instrumental()) {
+            return Err("所选轨道包含无效或伴奏轨道".into());
+        }
+        if affected.iter().flat_map(|track| track.references())
+            .any(|reference| !reference.database.is_object())
+        {
+            return Err("所选音轨的歌声 database 字段必须是对象".into());
+        }
+        self.begin("批量切换音轨歌手");
+        for track in self.project.tracks.iter_mut().filter(|track| ids.contains(&track.id)) {
+            for reference in std::iter::once(&mut track.main_ref).chain(&mut track.groups) {
+                let database = reference.database.as_object_mut().expect("validated database");
+                database.remove("id");
+                let (name, revision) = match singer {
+                    Some((id, name, revision)) => {
+                        database.insert("id".into(), id.into());
+                        (name, revision.to_string())
+                    }
+                    None => ("", "-2".to_string()),
+                };
+                database.insert("name".into(), name.into());
+                database.insert("version".into(), revision.into());
+                for key in ["language", "phoneset", "backendType"] {
+                    database.insert(key.into(), "".into());
+                }
+            }
+        }
+        self.finish();
+        Ok(())
+    }
+
     pub fn set_track_voice(&mut self, singer: Option<(&str, &str, u32)>) -> Result<(), String> {
         if self.current_track().is_instrumental() {
             return Err("伴奏轨不能设置歌手".into());
