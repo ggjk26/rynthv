@@ -98,6 +98,7 @@ pub(super) fn editing(app: &mut App, ui: &mut Ui) {
     toggle(ui, "三连音网格", &mut app.view.triplet);
     section(ui, "显示");
     toggle(ui, "显示音高线", &mut app.show_pitch);
+    toggle(ui, "播放时按音高中位数纵向居中", &mut app.view.auto_pitch_center);
     toggle(ui, "显示波形", &mut app.show_waveform);
     toggle(ui, "编排位于上方", &mut app.view.arrangement_first);
     toggle(ui, "显示曲速和拍号轨", &mut app.show_time_tracks);
