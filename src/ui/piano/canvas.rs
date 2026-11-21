@@ -119,6 +119,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 && app.audio_drag.is_none()
                 && !phoneme_dragging,
         },
+        app.preferences.language,
     );
     draw_ruler(
         ui,
