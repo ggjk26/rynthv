@@ -20,9 +20,10 @@ struct PhonemeDraft {
 }
 
 pub(super) fn show(app: &mut App, ui: &mut Ui) {
-    section(ui, "模式", |ui| performance::mode(app, ui));
-    section(ui, "演绎", |ui| performance::expression(app, ui));
-    section(ui, "AI 重录", |ui| retakes::show(app, ui));
+    let lang = app.preferences.language;
+    section(ui, lang.text("模式", "Mode", "モード"), |ui| performance::mode(app, ui));
+    section(ui, lang.text("演绎", "Performance", "表現"), |ui| performance::expression(app, ui));
+    section(ui, lang.text("AI 重录", "AI retakes", "AI リテイク"), |ui| retakes::show(app, ui));
     let notes: Vec<_> = app
         .editor
         .notes()
@@ -30,18 +31,19 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
         .filter(|n| app.editor.selected.contains(&n.id))
         .cloned()
         .collect();
-    section(ui, "语言", |ui| {
+    section(ui, lang.text("语言", "Language", "言語"), |ui| {
         ui.add_enabled_ui(!notes.is_empty(), |ui| language(app, ui, &notes));
     });
-    section(ui, "音素", |ui| {
+    section(ui, lang.text("音素", "Phonemes", "音素"), |ui| {
         ui.add_enabled_ui(!notes.is_empty(), |ui| phonemes(app, ui));
         if notes.is_empty() {
-            ui.weak("在钢琴卷帘中选择音符");
+            ui.weak(lang.text("在钢琴卷帘中选择音符", "Select notes in the piano roll", "ピアノロールでノートを選択してください"));
         }
     });
 }
 
 fn language(app: &mut App, ui: &mut Ui, notes: &[Note]) {
+    let lang = app.preferences.language;
     let config = app
         .voice_inventory()
         .and_then(|voice| voice.configuration.as_ref());
@@ -71,11 +73,11 @@ fn language(app: &mut App, ui: &mut Ui, notes: &[Note]) {
     let mixed = notes.iter().any(|n| override_value(n) != original);
     let mut selected = original.clone();
     let default_label = inherited.map_or_else(
-        || "继承歌声语言".into(),
-        |lang| format!("{}（继承歌声）", lang.label()),
+        || lang.text("继承歌声语言", "Inherit voice language", "歌声の言語を継承").into(),
+        |lang| format!("{} {}", lang.label(), app.preferences.language.text("（继承歌声）", "(inherited from voice)", "（歌声から継承）")),
     );
     let label = if mixed {
-        "多个值".into()
+        lang.text("多个值", "Multiple values", "複数の値").into()
     } else if selected.is_empty() {
         default_label.clone()
     } else {
@@ -102,6 +104,7 @@ fn language(app: &mut App, ui: &mut Ui, notes: &[Note]) {
 }
 
 fn phonemes(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let id = ui.make_persistent_id("phoneme-draft");
     let mut draft = ui
         .ctx()
@@ -165,12 +168,12 @@ fn phonemes(app: &mut App, ui: &mut Ui) {
         };
     }
     let mixed = draft.source.windows(2).any(|pair| pair[0] != pair[1]);
-    ui.weak("音素");
+    ui.weak(lang.text("音素", "Phonemes", "音素"));
     let response = ui.add_sized(
         vec2(ui.available_width(), 28.0),
         TextEdit::singleline(&mut draft.text)
             .id(id.with("input"))
-            .hint_text(if mixed { "多个值" } else { "自动" })
+            .hint_text(if mixed { lang.text("多个值", "Multiple values", "複数の値") } else { lang.text("自动", "Automatic", "自動") })
             .vertical_align(Align::Center)
             .margin(vec2(7.0, 5.0))
             .background_color(crate::ui::theme::BORDER),
@@ -195,7 +198,7 @@ fn phonemes(app: &mut App, ui: &mut Ui) {
         response.surrender_focus();
     }
     response.on_hover_text(
-        "音素以空格分隔；回车或移开焦点应用到所选音符，清空恢复自动发音。Esc 取消输入。",
+        lang.text("音素以空格分隔；回车或移开焦点应用到所选音符，清空恢复自动发音。Esc 取消输入。", "Separate phonemes with spaces; press Enter or leave the field to apply. Clear to restore automatic pronunciation. Esc cancels.", "音素は空白で区切ります。Enter またはフォーカス移動で適用。空欄にすると自動発音に戻ります。Esc でキャンセル。"),
     );
     let even = |note: &Note| {
         note.attributes
@@ -206,7 +209,7 @@ fn phonemes(app: &mut App, ui: &mut Ui) {
     let mut value = notes.first().is_none_or(even);
     let mixed = notes.iter().any(|note| even(note) != value);
     if ui
-        .add(Checkbox::new(&mut value, "按音符时值均匀分配音节").indeterminate(mixed))
+        .add(Checkbox::new(&mut value, lang.text("按音符时值均匀分配音节", "Distribute syllables evenly within note", "音節をノート長に均等に割り当てる")).indeterminate(mixed))
         .changed()
     {
         app.commit_lyric();
