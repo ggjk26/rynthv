@@ -24,6 +24,7 @@ pub(super) fn show(
     mapping: &Mapping,
     phones: &[RenderedPhoneme],
 ) {
+    let lang = app.preferences.language;
     let id = response.id.with("phoneme-reset-target");
     if response.secondary_clicked() {
         let target = response
@@ -82,7 +83,7 @@ pub(super) fn show(
                 target.supports_timing || attributes.left_offset.is_some()
             });
         if ui
-            .add_enabled(timing_enabled, Button::new("重置音素时值"))
+            .add_enabled(timing_enabled, Button::new(lang.text("重置音素时值", "Reset phoneme timing", "音素の長さをリセット")))
             .clicked()
             && let Some(source) = target.timing_source
         {
@@ -92,7 +93,7 @@ pub(super) fn show(
         if ui
             .add_enabled(
                 enabled && (target.supports_strength || attributes.strength.is_some()),
-                Button::new("重置音素强度"),
+                Button::new(lang.text("重置音素强度", "Reset phoneme strength", "音素の強さをリセット")),
             )
             .clicked()
         {
@@ -105,7 +106,7 @@ pub(super) fn show(
                     && (target.supports_impulse
                         || attributes.position.is_some()
                         || attributes.activity.is_some()),
-                Button::new("重置辅音爆破"),
+                Button::new(lang.text("重置辅音爆破", "Reset consonant burst", "子音バーストをリセット")),
             )
             .clicked()
         {
@@ -116,7 +117,7 @@ pub(super) fn show(
         if ui
             .add_enabled(
                 enabled && attributes != PhonemeAttributes::default(),
-                Button::new("重置此音素全部属性"),
+                Button::new(lang.text("重置此音素全部属性", "Reset all phoneme properties", "音素のすべての属性をリセット")),
             )
             .clicked()
         {
@@ -147,11 +148,11 @@ fn reset_impulse(app: &mut App, source: SourcePhone, mut attributes: PhonemeAttr
     attributes.position = None;
     attributes.activity = None;
     if !app.editor.begin_phoneme_edit(source) {
-        app.error = Some("无法编辑当前音素".into());
+        app.error = Some(app.preferences.language.text("无法编辑当前音素", "Cannot edit the current phoneme", "現在の音素を編集できません").into());
     } else if app.editor.update_phoneme_attributes(source, attributes) {
         app.editor.finish_phoneme_edit();
     } else {
         app.editor.cancel_phoneme_edit();
-        app.error = Some("无法重置辅音爆破".into());
+        app.error = Some(app.preferences.language.text("无法重置辅音爆破", "Cannot reset consonant burst", "子音バーストをリセットできません").into());
     }
 }
