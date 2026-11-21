@@ -147,7 +147,7 @@ fn parameter_combo(
 ) -> Response {
     ComboBox::from_id_salt(id)
         .width(78.0)
-        .selected_text(match target { AutomationTarget::Parameter(p) => parameter_name(*p, lang), _ => target.label() })
+        .selected_text(target_name(target, lang))
         .show_ui(ui, |ui| {
             for parameter in Parameter::ALL {
                 ui.selectable_value(
@@ -232,7 +232,7 @@ fn icon_button(ui: &mut Ui, glyph: Glyph, selected: bool, description: &'static 
     response.on_hover_text(description)
 }
 
-fn parameter_name(
+pub(crate) fn parameter_name(
     parameter: Parameter,
     lang: crate::ui::settings::UiLanguage,
 ) -> &'static str {
@@ -246,5 +246,15 @@ fn parameter_name(
         Parameter::Gender => lang.text("性别", "Gender", "ジェンダー"),
         Parameter::ToneShift => lang.text("声区转换", "Tone shift", "声域シフト"),
         Parameter::Mouth => lang.text("口型", "Mouth opening", "口の開き"),
+    }
+}
+
+pub(crate) fn target_name<'a>(
+    target: &'a AutomationTarget,
+    lang: crate::ui::settings::UiLanguage,
+) -> &'a str {
+    match target {
+        AutomationTarget::Parameter(parameter) => parameter_name(*parameter, lang),
+        AutomationTarget::VocalMode(name) => name,
     }
 }
