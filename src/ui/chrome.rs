@@ -21,79 +21,80 @@ fn item(ui: &mut Ui, text: &str, shortcut: &str, enabled: bool) -> bool {
     }
 }
 pub fn menus(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let ctx = ui.ctx().clone();
     MenuBar::new().ui(ui, |ui| {
         ui.spacing_mut().button_padding = vec2(11.0, 4.0);
         ui.spacing_mut().item_spacing.x = 0.0;
-        ui.menu_button("文件", |ui| {
-            if item(ui, "新建", "Ctrl+N", true) {
+        ui.menu_button(lang.text("文件", "File", "ファイル"), |ui| {
+            if item(ui, lang.text("新建", "New", "新規"), "Ctrl+N", true) {
                 app.request_file(FileAction::New, &ctx);
             }
-            if item(ui, "打开…", "Ctrl+O", true) {
+            if item(ui, lang.text("打开…", "Open…", "開く…"), "Ctrl+O", true) {
                 app.request_file(FileAction::Open, &ctx);
             }
             ui.separator();
-            if item(ui, "保存", "Ctrl+S", true) {
+            if item(ui, lang.text("保存", "Save", "保存"), "Ctrl+S", true) {
                 app.save_project(false);
             }
-            if item(ui, "另存为…", "Ctrl+Shift+S", true) {
+            if item(ui, lang.text("另存为…", "Save as…", "名前を付けて保存…"), "Ctrl+Shift+S", true) {
                 app.save_project(true);
             }
             ui.separator();
-            if item(ui, "导入…", "Ctrl+Shift+I", true) {
+            if item(ui, lang.text("导入…", "Import…", "インポート…"), "Ctrl+Shift+I", true) {
                 app.request_file(FileAction::ImportMidi, &ctx);
             }
-            if item(ui, "作为音轨导入…", "", true) {
+            if item(ui, lang.text("作为音轨导入…", "Import as tracks…", "トラックとしてインポート…"), "", true) {
                 app.begin_midi_import(MidiImportMode::Tracks, &ctx);
             }
-            if item(ui, "导入音频…", "", true) {
+            if item(ui, lang.text("导入音频…", "Import audio…", "オーディオをインポート…"), "", true) {
                 app.import_audio(None, &ctx);
             }
-            item(ui, "导出音频", "", false);
+            item(ui, lang.text("导出音频", "Export audio", "オーディオを書き出す"), "", false);
         });
-        ui.menu_button("编辑", |ui| {
+        ui.menu_button(lang.text("编辑", "Edit", "編集"), |ui| {
             if item(
                 ui,
-                &format!("撤销 {}", app.editor.undo_label()),
+                &format!("{} {}", lang.text("撤销", "Undo", "元に戻す"), app.editor.undo_label()),
                 "Ctrl+Z",
                 app.editor.can_undo(),
             ) {
                 app.editor.undo();
             }
-            if item(ui, "重做", "Ctrl+Y", app.editor.can_redo()) {
+            if item(ui, lang.text("重做", "Redo", "やり直す"), "Ctrl+Y", app.editor.can_redo()) {
                 app.editor.redo();
             }
             ui.separator();
-            if item(ui, "全选", "Ctrl+A", true) {
+            if item(ui, lang.text("全选", "Select all", "すべて選択"), "Ctrl+A", true) {
                 edit::select_all(app);
             }
-            if item(ui, "取消选择", "Esc", true) {
+            if item(ui, lang.text("取消选择", "Deselect", "選択解除"), "Esc", true) {
                 edit::clear(app);
             }
             let selected = edit::selected(app);
-            if item(ui, "删除所选内容", "Delete", selected) {
+            if item(ui, lang.text("删除所选内容", "Delete selection", "選択項目を削除"), "Delete", selected) {
                 edit::delete(app);
             }
             ui.separator();
-            if item(ui, "复制", "Ctrl+C", selected) {
+            if item(ui, lang.text("复制", "Copy", "コピー"), "Ctrl+C", selected) {
                 edit::copy(app, &ctx);
             }
-            if item(ui, "剪切", "Ctrl+X", selected) {
+            if item(ui, lang.text("剪切", "Cut", "切り取り"), "Ctrl+X", selected) {
                 edit::cut(app, &ctx);
             }
-            if item(ui, "粘贴", "Ctrl+V", edit::can_paste(app)) {
+            if item(ui, lang.text("粘贴", "Paste", "貼り付け"), "Ctrl+V", edit::can_paste(app)) {
                 edit::paste(app, &ctx);
             }
         });
-        ui.menu_button("查看", |ui| {
-            ui.checkbox(&mut app.show_time_tracks, "显示曲速和拍号轨");
+        ui.menu_button(lang.text("查看", "View", "表示"), |ui| {
+            ui.checkbox(&mut app.show_time_tracks, lang.text("显示曲速和拍号轨", "Show tempo and meter tracks", "テンポ・拍子トラックを表示"));
             if ui
                 .checkbox(&mut app.view.arrangement_collapsed, "折叠编排")
                 .clicked()
             {
                 ui.close();
             }
-            ui.checkbox(&mut app.view.arrangement_first, "编排位于上方");
+            ui.checkbox(&mut app.view.arrangement_first, lang.text("编排位于上方", "Arrangement above", "アレンジを上に配置"));
             ui.separator();
             for column in Column::PANELS {
                 let mut active = app.view.columns.contains(&column);
@@ -102,44 +103,44 @@ pub fn menus(app: &mut App, ui: &mut Ui) {
                 }
             }
             ui.separator();
-            if item(ui, "设置", "", true) {
+            if item(ui, lang.text("设置", "Settings", "設定"), "", true) {
                 app.settings = true;
             }
         });
-        ui.menu_button("修改", |ui| {
+        ui.menu_button(lang.text("修改", "Modify", "変更"), |ui| {
             let selected = !super::lanes::parameter_active(app)
                 && !super::phonemes::phoneme_active(app)
                 && app.piano_tool != super::piano::Tool::PitchAnchor
                 && !app.editor.selected.is_empty();
-            if item(ui, "填入歌词…", "Ctrl+L", selected) {
+            if item(ui, lang.text("填入歌词…", "Fill lyrics…", "歌詞を入力…"), "Ctrl+L", selected) {
                 super::fill_lyrics::open(app);
             }
-            if item(ui, "静音音符", "Ctrl+M", selected) {
+            if item(ui, lang.text("静音音符", "Mute notes", "ノートをミュート"), "Ctrl+M", selected) {
                 app.editor.mute_selected();
             }
             ui.separator();
-            if item(ui, "升高八度", "Ctrl+↑", edit::can_transpose(app)) {
+            if item(ui, lang.text("升高八度", "Octave up", "1オクターブ上げる"), "Ctrl+↑", edit::can_transpose(app)) {
                 edit::transpose(app, true);
             }
-            if item(ui, "降低八度", "Ctrl+↓", edit::can_transpose(app)) {
+            if item(ui, lang.text("降低八度", "Octave down", "1オクターブ下げる"), "Ctrl+↓", edit::can_transpose(app)) {
                 edit::transpose(app, false);
             }
-            item(ui, "智能量化", "", false);
-            item(ui, "解除组链接", "", false);
+            item(ui, lang.text("智能量化", "Smart quantize", "スマートクオンタイズ"), "", false);
+            item(ui, lang.text("解除组链接", "Unlink group", "グループのリンクを解除"), "", false);
         });
-        ui.menu_button("自动处理", |ui| {
-            item(ui, "装饰所选音符", "", false);
+        ui.menu_button(lang.text("自动处理", "Automation", "自動処理"), |ui| {
+            item(ui, lang.text("装饰所选音符", "Decorate selected notes", "選択ノートを装飾"), "", false);
             ui.add_enabled_ui(
                 !super::lanes::parameter_active(app) && !super::phonemes::phoneme_active(app),
                 |ui| {
                     super::retakes::commands(app, ui);
                 },
             );
-            item(ui, "从音频提取音符", "", false);
-            item(ui, "检测曲速", "", false);
+            item(ui, lang.text("从音频提取音符", "Extract notes from audio", "音声からノートを抽出"), "", false);
+            item(ui, lang.text("检测曲速", "Detect tempo", "テンポを検出"), "", false);
         });
-        ui.menu_button("项目", |ui| {
-            if item(ui, "创建音轨", "", true) {
+        ui.menu_button(lang.text("项目", "Project", "プロジェクト"), |ui| {
+            if item(ui, lang.text("创建音轨", "Add track", "トラックを追加"), "", true) {
                 app.editor.add_track();
             }
             if item(
@@ -150,33 +151,33 @@ pub fn menus(app: &mut App, ui: &mut Ui) {
             ) {
                 app.editor.add_group();
             }
-            if item(ui, "创建伴奏轨", "", true) {
+            if item(ui, lang.text("创建伴奏轨", "Add instrumental track", "伴奏トラックを追加"), "", true) {
                 let id = app.editor.add_instrumental_track();
                 app.import_audio(Some(id), &ctx);
             }
-            item(ui, "设置歌声", "", false);
+            item(ui, lang.text("设置歌声", "Set voice", "歌声を設定"), "", false);
         });
-        ui.menu_button("走带控制", |ui| {
-            if item(ui, "播放 / 暂停", "Space", true) {
+        ui.menu_button(lang.text("走带控制", "Transport", "再生操作"), |ui| {
+            if item(ui, lang.text("播放 / 暂停", "Play / Pause", "再生／一時停止"), "Space", true) {
                 app.editor.transport.toggle();
             }
-            if item(ui, "停止", "Ctrl+Space", true) {
+            if item(ui, lang.text("停止", "Stop", "停止"), "Ctrl+Space", true) {
                 app.editor.transport.stop();
             }
-            ui.checkbox(&mut app.editor.transport.looping, "循环播放");
-            if item(ui, "跳到开头", "", true) {
+            ui.checkbox(&mut app.editor.transport.looping, lang.text("循环播放", "Loop playback", "ループ再生"));
+            if item(ui, lang.text("跳到开头", "Go to start", "先頭へ移動"), "", true) {
                 app.editor.transport.position = 0;
             }
-            if item(ui, "跳到结尾", "Ctrl+End", true) {
+            if item(ui, lang.text("跳到结尾", "Go to end", "末尾へ移動"), "Ctrl+End", true) {
                 app.editor.transport.position = app.editor.project.end();
             }
         });
-        ui.menu_button("脚本", |ui| {
-            item(ui, "重新扫描", "", false);
-            item(ui, "打开脚本文件夹", "", false);
+        ui.menu_button(lang.text("脚本", "Scripts", "スクリプト"), |ui| {
+            item(ui, lang.text("重新扫描", "Rescan", "再スキャン"), "", false);
+            item(ui, lang.text("打开脚本文件夹", "Open scripts folder", "スクリプトフォルダーを開く"), "", false);
         });
-        ui.menu_button("其他", |ui| {
-            if item(ui, "关于 RynthV", "", true) {
+        ui.menu_button(lang.text("其他", "Other", "その他"), |ui| {
+            if item(ui, lang.text("关于 RynthV", "About RynthV", "RynthV について"), "", true) {
                 app.about = true;
             }
         });
