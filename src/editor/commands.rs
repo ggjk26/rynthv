@@ -82,7 +82,7 @@ impl Editor {
     }
     /// Explicit pronunciation is local to one note. Clearing the text returns
     /// that note to automatic dictionary pronunciation.
-    pub fn set_note_phonemes(&mut self, id: EntityId, text: String) {
+    pub fn set_single_note_phonemes(&mut self, id: EntityId, text: String) {
         let value = text.split_whitespace().collect::<Vec<_>>().join(" ");
         if !self.notes().iter().any(|note| note.id == id && note.phonemes != value) {
             return;
