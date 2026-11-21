@@ -110,9 +110,10 @@ fn marker(painter: &Painter, pos: Pos2, text: &str, flag: bool) -> Option<Rect> 
 }
 
 fn event_menu(app: &mut App, ui: &mut Ui, target: Target) {
+    let lang = app.preferences.language;
     let (edit_label, delete_label, can_delete) = match target {
-        Target::Meter(index) => ("编辑拍号…", "删除拍号标记", index > 0),
-        Target::Tempo(position) => ("编辑曲速…", "删除曲速标记", position > 0),
+        Target::Meter(index) => (lang.text("编辑拍号…", "Edit time signature…", "拍子を編集…"), lang.text("删除拍号标记", "Delete time-signature marker", "拍子マーカーを削除"), index > 0),
+        Target::Tempo(position) => (lang.text("编辑曲速…", "Edit tempo…", "テンポを編集…"), lang.text("删除曲速标记", "Delete tempo marker", "テンポマーカーを削除"), position > 0),
     };
     if ui.button(edit_label).clicked() {
         time_edit::open(app, target);
@@ -121,7 +122,7 @@ fn event_menu(app: &mut App, ui: &mut Ui, target: Target) {
     ui.separator();
     if ui
         .add_enabled(can_delete, Button::new(delete_label))
-        .on_disabled_hover_text("初始拍号和曲速必须保留，可通过编辑修改其数值")
+        .on_disabled_hover_text(lang.text("初始拍号和曲速必须保留，可通过编辑修改其数值", "The initial time signature and tempo must remain. Edit their values instead.", "最初の拍子とテンポは削除できません。値を編集してください。"))
         .clicked()
     {
         super::tempo_input::finish(app);
