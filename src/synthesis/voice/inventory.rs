@@ -248,6 +248,24 @@ impl VoiceInventory {
             inventory.files.push(file);
             inventory._models.push(LoadedModel::Dnni { archive, trees });
         }
+        // A standalone SV2 download may store its configuration outside the
+        // DNNI archive. Use the same validated sidecar during actual model load,
+        // never only for the catalog display.
+        if let Some(sidecar) = super::sidecar::load(directory)? {
+            if let Some(embedded) = inventory.configuration.as_ref() {
+                if embedded.name != sidecar.config.name
+                    || embedded.vendor != sidecar.config.vendor
+                    || embedded.version != sidecar.config.version
+                    || embedded.model_version != sidecar.config.model_version
+                {
+                    return Err(VoiceError::new(
+                        "DNNI 内部配置与外部 configs.txt 不一致"
+                    ));
+                }
+            } else {
+                inventory.configuration = Some(sidecar.config);
+            }
+        }
         // An optional locally bundled Duration stage may fill a missing
         // SV2 model, but never replace a voice's own duration or introduce
         // unrelated configuration/timbre resources.
