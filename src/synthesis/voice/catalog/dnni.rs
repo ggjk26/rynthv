@@ -205,6 +205,11 @@ pub(super) fn scan_named(
                 }
             }
         }
+        Err(error) if error.to_string() == "声库缺少名称配置资源" => {
+            // Shared runtime-model caches have DNNI payloads but no voice
+            // configuration. They are not standalone voicebanks.
+            return Ok(None);
+        }
         Err(error) => {
             entry.availability = VoiceAvailability::Unsupported(
                 format!("DNNI 声库配置无法读取：{error}")
