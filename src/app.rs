@@ -12,6 +12,7 @@ use crate::{
 };
 use eframe::egui::*;
 use std::{
+    collections::BTreeSet,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -44,6 +45,7 @@ pub struct App {
     pub piano_collapsed: bool,
     pub piano_audition: ui::piano::KeyboardAudition,
     pub view_pan: ui::view_pan::ViewPan,
+    pub selected_tracks: BTreeSet<EntityId>,
     pub gesture: Option<ui::piano::Gesture>,
     pub group_gesture: Option<ui::group_edit::GroupGesture>,
     pub audio_drag: Option<ui::instrumental::AudioDrag>,
@@ -128,6 +130,7 @@ impl App {
             piano_collapsed: false,
             piano_audition: ui::piano::KeyboardAudition::default(),
             view_pan: ui::view_pan::ViewPan::default(),
+            selected_tracks: BTreeSet::new(),
             gesture: None,
             group_gesture: None,
             audio_drag: None,
@@ -162,6 +165,7 @@ impl App {
                 self.synthesis.reset_project();
                 self.path = Some(path);
                 self.gesture = None;
+                self.selected_tracks.clear();
                 self.piano_anchor = ui::piano::AnchorSelection::default();
                 self.parameter_lane = ui::lanes::ParameterSelection::default();
                 self.phoneme_editing = ui::phonemes::PhonemeEditing::default();
@@ -254,6 +258,7 @@ impl App {
         ui::phonemes::phoneme_deactivate(self);
         self.midi_import = None;
         self.gesture = None;
+        self.selected_tracks.clear();
         self.piano_anchor = ui::piano::AnchorSelection::default();
         self.parameter_lane = ui::lanes::ParameterSelection::default();
         self.phoneme_editing = ui::phonemes::PhonemeEditing::default();
