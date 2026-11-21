@@ -6,6 +6,7 @@ mod waveform;
 mod waveform_flash;
 
 pub use phonemes::draw as phonemes;
+pub(super) use phonemes::{begin_text_edit, text_editor};
 
 use std::{
     ops::Range,
