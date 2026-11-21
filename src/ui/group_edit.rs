@@ -21,8 +21,8 @@ pub fn start(
     app.commit_lyric();
     app.editor.select_reference(track, original.id);
     app.editor.begin(match kind {
-        GroupEdit::Move => "移动音符组",
-        _ => "调整音符组范围",
+        GroupEdit::Move => app.preferences.language.text("移动音符组", "Move note group", "ノートグループを移動"),
+        _ => app.preferences.language.text("调整音符组范围", "Resize note group", "ノートグループの範囲を調整"),
     });
     app.group_gesture = Some(GroupGesture {
         original: original.clone(),
