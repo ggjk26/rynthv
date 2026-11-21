@@ -1,11 +1,12 @@
 use crate::{
     app::{App, MidiImportMode, MidiImportPhase},
     midi::MidiTrack,
-    ui::theme::*,
+    ui::{settings::UiLanguage, theme::*},
 };
 use eframe::egui::*;
 
 pub fn show(app: &mut App, ctx: &Context) {
+    let lang = app.preferences.language;
     let Some(mut import) = app.midi_import.take() else {
         return;
     };
@@ -27,7 +28,7 @@ pub fn show(app: &mut App, ctx: &Context) {
             ui.set_width(width);
             ui.spacing_mut().item_spacing.y = 12.0;
             ui.label(
-                RichText::new("导入 MIDI")
+                RichText::new(lang.text("导入 MIDI", "Import MIDI", "MIDI をインポート"))
                     .font(FontId::new(18.0, FontFamily::Name("SectionTitle".into()))),
             );
             ui.label(
@@ -46,7 +47,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                 MidiImportPhase::Loading(_) => {
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("正在读取 MIDI 音轨…");
+                        ui.label(lang.text("正在读取 MIDI 音轨…", "Reading MIDI tracks…", "MIDI トラックを読み込み中…"));
                     });
                 }
                 MidiImportPhase::Failed(error) => {
@@ -54,13 +55,13 @@ pub fn show(app: &mut App, ctx: &Context) {
                 }
                 MidiImportPhase::Ready { file, selected } => {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("要导入的音轨").color(MUTED));
+                        ui.label(RichText::new(lang.text("要导入的音轨", "Tracks to import", "インポートするトラック")).color(MUTED));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.small_button("取消全选").clicked() {
+                            if ui.small_button(lang.text("取消全选", "Deselect all", "すべて選択解除")).clicked() {
                                 selected.fill(false);
                                 import.validation_error = None;
                             }
-                            if ui.small_button("全选").clicked() {
+                            if ui.small_button(lang.text("全选", "Select all", "すべて選択")).clicked() {
                                 import.validation_error = None;
                                 for (selected, track) in selected.iter_mut().zip(&file.tracks) {
                                     *selected = !track.notes.is_empty();
@@ -77,7 +78,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                                 if ui
                                     .add_enabled(
                                         !track.notes.is_empty(),
-                                        Checkbox::new(selected, track_label(track)),
+                                        Checkbox::new(selected, track_label(track, lang)),
                                     )
                                     .changed()
                                 {
@@ -92,19 +93,19 @@ pub fn show(app: &mut App, ctx: &Context) {
                         .any(|(track, &selected)| selected && !track.notes.is_empty());
                     ui.label(
                         RichText::new(match import.mode {
-                            MidiImportMode::NewProject => "新建工程，使用 MIDI 的曲速和拍号。",
-                            MidiImportMode::Tracks => "从工程起点追加音轨，保留当前曲速和拍号。",
+                            MidiImportMode::NewProject => lang.text("新建工程，使用 MIDI 的曲速和拍号。", "Create a new project with the MIDI tempo and time signatures.", "MIDI のテンポと拍子を使用して新規プロジェクトを作成します。"),
+                            MidiImportMode::Tracks => lang.text("从工程起点追加音轨，保留当前曲速和拍号。", "Append tracks from project start; keep current tempo and time signature.", "プロジェクトの先頭にトラックを追加し、現在のテンポと拍子を維持します。"),
                         })
                         .size(11.0)
                         .color(MUTED),
                     );
                     ui.label(
-                        RichText::new("重叠音符会拆分为独立声部。")
+                        RichText::new(lang.text("重叠音符会拆分为独立声部。", "Overlapping notes will be split into separate parts.", "重なったノートは別のパートに分割されます。"))
                             .size(11.0)
                             .color(MUTED),
                     );
                     if !file.warnings.is_empty() {
-                        CollapsingHeader::new(format!("导入提示（{}）", file.warnings.len())).show(
+                        CollapsingHeader::new(format!("{} ({})", lang.text("导入提示", "Import warnings", "インポートの注意"), file.warnings.len())).show(
                             ui,
                             |ui| {
                                 ScrollArea::vertical()
@@ -121,7 +122,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                         );
                     }
                     if file.tracks.iter().all(|track| track.notes.is_empty()) {
-                        ui.label("文件中没有可导入的音符。");
+                        ui.label(lang.text("文件中没有可导入的音符。", "No importable notes in this file.", "インポートできるノートがありません。"));
                     }
                 }
             }
@@ -132,13 +133,13 @@ pub fn show(app: &mut App, ctx: &Context) {
             ui.horizontal(|ui| {
                 let size = vec2((ui.available_width() - 10.0) / 2.0, 34.0);
                 cancel = ui
-                    .add_sized(size, Button::new("取消").fill(BUTTON_HOVER))
+                    .add_sized(size, Button::new(lang.text("取消", "Cancel", "キャンセル")).fill(BUTTON_HOVER))
                     .clicked();
                 ui.add_space(2.0);
                 submit = ui
                     .add_enabled(
                         can_import,
-                        Button::new(RichText::new("导入").color(CANVAS))
+                        Button::new(RichText::new(lang.text("导入", "Import", "インポート")).color(CANVAS))
                             .fill(GREEN)
                             .min_size(size),
                     )
@@ -162,8 +163,8 @@ pub fn show(app: &mut App, ctx: &Context) {
     }
 }
 
-fn track_label(track: &MidiTrack) -> String {
-    let mut details = format!("{} 个音符", track.notes.len());
+fn track_label(track: &MidiTrack, lang: UiLanguage) -> String {
+    let mut details = format!("{} {}", track.notes.len(), lang.text("个音符", "notes", "個のノート"));
     if let Some(low) = track.notes.iter().map(|note| note.pitch).min() {
         let high = track.notes.iter().map(|note| note.pitch).max().unwrap();
         details.push_str(&format!("，{} – {}", pitch_name(low), pitch_name(high)));
