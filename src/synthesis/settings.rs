@@ -143,6 +143,38 @@ impl SynthesisSettings {
         self.database_roots().next().is_some()
     }
 
+    /// Locate the three standard Windows database roots without reading or
+    /// modifying any installed voicebank contents. Missing roots are left unset.
+    /// The caller must explicitly choose whether to apply these values.
+    pub fn installed_windows_roots() -> Result<Self, String> {
+        let mut settings = Self::default();
+        #[cfg(windows)]
+        {
+            let home = std::env::var_os("USERPROFILE")
+                .filter(|home| !home.is_empty())
+                .map(PathBuf::from)
+                .ok_or_else(|| "USERPROFILE 未设置，无法定位 Documents。".to_owned())?;
+            let documents = home.join("Documents");
+            for (destination, candidate) in [
+                (&mut settings.databases, documents.join("Dreamtonics/Synthesizer V Studio 2/databases")),
+                (&mut settings.sv1_databases, documents.join("Dreamtonics/Synthesizer V Studio/databases")),
+                (&mut settings.flat_databases, documents.join("OPSV/Dreamtonics/Synthesizer V Studio/databases")),
+            ] {
+                if candidate.is_dir() {
+                    *destination = Some(candidate);
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            return Err("只支持在 Windows 上检测 Dreamtonics 标准安装目录。".to_owned());
+        }
+        if !settings.has_databases() {
+            return Err("未找到任何默认 Dreamtonics databases 目录，请手动指定声库根目录。".to_owned());
+        }
+        Ok(settings)
+    }
+
     pub fn path() -> Result<PathBuf, String> {
         crate::platform::config_directory().map(|path| path.join("synthesis.json"))
     }
