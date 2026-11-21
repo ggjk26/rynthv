@@ -59,6 +59,39 @@ cargo build --release --locked --bins
 
 **重要：SV Flat 目前只有只读识别与诊断功能，不能合成/试听/导出。** .sfpk 安装包解包和 Flat 原生合成模型加载尚未实现，识别到的 Flat 声库会明确显示为不可用，不会误当作 SV1 声库加载。
 
+### 本地编译时内嵌 SV2 Duration（可选）
+
+如果拥有相应模型的使用与再分发许可，可以在**自己的电脑**编译时通过
+`RYNTHV_DURATION_DNNI` 指定一个 DNNI v3 文件。构建脚本只将该文件嵌入
+**本地构建的可执行文件**，GitHub 仓库与默认 Actions 产物不会包含模型权重。
+
+Windows PowerShell 示例：
+
+```powershell
+$env:RYNTHV_DURATION_DNNI = "D:\\MyModels\\duration.dnni"
+cargo build --release --locked --bins
+Remove-Item Env:RYNTHV_DURATION_DNNI
+```
+
+Linux 示例：
+
+```sh
+RYNTHV_DURATION_DNNI=/home/me/models/duration.dnni cargo build --release --locked --bins
+```
+
+运行时只会在所选 SV2 声库**没有自己的 Duration 阶段**时考虑使用内嵌模型。
+它必须通过现有 DNNI v3 格式校验、资源完整性校验，并包含 **SV2 Duration**
+资源标识；否则会报告不兼容，绝不会用其他类型的模型冒充时长模型。
+有声库自带的 Duration 时优先使用声库自己的模型。
+
+**SV Flat 的 `timing_model` 不等同于已验证兼容的 SV2 Duration 阶段。**
+例如 `7b0ea690ada94b4484b50d9d64a21cae.dnni` 是 Flat 的通用
+Timing Model；即使可以本地编译内嵌，也不保证能通过 RynthV 的 SV2 Duration
+校验，更不能据此认为 SV Flat 原生合成已经实现。
+`dcee89442f69984189a5b2aedbf9f090` 为 Flat F0，
+`2c233d8e9b19f1f4dc0276ba3a5542c1` 为 Flat 基础模型，
+均不应当作为 Duration 注入。
+
 ### SV Flat 命令行诊断
 
 命令可用于检查原始 JSON NOFS、解包后配套 config.json 的 info.nofs，以及声库目录：
