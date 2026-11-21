@@ -10,6 +10,7 @@ use crate::{app::App, model::*};
 use eframe::egui::*;
 
 pub fn show(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let rect = ui.max_rect();
     if ui.rect_contains_pointer(rect) && ui.input(|input| input.pointer.any_pressed()) {
         super::lanes::parameter_deactivate(app);
@@ -52,7 +53,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     } else {
                         Icon::ChevronDown
                     },
-                    "展开 / 折叠编排",
+                    lang.text("展开 / 折叠编排", "Expand / collapse arrangement", "アレンジを展開／折りたたむ"),
                 )
                 .size(vec2(12.0, 24.0))
                 .icon_size(12.0),
@@ -61,17 +62,17 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         {
             app.view.arrangement_collapsed = !app.view.arrangement_collapsed;
         }
-        super::section_title(ui, "编排", DragPayload::Arrangement);
+        super::section_title(ui, lang.text("编排", "Arrangement", "アレンジ"), DragPayload::Arrangement);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let create = ui.add(
-                IconButton::new(Icon::Plus, "创建音轨")
+                IconButton::new(Icon::Plus, lang.text("创建音轨", "Create track", "トラックを作成"))
                     .size(vec2(23.0, 24.0))
                     .icon_size(17.0),
             );
             Popup::menu(&create).show(|ui| super::instrumental::create_menu(app, ui));
             if ui
                 .add(
-                    IconButton::new(Icon::TempoTracks, "显示 / 隐藏曲速和拍号轨")
+                    IconButton::new(Icon::TempoTracks, lang.text("显示 / 隐藏曲速和拍号轨", "Show / hide tempo and meter tracks", "テンポ・拍子トラックの表示切替"))
                         .size(vec2(24.0, 24.0))
                         .icon_size(17.0)
                         .selected(app.show_time_tracks)
@@ -176,7 +177,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         ARRANGEMENT_GRID,
     );
     if app.show_time_tracks {
-        for (index, text) in ["拍号", "曲速"].into_iter().enumerate() {
+        for (index, text) in [lang.text("拍号", "Time signature", "拍子"), lang.text("曲速", "Tempo", "テンポ")].into_iter().enumerate() {
             let y = header.bottom() + index as f32 * 28.0;
             ui.painter().rect_filled(
                 Rect::from_min_size(pos2(rect.left(), y), vec2(gutter, 28.0)),
