@@ -3,6 +3,7 @@ mod commands;
 mod geometry;
 mod gesture;
 mod header;
+pub(crate) use header::target_name;
 mod paint;
 mod session;
 
