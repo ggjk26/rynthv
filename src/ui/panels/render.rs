@@ -135,6 +135,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             &[(1, lang.text("单声道", "Mono", "モノラル")), (2, lang.text("立体声", "Stereo", "ステレオ"))],
         );
         ui.weak(lang.text("气声输出", "Aspiration output", "息成分の書き出し"));
+        ui.small(lang.text("独立气声分轨尚未由合成引擎提供；当前仅支持完整音频。", "Separate aspiration stems are not available from the synthesis engine yet; only full audio can be exported.", "合成エンジンは息成分の個別出力に未対応です。現在は全音声のみ書き出せます。"));
         let mut aspiration = string(&config, "aspirationFormat");
         combo(
             ui,
