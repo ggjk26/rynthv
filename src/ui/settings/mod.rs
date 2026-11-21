@@ -135,7 +135,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                         Page::General => pages::general(app, ui),
                         Page::Audio => pages::audio(app, ui),
                         Page::Editing => pages::editing(app, ui),
-                        Page::Recording => pages::recording(ui),
+                        Page::Recording => pages::recording(ui, app.preferences.language),
                         Page::Rendering => pages::rendering(app, ui),
                         Page::Shortcuts => shortcuts::show(ui),
                     }
