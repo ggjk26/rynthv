@@ -135,6 +135,7 @@ pub(super) fn tuning(app: &mut App, ui: &mut Ui) {
 }
 
 fn sliders(app: &mut App, ui: &mut Ui, parameters: &[VoiceParameter]) {
+    let lang = app.preferences.language;
     interaction::prepare(app, ui.ctx());
     let state = state(app, ui);
     let enabled = state.is_some() && interaction::editable(app, ui);
@@ -149,7 +150,7 @@ fn sliders(app: &mut App, ui: &mut Ui, parameters: &[VoiceParameter]) {
             let id = ui.make_persistent_id(parameter.key());
             let response = ui
                 .add_enabled_ui(enabled, |ui| {
-                    widgets::parameter_slider(ui, parameter, &mut value)
+                    widgets::parameter_slider(ui, parameter, &mut value, lang)
                 })
                 .inner;
             interaction::apply(
