@@ -257,7 +257,7 @@ fn interaction(
             app.editor.selected = BTreeSet::from([note.id]);
             app.edit_lyric();
         } else {
-            app.editor.begin("创建音符");
+            app.editor.begin(app.preferences.language.text("创建音符", "Create note", "ノートを作成"));
             let at = ticks(app.view.snap_beat(beat_at(canvas, &app.view.piano, p.x))).max(0);
             if app
                 .editor
