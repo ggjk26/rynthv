@@ -146,6 +146,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     super::rendered::waveforms(app, ui, canvas, &groups);
     scene::draw_notes(app, ui, canvas, &groups);
     super::rendered::phonemes(app, ui, canvas, &groups);
+    super::rendered::text_editor(app, ui, canvas);
     super::rendered::pitch(app, ui, canvas, &groups);
     super::pitch_edit::draw(app, ui, canvas, &groups);
     super::pitch_anchor::draw(app, ui, canvas);
@@ -246,7 +247,10 @@ fn interaction(
         && let Some(p) = response.interact_pointer_pos()
     {
         app.commit_lyric();
-        if let Some((reference, note)) = hit {
+        if super::rendered::begin_text_edit(app, canvas, groups, p) {
+            // Editing a rendered phoneme label takes precedence over creating
+            // a note at the same double-click location.
+        } else if let Some((reference, note)) = hit {
             app.editor.select_reference(app.editor.track, reference.id);
             app.editor.selected = BTreeSet::from([note.id]);
             app.edit_lyric();
