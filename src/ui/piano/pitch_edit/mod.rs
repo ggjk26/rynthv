@@ -109,12 +109,12 @@ fn start(app: &mut App, ctx: &Context, canvas: Rect, pos: Pos2, button: PointerB
         return false;
     }
     let Some(reference) = app.editor.active_ref().cloned() else {
-        app.status = "请先点击音符组标题，再绘制音高曲线".into();
+        app.status = app.preferences.language.text("请先点击音符组标题，再绘制音高曲线", "Select a note group header before drawing pitch", "ピッチを描く前にノートグループの見出しを選択してください").into();
         return false;
     };
     let global = ticks(beat_at(canvas, &app.view.piano, pos.x));
     if !reference.contains(global) {
-        app.status = "请在当前音符组范围内绘制音高，点击标题可切换音符组".into();
+        app.status = app.preferences.language.text("请在当前音符组范围内绘制音高，点击标题可切换音符组", "Draw pitch within the current note group; click a header to change groups", "現在のノートグループ内でピッチを描いてください。見出しをクリックしてグループを切り替えます").into();
         return false;
     }
     let Some(group) = app.editor.group() else {
