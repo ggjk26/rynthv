@@ -66,11 +66,21 @@ impl VoiceCatalog {
     pub fn scan_with_models(root: &Path, flat_models: Option<&Path>) -> Result<Self> {
         let mut catalog = Self::default();
         if super::nofs::is_file(root) {
-            catalog.entries.push(entry_nofs(root, flat_models)?);
+            match entry_nofs(root, flat_models) {
+                Ok(entry) => catalog.entries.push(entry),
+                Err(error) => catalog.warnings.push(format!(
+                    "声库文件 {} 解析失败：{error}", root.display()
+                )),
+            }
             return Ok(catalog);
         }
         for path in super::nofs::paths(root)? {
-            catalog.entries.push(entry_nofs(&path, flat_models)?);
+            match entry_nofs(&path, flat_models) {
+                Ok(entry) => catalog.entries.push(entry),
+                Err(error) => catalog.warnings.push(format!(
+                    "声库文件 {} 解析失败：{error}", path.display()
+                )),
+            }
         }
         let metadata = MetadataIndex::load(root);
         // Also accept a standalone, human-named folder containing DNNI
@@ -117,7 +127,12 @@ impl VoiceCatalog {
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
                     for path in paths {
-                        catalog.entries.push(entry_nofs(&path, flat_models)?);
+                        match entry_nofs(&path, flat_models) {
+                            Ok(entry) => catalog.entries.push(entry),
+                            Err(error) => catalog.warnings.push(format!(
+                                "声库文件 {} 解析失败：{error}", path.display()
+                            )),
+                        }
                     }
                 }
                 Err(error) => catalog.warnings.push(format!(
@@ -156,7 +171,12 @@ impl VoiceCatalog {
                         match super::nofs::paths(&revision.path()) {
                             Ok(paths) => {
                                 for path in paths {
-                                    catalog.entries.push(entry_nofs(&path, flat_models)?);
+                                    match entry_nofs(&path, flat_models) {
+                                        Ok(entry) => catalog.entries.push(entry),
+                                        Err(error) => catalog.warnings.push(format!(
+                                            "声库文件 {} 解析失败：{error}", path.display()
+                                        )),
+                                    }
                                 }
                             }
                             Err(error) => catalog.warnings.push(format!(
