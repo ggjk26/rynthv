@@ -42,6 +42,7 @@ pub(crate) fn parameter_slider(
             },
             snap_input: tuning,
         },
+        lang,
     )
 }
 
