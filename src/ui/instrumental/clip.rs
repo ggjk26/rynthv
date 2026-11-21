@@ -7,9 +7,10 @@ use crate::{
 use eframe::egui::*;
 
 pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
+    let lang = app.preferences.language;
     let row = ui.interact(body, Id::new(("audio-row", track.id)), Sense::click());
     row.context_menu(|ui| {
-        if ui.button("导入 / 替换音频…").clicked() {
+        if ui.button(lang.text("导入 / 替换音频…", "Import / replace audio…", "音声をインポート／置換…")).clicked() {
             ui.close();
             app.import_audio(Some(track.id), ui.ctx());
         }
@@ -24,9 +25,9 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
             body.left_center() + vec2(12.0, 0.0),
             Align2::LEFT_CENTER,
             if loading {
-                "正在导入音频…"
+                lang.text("正在导入音频…", "Importing audio…", "音声を読み込み中…")
             } else {
-                "双击导入伴奏音频…"
+                lang.text("双击导入伴奏音频…", "Double-click to import instrumental audio…", "ダブルクリックで伴奏音声をインポート…")
             },
             FontId::proportional(12.0),
             MUTED,
@@ -35,7 +36,7 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
             app.import_audio(Some(track.id), ui.ctx());
         }
         response.context_menu(|ui| {
-            if ui.button("导入音频…").clicked() {
+            if ui.button(lang.text("导入音频…", "Import audio…", "音声をインポート…")).clicked() {
                 ui.close();
                 app.import_audio(Some(track.id), ui.ctx());
             }
@@ -66,9 +67,9 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
     let error = app.synthesis.instrumentals.error(&clip.path);
     let asset = app.synthesis.instrumentals.asset(&clip.path);
     let title = if error.is_some() {
-        format!("{} · 加载失败", clip.name())
+        format!("{} · {}", clip.name(), lang.text("加载失败", "Load failed", "読み込み失敗"))
     } else if asset.is_none() {
-        format!("{} · 加载中…", clip.name())
+        format!("{} · {}", clip.name(), lang.text("加载中…", "Loading…", "読み込み中…"))
     } else {
         clip.name().to_owned()
     };
@@ -110,9 +111,11 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
     let hover = error.map_or_else(
         || {
             format!(
-                "{}\n{:.2} 秒 · 拖动调整位置，双击替换音频",
+                "{}\n{:.2} {} · {}",
                 clip.path.display(),
-                clip.duration_seconds
+                clip.duration_seconds,
+                lang.text("秒", "s", "秒"),
+                lang.text("拖动调整位置，双击替换音频", "Drag to reposition, double-click to replace audio", "ドラッグで位置を移動、ダブルクリックで音声を置換")
             )
         },
         str::to_owned,
@@ -144,21 +147,21 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
         });
     }
     response.context_menu(|ui| {
-        if ui.button("替换音频…").clicked() {
+        if ui.button(lang.text("替换音频…", "Replace audio…", "音声を置換…")).clicked() {
             ui.close();
             app.import_audio(Some(track.id), ui.ctx());
         }
-        if ui.button("重新加载音频").clicked() {
+        if ui.button(lang.text("重新加载音频", "Reload audio", "音声を再読み込み")).clicked() {
             app.reload_audio(track.id, ui.ctx());
             ui.close();
         }
-        if ui.button("移到工程开头").clicked() {
+        if ui.button(lang.text("移到工程开头", "Move to project start", "プロジェクトの先頭に移動")).clicked() {
             app.editor.begin("移动伴奏");
             app.editor.move_audio_clip(track.id, 0.0);
             app.editor.finish();
             ui.close();
         }
-        if ui.button("移除音频").clicked() {
+        if ui.button(lang.text("移除音频", "Remove audio", "音声を削除")).clicked() {
             app.editor.set_audio_clip(track.id, None);
             ui.close();
         }
