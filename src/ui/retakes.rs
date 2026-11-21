@@ -20,6 +20,14 @@ pub fn label(id: u32) -> String {
     }
 }
 
+pub fn localized_label(id: u32, lang: crate::ui::settings::UiLanguage) -> String {
+    if id == 0 {
+        lang.text("默认采样", "Default take", "デフォルトテイク").into()
+    } else {
+        format!("{} {id}", lang.text("重录采样", "Retake", "リテイク"))
+    }
+}
+
 pub fn unavailable(app: &App, component: RetakeComponent) -> Option<&'static str> {
     unavailable_at(app, component, Target::Selection)
 }
@@ -29,31 +37,32 @@ fn unavailable_at(
     component: RetakeComponent,
     target: Target<'_>,
 ) -> Option<&'static str> {
+    let lang = app.preferences.language;
     if matches!(target, Target::Selection)
         && (app.editor.selected.is_empty() || app.editor.active_ref().is_none())
     {
-        return Some("在钢琴卷帘中选择要重录的音符");
+        return Some(lang.text("在钢琴卷帘中选择要重录的音符", "Select notes to retake in the piano roll", "ピアノロールでリテイクするノートを選択してください"));
     }
     if app.editor.is_editing() {
-        return Some("请先结束当前编辑");
+        return Some(lang.text("请先结束当前编辑", "Finish the current edit first", "先に現在の編集を完了してください"));
     }
     let reason = match voice_family(app, target) {
         Some(VoiceFamily::Sv2) => None,
         Some(VoiceFamily::Sv2Compatible | VoiceFamily::Sv1)
             if component == RetakeComponent::Duration =>
         {
-            Some("一代歌声支持音高和音色重录")
+            Some(lang.text("一代歌声支持音高和音色重录", "Legacy voices support pitch/timbre retakes only", "旧世代の歌声はピッチと音色のリテイクのみ対応します"))
         }
         Some(VoiceFamily::Sv2Compatible | VoiceFamily::Sv1) => None,
-        None => Some("请先为当前音轨选择歌声"),
+        None => Some(lang.text("请先为当前音轨选择歌声", "Select a voice for the current track first", "先に現在のトラックの歌声を選択してください")),
     };
     reason.or_else(|| {
         let key = voice_selection(app, target)?;
         match app.synthesis.voice_state(&key) {
             VoiceState::Loaded(_) => None,
-            VoiceState::Loading => Some("歌声正在加载，请稍候"),
-            VoiceState::Failed(_) => Some("歌声加载失败，请在歌声面板重试"),
-            VoiceState::Unloaded => Some("请先加载当前音轨的歌声"),
+            VoiceState::Loading => Some(lang.text("歌声正在加载，请稍候", "Voice is loading…", "歌声を読み込み中です…")),
+            VoiceState::Failed(_) => Some(lang.text("歌声加载失败，请在歌声面板重试", "Voice load failed; retry in the voice panel", "歌声の読み込みに失敗しました。歌声パネルから再試行してください")),
+            VoiceState::Unloaded => Some(lang.text("请先加载当前音轨的歌声", "Load the current track's voice first", "先に現在のトラックの歌声を読み込んでください")),
         }
     })
 }
@@ -142,10 +151,11 @@ fn report(app: &mut App, result: Result<usize, String>) {
 }
 
 pub fn commands(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let reason = unavailable(app, RetakeComponent::All);
     let response = ui.add_enabled(
         reason.is_none(),
-        Button::new("重录新的采样").shortcut_text("Alt+T"),
+        Button::new(lang.text("重录新的采样", "Generate a new retake", "新しいリテイクを生成")).shortcut_text("Alt+T"),
     );
     if response.clicked() {
         create(app, RetakeComponent::All);
@@ -162,7 +172,7 @@ pub fn commands(app: &mut App, ui: &mut Ui) {
     if ui
         .add_enabled(
             can_prune,
-            Button::new("裁剪保留使用采样").shortcut_text("Shift+Alt+T"),
+            Button::new(lang.text("裁剪保留使用采样", "Prune unused takes", "未使用のテイクを削除")).shortcut_text("Shift+Alt+T"),
         )
         .clicked()
     {
@@ -176,9 +186,10 @@ pub fn choices(app: &mut App, ui: &mut Ui, selection: &RetakeSelection) {
 }
 
 pub fn choices_at(app: &mut App, ui: &mut Ui, selection: &RetakeSelection, target: Target<'_>) {
+    let lang = app.preferences.language;
     if matches!(target, Target::Note { .. }) {
         let reason = unavailable_at(app, RetakeComponent::All, target);
-        let response = ui.add_enabled(reason.is_none(), Button::new("重录新的采样"));
+        let response = ui.add_enabled(reason.is_none(), Button::new(lang.text("重录新的采样", "Generate a new retake", "新しいリテイクを生成")));
         if response.clicked() {
             create_at(app, RetakeComponent::All, target);
             ui.close();
@@ -189,7 +200,7 @@ pub fn choices_at(app: &mut App, ui: &mut Ui, selection: &RetakeSelection, targe
     if ui
         .add_enabled(
             selection.can_prune,
-            Button::new("裁剪保留使用采样").shortcut_text("Shift+Alt+T"),
+            Button::new(lang.text("裁剪保留使用采样", "Prune unused takes", "未使用のテイクを削除")).shortcut_text("Shift+Alt+T"),
         )
         .clicked()
     {
@@ -199,7 +210,7 @@ pub fn choices_at(app: &mut App, ui: &mut Ui, selection: &RetakeSelection, targe
     ui.separator();
     for take in &selection.takes {
         if ui
-            .selectable_label(selection.active_take_id == Some(take.id), label(take.id))
+            .selectable_label(selection.active_take_id == Some(take.id), localized_label(take.id, lang))
             .clicked()
         {
             select_at(app, take.id, target);
@@ -209,6 +220,7 @@ pub fn choices_at(app: &mut App, ui: &mut Ui, selection: &RetakeSelection, targe
 }
 
 pub fn selector(app: &mut App, ui: &mut Ui, selection: &RetakeSelection) {
+    let lang = app.preferences.language;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         ComboBox::from_id_salt("retake-choice")
@@ -216,12 +228,12 @@ pub fn selector(app: &mut App, ui: &mut Ui, selection: &RetakeSelection) {
             .selected_text(
                 selection
                     .active_take_id
-                    .map_or_else(|| "多个采样".into(), label),
+                    .map_or_else(|| lang.text("多个采样", "Multiple takes", "複数のテイク").into(), |id| localized_label(id, lang)),
             )
             .show_ui(ui, |ui| choices(app, ui, selection))
             .response
-            .on_hover_text(format!("切换所选 {} 个音符的采样", selection.note_count));
-        for (direction, text, tip) in [(-1, "‹", "上一个采样"), (1, "›", "下一个采样")]
+            .on_hover_text(format!("{} {} {}", lang.text("切换所选", "Switch takes for", "選択した"), selection.note_count, lang.text("个音符的采样", "selected notes", "ノートのテイクを切り替え")));
+        for (direction, text, tip) in [(-1, "‹", lang.text("上一个采样", "Previous take", "前のテイク")), (1, "›", lang.text("下一个采样", "Next take", "次のテイク"))]
         {
             let adjacent = selection.adjacent_id(direction);
             if ui
