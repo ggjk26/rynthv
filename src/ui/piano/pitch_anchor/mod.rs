@@ -138,7 +138,7 @@ fn can_add_points(app: &mut App) -> bool {
             .and_then(|entry| entry.family)
     });
     if family.is_some_and(|family| family != crate::synthesis::voice::VoiceFamily::Sv2) {
-        app.status = "当前声库暂不支持音高控制点，请使用手绘音高模式".into();
+        app.status = app.preferences.language.text("当前声库暂不支持音高控制点，请使用手绘音高模式", "Current voice does not support pitch anchors. Use freehand pitch drawing.", "現在の歌声はピッチ制御点に未対応です。フリーハンドでピッチを描いてください。").into();
         false
     } else {
         true
@@ -168,7 +168,7 @@ pub fn anchor_delete(app: &mut App) {
         return;
     }
     let selected = app.piano_anchor.ids.clone();
-    app.editor.begin("删除音高控制点");
+    app.editor.begin(app.preferences.language.text("删除音高控制点", "Delete pitch anchors", "ピッチ制御点を削除"));
     if let Some(group) = app.editor.group_mut() {
         group
             .pitch_controls
