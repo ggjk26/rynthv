@@ -86,6 +86,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, selection: &PerformanceSelection,
                 &mut value,
                 current.flatten().is_none(),
                 -minimum / span,
+                lang,
             );
             let reset = response.double_clicked()
                 || response.has_focus() && ui.input(|input| input.key_pressed(Key::Home));
