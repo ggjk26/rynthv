@@ -230,6 +230,7 @@ fn interaction(
     canvas: Rect,
     groups: &[scene::SceneGroup],
 ) {
+    let lang = app.preferences.language;
     let hit = response
         .interact_pointer_pos()
         .and_then(|p| scene::hit_note(app, groups, canvas, p));
@@ -262,7 +263,7 @@ fn interaction(
                 .add_note(at, QUARTER, pitch_at(app, canvas, p.y))
                 .is_none()
             {
-                app.status = "请在音符组范围内创建音符，或在编排中插入新的音符组".into();
+                app.status = lang.text("请在音符组范围内创建音符，或在编排中插入新的音符组", "Create notes inside a group, or insert a new group in the arrangement", "グループ内にノートを作成するか、アレンジに新しいグループを追加してください").into();
             }
             app.editor.finish();
         }
@@ -302,13 +303,13 @@ fn interaction(
     response.context_menu(|ui| {
         let selected = !app.editor.selected.is_empty();
         if ui
-            .add_enabled(selected, Button::new("填入歌词…").shortcut_text("Ctrl+L"))
+            .add_enabled(selected, Button::new(lang.text("填入歌词…", "Fill lyrics…", "歌詞を入力…")).shortcut_text("Ctrl+L"))
             .clicked()
         {
             crate::ui::fill_lyrics::open(app);
             ui.close();
         }
-        if ui.add_enabled(selected, Button::new("静音音符")).clicked() {
+        if ui.add_enabled(selected, Button::new(lang.text("静音音符", "Mute notes", "ノートをミュート"))).clicked() {
             app.editor.mute_selected();
             ui.close();
         }
@@ -316,14 +317,14 @@ fn interaction(
         crate::ui::retakes::commands(app, ui);
         ui.separator();
         if ui
-            .add_enabled(selected, Button::new("复制").shortcut_text("Ctrl+C"))
+            .add_enabled(selected, Button::new(lang.text("复制", "Copy", "コピー")).shortcut_text("Ctrl+C"))
             .clicked()
         {
             crate::ui::chrome::edit::copy(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(selected, Button::new("剪切").shortcut_text("Ctrl+X"))
+            .add_enabled(selected, Button::new(lang.text("剪切", "Cut", "切り取り")).shortcut_text("Ctrl+X"))
             .clicked()
         {
             crate::ui::chrome::edit::cut(app, ui.ctx());
@@ -332,16 +333,16 @@ fn interaction(
         if ui
             .add_enabled(
                 crate::ui::chrome::edit::can_paste(app),
-                Button::new("粘贴").shortcut_text("Ctrl+V"),
+                Button::new(lang.text("粘贴", "Paste", "貼り付け")).shortcut_text("Ctrl+V"),
             )
-            .on_hover_text("在播放游标处粘贴音符")
+            .on_hover_text(lang.text("在播放游标处粘贴音符", "Paste notes at the playhead", "再生位置にノートを貼り付け"))
             .clicked()
         {
             crate::ui::chrome::edit::paste(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(selected, Button::new("删除所选音符"))
+            .add_enabled(selected, Button::new(lang.text("删除所选音符", "Delete selected notes", "選択したノートを削除")))
             .clicked()
         {
             app.editor.delete_selected();
