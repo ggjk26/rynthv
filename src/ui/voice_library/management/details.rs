@@ -74,6 +74,36 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
     if let VoiceAvailability::Unsupported(reason) = &entry.availability {
         super::super::error_label(ui, reason);
     }
+    if entry.database_id.starts_with("svflat:") {
+        // A concise, copyable report makes mismatched Flat model installs
+        // diagnosable without reading or exporting protected model payloads.
+        let mut report = format!(
+            "RynthV SV Flat diagnostics\nName: {}\nVersion: {}\nID: {}\nSource: {}\n",
+            entry.display_name,
+            entry.version_label.as_deref().unwrap_or("-"),
+            entry.database_id,
+            entry.directory.display(),
+        );
+        for dependency in &entry.model_dependencies {
+            report.push_str("Model: ");
+            report.push_str(dependency);
+            report.push('\n');
+        }
+        if let VoiceAvailability::Unsupported(reason) = &entry.availability {
+            report.push_str("Synthesis: unsupported\nDetails: ");
+            report.push_str(reason);
+        }
+        if ui
+            .button(lang.text(
+                "复制 SV Flat 诊断报告",
+                "Copy SV Flat diagnostic report",
+                "SV Flat 診断レポートをコピー",
+            ))
+            .clicked()
+        {
+            ui.ctx().copy_text(report);
+        }
+    }
     if app.synthesis.inventory(&selection).is_some()
         || app.synthesis.voice_error(&selection).is_some()
     {
