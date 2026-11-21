@@ -68,6 +68,44 @@ pub fn finish(app: &mut App) {
     app.group_gesture = None;
 }
 pub fn context_menu(app: &mut App, ui: &mut Ui, reference: &GroupRef) {
+    let voice_options = app.synthesis.library.catalog().map(|catalog| {
+        catalog.entries.iter()
+            .filter(|entry| entry.availability.is_loadable())
+            .map(|entry| (
+                entry.database_id.clone(),
+                entry.display_name.clone(),
+                entry.revision,
+            ))
+            .collect::<Vec<_>>()
+    }).unwrap_or_default();
+    let track_id = app.editor.track;
+    let reference_id = reference.id;
+    ui.menu_button("设置此音符组声库", |ui| {
+        if ui.button("继承音轨声库").clicked() {
+            app.commit_lyric();
+            app.commit_phoneme_text();
+            if let Err(error) = app.editor.set_reference_voice(track_id, reference_id, None) {
+                app.error = Some(error);
+            }
+            ui.close();
+        }
+        ui.separator();
+        if voice_options.is_empty() {
+            ui.label("没有可用声库，请先配置声库路径");
+        }
+        for (id, name, revision) in &voice_options {
+            if ui.button(format!("{name} · {revision}")).clicked() {
+                app.commit_lyric();
+                app.commit_phoneme_text();
+                if let Err(error) = app.editor.set_reference_voice(
+                    track_id, reference_id, Some((id, name, *revision))
+                ) {
+                    app.error = Some(error);
+                }
+                ui.close();
+            }
+        }
+    });
     if ui.button("重命名音符组…").clicked() {
         if let Some(group) = app.editor.project.group(&reference.group_id) {
             app.rename = Some(super::rename::Rename::group(reference.id, &group.name));
