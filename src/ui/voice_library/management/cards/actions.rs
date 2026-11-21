@@ -17,6 +17,7 @@ pub(super) fn primary(
     current: bool,
     stable: bool,
 ) {
+    let lang = app.preferences.language;
     let key = entry.selection();
     let voice = app.synthesis.voice_state(&key);
     let loading = matches!(voice, VoiceState::Loading);
@@ -26,21 +27,21 @@ pub(super) fn primary(
         matches!(voice, VoiceState::Loaded(_)) && app.synthesis.voice_error(&key).is_some();
     let loaded = matches!(voice, VoiceState::Loaded(_)) && !problem;
     let label = if !entry.availability.is_loadable() {
-        "不可用"
+        lang.text("不可用", "Unavailable", "利用不可")
     } else if current && loading {
-        "正在加载…"
+        lang.text("正在加载…", "Loading…", "読み込み中…")
     } else if needs_context {
-        "导入模型上下文…"
+        lang.text("导入模型上下文…", "Import model context…", "モデルコンテキストをインポート…")
     } else if problem {
-        "处理问题"
+        lang.text("处理问题", "View issues", "問題を確認")
     } else if current && loaded {
-        "取消当前音轨歌声"
+        lang.text("取消当前音轨歌声", "Remove track voice", "トラックの歌声を解除")
     } else if loaded {
-        "用于当前音轨"
+        lang.text("用于当前音轨", "Use for this track", "このトラックで使用")
     } else if current && matches!(voice, VoiceState::Failed(_)) {
-        "重试加载"
+        lang.text("重试加载", "Retry loading", "再読み込み")
     } else {
-        "加载歌声"
+        lang.text("加载歌声", "Load voice", "歌声を読み込む")
     };
     let enabled = stable
         && entry.availability.is_loadable()
@@ -84,6 +85,7 @@ pub(super) fn menu(
     state: &mut State,
     current: bool,
 ) {
+    let lang = app.preferences.language;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::click());
     if response.hovered() {
         ui.painter().rect_filled(rect, 13, BORDER);
@@ -92,13 +94,13 @@ pub(super) fn menu(
         ui.painter()
             .circle_filled(rect.center() + vec2(0.0, offset), 1.5, MUTED);
     }
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "更多声库操作"));
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, lang.text("更多声库操作", "More voice actions", "その他の歌声操作")));
     Popup::menu(&response).show(|ui| {
         if ui
             .button(if state.expanded.as_ref() == Some(&entry.database_id) {
-                "收起详情"
+                lang.text("收起详情", "Hide details", "詳細を閉じる")
             } else {
-                "详情与诊断"
+                lang.text("详情与诊断", "Details & diagnostics", "詳細と診断")
             })
             .clicked()
         {
@@ -113,10 +115,10 @@ pub(super) fn menu(
             && ui
                 .add_enabled(
                     app.synthesis.can_import_context(&entry.selection()),
-                    Button::new("重新导入上下文…"),
+                    Button::new(lang.text("重新导入上下文…", "Reimport context…", "コンテキストを再インポート…")),
                 )
-                .on_hover_text("重新选择上下文来源，导入成功后重新加载使用此上下文的歌声")
-                .on_disabled_hover_text("当前声库不可用，或正在扫描声库、导入上下文")
+                .on_hover_text(lang.text("重新选择上下文来源，导入成功后重新加载使用此上下文的歌声", "Select a new source. Voices using the context will reload after import.", "ソースを選び直します。インポート後、このコンテキストを使う歌声を再読み込みします。"))
+                .on_disabled_hover_text(lang.text("当前声库不可用，或正在扫描声库、导入上下文", "Voice is unavailable, or scanning/import is in progress", "歌声が利用できないか、スキャン・インポート中です"))
                 .clicked()
         {
             app.synthesis.open_context_import(entry.selection());
@@ -132,14 +134,14 @@ pub(super) fn menu(
                         app.synthesis.voice_state(&entry.selection()),
                         VoiceState::Loading
                     ),
-                    Button::new("重新加载"),
+                    Button::new(lang.text("重新加载", "Reload", "再読み込み")),
                 )
                 .clicked()
             {
                 app.synthesis.reload_voice(&entry.selection());
                 ui.close();
             }
-            if current && ui.button("取消当前音轨歌声").clicked() {
+            if current && ui.button(lang.text("取消当前音轨歌声", "Remove track voice", "トラックの歌声を解除")).clicked() {
                 app.unload_voice();
                 ui.close();
             }
