@@ -248,6 +248,35 @@ impl VoiceInventory {
             inventory.files.push(file);
             inventory._models.push(LoadedModel::Dnni { archive, trees });
         }
+        // An optional locally bundled Duration stage may fill a missing
+        // SV2 model, but never replace a voice's own duration or introduce
+        // unrelated configuration/timbre resources.
+        let has_duration = inventory.files.iter().any(|file| {
+            file.graphs.iter().any(|graph| graph.role == "duration")
+        });
+        if !has_duration {
+            if let Some(archive) = super::bundled::duration()? {
+                if archive.index(CONFIGURATION_ID).is_some() {
+                    return Err(VoiceError::new(
+                        "内嵌时长模型包含独立声库配置，不能作为共享 Duration 注入",
+                    ));
+                }
+                let (file, trees) = inspect::file(
+                    Path::new("bundled-duration.dnni"), &archive,
+                )?;
+                if !file.graphs.iter().any(|graph| graph.role == "duration")
+                    || file.graphs.iter().any(|graph| {
+                        graph.role != "duration" && graph.role != "unconfirmed"
+                    })
+                {
+                    return Err(VoiceError::new(
+                        "内嵌模型不是独立的 SV2 Duration 阶段",
+                    ));
+                }
+                inventory.files.push(file);
+                inventory._models.push(LoadedModel::Dnni { archive, trees });
+            }
+        }
         let mut identity = Sha256::new();
         for file in &inventory.files {
             identity.update((file.name.len() as u64).to_le_bytes());
