@@ -116,12 +116,12 @@ fn show(app: &mut App, ctx: &Context, state: &mut State) {
                     if app.synthesis.library.is_scanning() {
                         ui.horizontal(|ui| {
                             ui.spinner();
-                            text(ui, "正在扫描歌声…");
+                            text(ui, app.preferences.language.text("正在扫描歌声…", "Scanning voicebanks…", "歌声データベースを検索中…"));
                         });
                         return;
                     }
                     if let Some(error) = app.synthesis.library.settings_error() {
-                        error_label(ui, "无法读取声库列表");
+                        error_label(ui, app.preferences.language.text("无法读取声库列表", "Cannot read voicebank list", "歌声一覧を読み込めません"));
                         ui.collapsing("查看原因", |ui| error_label(ui, error));
                         ui.menu_button("选择声库目录…", |ui| {
                             paths::directory_menu(app, ui)
@@ -174,7 +174,7 @@ fn empty(app: &mut App, ui: &mut Ui, state: &mut State) {
             if !state.query.is_empty() || !state.language.is_empty() || !state.vendor.is_empty() {
                 text(
                     ui,
-                    RichText::new("没有匹配的歌声")
+                    RichText::new(app.preferences.language.text("没有匹配的歌声", "No matching voices", "一致する歌声がありません"))
                         .font(section_title_font())
                         .size(16.0),
                 );
@@ -187,7 +187,7 @@ fn empty(app: &mut App, ui: &mut Ui, state: &mut State) {
             } else {
                 text(
                     ui,
-                    RichText::new("没有可显示的声库")
+                    RichText::new(app.preferences.language.text("没有可显示的声库", "No voicebanks found", "歌声データベースが見つかりません"))
                         .font(section_title_font())
                         .size(16.0),
                 );
