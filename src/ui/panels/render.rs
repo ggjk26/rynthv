@@ -41,7 +41,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                     .margin(vec2(7.0, 5.0))
                     .background_color(BORDER),
             );
-            if folder_button(ui).clicked() {
+            if folder_button(ui, lang).clicked() {
                 let mut picker = rfd::FileDialog::new().set_title(lang.text("选择导出文件夹", "Select export folder", "書き出し先を選択"));
                 if !directory.is_empty() {
                     picker = picker.set_directory(&directory);
@@ -145,6 +145,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             "numChannels",
             lang.text("声道", "Channels", "チャンネル"),
             &[(1, lang.text("单声道", "Mono", "モノラル")), (2, lang.text("立体声", "Stereo", "ステレオ"))],
+            lang,
         );
         ui.weak(lang.text("气声输出", "Aspiration output", "息成分の書き出し"));
         ui.small(lang.text("独立气声分轨尚未由合成引擎提供；当前仅支持完整音频。", "Separate aspiration stems are not available from the synthesis engine yet; only full audio can be exported.", "合成エンジンは息成分の個別出力に未対応です。現在は全音声のみ書き出せます。"));
@@ -154,6 +155,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             "aspiration-format",
             &mut aspiration,
             &[("noAspiration".to_owned(), lang.text("无", "None", "なし"))],
+            lang,
         );
         config.insert("aspirationFormat".into(), aspiration.into());
         numeric(
@@ -162,6 +164,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             "bitDepth",
             lang.text("位深度", "Bit depth", "ビット深度"),
             &[(16, lang.text("16 位", "16-bit", "16ビット")), (24, lang.text("24 位", "24-bit", "24ビット")), (32, lang.text("32 位浮点", "32-bit float", "32ビット浮動小数点"))],
+            lang,
         );
         numeric(
             ui,
@@ -173,6 +176,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                 (48000, "48000 Hz"),
                 (96000, "96000 Hz"),
             ],
+            lang,
         );
     });
     if config != app.editor.project.render_config || tracks != original_tracks {
@@ -232,13 +236,13 @@ fn string(config: &Extra, key: &str) -> String {
         .unwrap_or("")
         .to_owned()
 }
-fn numeric(ui: &mut Ui, config: &mut Extra, key: &str, label: &str, values: &[(u64, &str)]) {
+fn numeric(ui: &mut Ui, config: &mut Extra, key: &str, label: &str, values: &[(u64, &str)], lang: crate::ui::settings::UiLanguage) {
     ui.weak(label);
     let mut value = config
         .get(key)
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(values[0].0);
-    combo(ui, key, &mut value, values);
+    combo(ui, key, &mut value, values, lang);
     config.insert(key.into(), value.into());
 }
 fn track_row(ui: &mut Ui, checked: &mut bool, name: &str, color: Color32) {
@@ -261,7 +265,7 @@ fn track_row(ui: &mut Ui, checked: &mut bool, name: &str, color: Color32) {
         color,
     );
 }
-fn folder_button(ui: &mut Ui) -> Response {
+fn folder_button(ui: &mut Ui, lang: crate::ui::settings::UiLanguage) -> Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
     ui.painter().rect(
         rect,
@@ -289,5 +293,5 @@ fn folder_button(ui: &mut Ui) -> Response {
         points.into_iter().map(|(x, y)| c + vec2(x, y)).collect(),
         Stroke::new(1.1, MUTED),
     ));
-    response.on_hover_text("选择目标文件夹")
+    response.on_hover_text(lang.text("选择目标文件夹", "Choose destination folder", "書き出し先フォルダーを選択"))
 }
