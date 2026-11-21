@@ -35,7 +35,7 @@ pub(super) fn start_gesture(
         } else {
             NoteDrag::Move
         };
-        app.editor.begin("拖动音符");
+        app.editor.begin(app.preferences.language.text("拖动音符", "Move notes", "ノートを移動"));
         let mut selected: Vec<_> = app
             .editor
             .notes()
@@ -79,7 +79,7 @@ pub(super) fn start_gesture(
             },
         });
     } else if app.piano_tool == super::Tool::NoteDraw || modifiers.ctrl {
-        app.editor.begin("创建音符");
+        app.editor.begin(app.preferences.language.text("创建音符", "Create note", "ノートを作成"));
         let beat = beat_at(rect, &app.view.piano, origin.x);
         let at = ticks(if app.view.snap && !(modifiers.ctrl && modifiers.alt) {
             app.view.snap_beat(beat)
