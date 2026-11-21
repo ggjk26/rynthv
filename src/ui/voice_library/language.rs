@@ -46,7 +46,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
     }
     let default = inherited.and_then(|inherited| database_language(&default_database, inherited));
     let default_label = match &default {
-        Ok(language) => format!("{} {}", lang.language_label(language), lang.text("（默认）", "(default)", "（既定）")),
+        Ok(language) => format!("{} {}", lang.language_label(*language), lang.text("（默认）", "(default)", "（既定）")),
         Err(_) => lang.text("默认语言不可用", "Default language unavailable", "既定の言語は利用できません").into(),
     };
     let selected_label = if selected.is_empty() {
