@@ -14,7 +14,7 @@ pub(super) fn add_point(app: &mut App, lane: &Lane, mapping: &Mapping, pos: Pos2
         .flat_map(|curve| curve.points.iter().copied())
         .collect();
     points.insert(point.0, point.1);
-    app.editor.begin("添加参数控制点");
+    app.editor.begin(app.preferences.language.text("添加参数控制点", "Add parameter point", "パラメーター制御点を追加"));
     match app
         .editor
         .replace_automation_points(&lane.foreground, points.into_iter().collect())
