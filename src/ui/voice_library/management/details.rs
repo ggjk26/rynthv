@@ -13,6 +13,16 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
     ui.spacing_mut().item_spacing.y = 10.0;
     let selection = entry.selection();
     text(ui, format!("{}: {}", lang.text("声库类型", "Voice type", "歌声タイプ"), family_name(entry)));
+    if entry.database_id.starts_with("svflat:") {
+        weak(
+            ui,
+            lang.text(
+                "已识别 SV Flat 声库元数据。可检查模型依赖，但原生 Flat 合成与导出尚未实现。",
+                "SV Flat metadata is recognized. Model dependencies can be inspected, but native Flat synthesis and export are not implemented.",
+                "SV Flat のメタデータを認識しました。モデルの依存関係は確認できますが、Flat の歌声合成と書き出しは未対応です。",
+            ),
+        );
+    }
     if let Some(range) = &entry.pitch_range {
         weak(ui, format!("{}  {range}", lang.text("推荐音域", "Recommended range", "推奨音域")));
     }
