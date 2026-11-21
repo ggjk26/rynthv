@@ -39,22 +39,35 @@ impl VoiceCatalog {
             return Ok(None);
         }
         let version = text("version")?;
-        let revision = if version.is_empty() || version == "-2" {
+        let requested = if version.is_empty() || version == "-2" {
             None
         } else {
-            Some(
-                version
-                    .parse::<u32>()
-                    .map_err(|_| format!("歌声版本无效：{version}"))?,
-            )
+            // Flat manifests can use release identifiers such as "106b1".
+            // Keep exact labels distinct from "106": silently stripping the
+            // beta suffix can bind a project to a different installed bank.
+            if version.len() > 64
+                || !version.bytes().all(|c| c.is_ascii_alphanumeric()
+                    || matches!(c, b'.' | b'-' | b'_'))
+            {
+                return Err(format!("歌声版本无效：{version}"));
+            }
+            Some(version)
         };
+        let numeric_revision = requested.and_then(|text| text.parse::<u32>().ok());
         let matches: Vec<_> = self
             .entries
             .iter()
             .filter(|e| {
                 (id.is_empty() || e.database_id == id)
                     && (name.is_empty() || e.display_name == name)
-                    && revision.is_none_or(|r| e.revision == r)
+                    && requested.is_none_or(|text| {
+                        // Where available, the manifest's original label is
+                        // authoritative even when the numeric prefixes match.
+                        e.version_label.as_deref().map_or_else(
+                            || numeric_revision == Some(e.revision),
+                            |label| label == text,
+                        )
+                    })
             })
             .collect();
         if id.is_empty()
@@ -83,7 +96,8 @@ impl VoiceCatalog {
         if let VoiceAvailability::Unsupported(reason) = &entry.availability {
             return Err(format!(
                 "歌声 {}（版本 {}）不可用：{reason}",
-                entry.display_name, entry.revision,
+                entry.display_name,
+                entry.version_label.as_deref().unwrap_or(version),
             ));
         }
         Ok(Some(entry.selection()))
