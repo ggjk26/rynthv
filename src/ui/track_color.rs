@@ -46,6 +46,24 @@ pub fn foreground(color: Color32) -> Color32 {
     }
 }
 
+fn localized_color_name(name: &str, lang: UiLanguage) -> &str {
+    match name {
+        "红色" => lang.text("红色", "Red", "赤"),
+        "橙色" => lang.text("橙色", "Orange", "オレンジ"),
+        "赭黄" => lang.text("赭黄", "Ochre", "黄土色"),
+        "黄色" => lang.text("黄色", "Yellow", "黄"),
+        "绿色" => lang.text("绿色", "Green", "緑"),
+        "翠绿" => lang.text("翠绿", "Emerald", "エメラルドグリーン"),
+        "青色" => lang.text("青色", "Cyan", "シアン"),
+        "天蓝" => lang.text("天蓝", "Sky blue", "空色"),
+        "蓝色" => lang.text("蓝色", "Blue", "青"),
+        "靛蓝" => lang.text("靛蓝", "Indigo", "藍色"),
+        "紫色" => lang.text("紫色", "Purple", "紫"),
+        "品红" => lang.text("品红", "Magenta", "マゼンタ"),
+        _ => name,
+    }
+}
+
 pub fn picker(ui: &mut Ui, current: TrackColor, lang: UiLanguage) -> Option<TrackColor> {
     let mut picked = None;
     ui.scope(|ui| {
@@ -56,6 +74,7 @@ pub fn picker(ui: &mut Ui, current: TrackColor, lang: UiLanguage) -> Option<Trac
             ui.horizontal(|ui| {
                 for &(name, color) in row {
                     let selected = current == color;
+                    let color_label = localized_color_name(name, lang);
                     let (rect, response) =
                         ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
                     response.widget_info(|| {
@@ -63,7 +82,7 @@ pub fn picker(ui: &mut Ui, current: TrackColor, lang: UiLanguage) -> Option<Trac
                             WidgetType::SelectableLabel,
                             ui.is_enabled(),
                             selected,
-                            name,
+                            color_label,
                         )
                     });
                     ui.painter()
@@ -78,7 +97,7 @@ pub fn picker(ui: &mut Ui, current: TrackColor, lang: UiLanguage) -> Option<Trac
                     }
                     if response
                         .on_hover_cursor(CursorIcon::Default)
-                        .on_hover_text(name)
+                        .on_hover_text(color_label)
                         .clicked()
                     {
                         picked = Some(color);
