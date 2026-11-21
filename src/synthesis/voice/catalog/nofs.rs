@@ -11,6 +11,7 @@ pub(super) fn entry(path: &Path) -> Result<VoiceCatalogEntry> {
     let mut entry = VoiceCatalogEntry {
         database_id: nofs::database_id(path)?,
         revision: 0,
+        version_label: None,
         model_version: Some(1),
         family: Some(VoiceFamily::Sv1),
         directory: path.to_owned(),
@@ -34,6 +35,7 @@ pub(super) fn entry(path: &Path) -> Result<VoiceCatalogEntry> {
     match description {
         Ok(description) => {
             let configuration = description.configuration;
+            entry.version_label = Some(configuration.version.clone());
             entry.revision = configuration
                 .version
                 .parse()
