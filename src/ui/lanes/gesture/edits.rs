@@ -147,7 +147,7 @@ fn move_points(app: &mut App, gesture: &ParameterGesture) -> Result<(), String> 
         .iter()
         .any(|point| !selected_times.contains(&point.0) && moved_times.contains(&point.0))
     {
-        app.status = "控制点不能覆盖未选中的控制点".into();
+        app.status = app.preferences.language.text("控制点不能覆盖未选中的控制点", "Control points cannot overwrite unselected points", "選択されていない制御点を上書きできません").into();
         return Ok(());
     }
     let mut points: BTreeMap<_, _> = gesture
