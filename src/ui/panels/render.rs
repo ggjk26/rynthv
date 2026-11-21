@@ -58,13 +58,25 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
         config.insert("filename".into(), name.into());
         ui.add_space(12.0);
         let ready = !app.editor.is_editing() && app.synthesis.export_ready(app.editor.revision);
+        let unavailable_reason = app.synthesis.error.as_deref().unwrap_or_else(|| {
+            lang.text(
+                "等待伴奏加载和当前歌声合成完成后导出",
+                "Wait until accompaniment and voice synthesis finish",
+                "伴奏の読み込みと歌声合成の完了後に書き出せます",
+            )
+        });
         export_clicked = ui
             .add_enabled(
                 ready,
                 Button::new(lang.text("导出为文件", "Export to files", "ファイルに書き出す")).min_size(vec2(ui.available_width(), 28.0)),
             )
-            .on_disabled_hover_text(lang.text("等待伴奏加载和当前歌声合成完成后导出", "Wait until accompaniment and voice synthesis finish", "伴奏の読み込みと歌声合成の完了後に書き出せます"))
+            .on_disabled_hover_text(unavailable_reason)
             .clicked();
+        if !ready && !app.editor.is_editing() {
+            if let Some(error) = &app.synthesis.error {
+                error(ui, error);
+            }
+        }
         if app.synthesis.is_exporting() {
             ui.horizontal(|ui| {
                 ui.spinner();
