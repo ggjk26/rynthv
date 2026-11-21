@@ -48,7 +48,7 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
             .text(
                 label_rect.left_center() + vec2(0.0, 12.0),
                 Align2::LEFT_CENTER,
-                family_name(entry),
+                family_name(entry, lang),
                 FontId::proportional(10.5),
                 MUTED,
             );
@@ -322,7 +322,7 @@ fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool, lang: crate::ui:
                 "{} · {} · {} {}\n{}",
                 lang.text("版本", "Version", "バージョン"),
                 entry.display_name,
-                family_name(entry),
+                family_name(entry, lang),
                 entry.revision,
                 entry.vendor
             ),
