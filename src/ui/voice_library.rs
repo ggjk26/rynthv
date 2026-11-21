@@ -27,7 +27,17 @@ fn selected_entry(app: &App) -> Option<&VoiceCatalogEntry> {
 
 fn family_name(entry: &VoiceCatalogEntry) -> &'static str {
     if entry.database_id.starts_with("svflat:") {
-        return "SV Flat · NOFS-JSON";
+        // Flat JSON voices and extracted SFPK binary packages have different
+        // resource layouts. The catalog keeps both metadata-only for now.
+        return if matches!(&entry.availability,
+            crate::synthesis::voice::VoiceAvailability::Unsupported(reason)
+                if reason.starts_with("Flat SFPK")
+                    || reason.starts_with("Flat config.json")
+        ) {
+            "SV Flat · SFPK"
+        } else {
+            "SV Flat · NOFS-JSON"
+        };
     }
     match entry.family {
         Some(VoiceFamily::Sv1) => "SV1 原生",
