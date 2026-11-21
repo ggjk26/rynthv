@@ -6,6 +6,81 @@ use crate::{
 };
 use eframe::egui::*;
 
+
+/// Interpret historical undo labels in the current interface language even
+/// when the user switches locales after performing an edit.
+fn localized_undo_label<'a>(lang: crate::ui::settings::UiLanguage, label: &'a str) -> &'a str {
+    match label {
+        "删除音符" | "Delete notes" | "ノートを削除" => lang.text("删除音符", "Delete notes", "ノートを削除"),
+        "移调" | "Transpose notes" | "ノートを移調" => lang.text("移调", "Transpose notes", "ノートを移調"),
+        "静音音符" | "Mute notes" | "ノートをミュート" => lang.text("静音音符", "Mute notes", "ノートをミュート"),
+        "创建音轨" | "Create track" | "トラックを作成" => lang.text("创建音轨", "Create track", "トラックを作成"),
+        "修改音轨颜色" | "Change track color" | "トラックの色を変更" => lang.text("修改音轨颜色", "Change track color", "トラックの色を変更"),
+        "编辑音符音素" | "Edit note phonemes" | "ノート音素を編集" => lang.text("编辑音符音素", "Edit note phonemes", "ノート音素を編集"),
+        "填入歌词" | "Fill lyrics" | "歌詞を入力" => lang.text("填入歌词", "Fill lyrics", "歌詞を入力"),
+        "插入音符组" | "Insert note group" | "ノートグループを挿入" => lang.text("插入音符组", "Insert note group", "ノートグループを挿入"),
+        "删除音符组" | "Delete note group" | "ノートグループを削除" => lang.text("删除音符组", "Delete note group", "ノートグループを削除"),
+        "重命名音符组" | "Rename note group" | "ノートグループ名を変更" => lang.text("重命名音符组", "Rename note group", "ノートグループ名を変更"),
+        "重命名音轨" | "Rename track" | "トラック名を変更" => lang.text("重命名音轨", "Rename track", "トラック名を変更"),
+        "删除音轨" | "Delete track" | "トラックを削除" => lang.text("删除音轨", "Delete track", "トラックを削除"),
+        "调整音轨顺序" | "Reorder tracks" | "トラックを並び替え" => lang.text("调整音轨顺序", "Reorder tracks", "トラックを並び替え"),
+        "编辑音素" | "Edit phonemes" | "音素を編集" => lang.text("编辑音素", "Edit phonemes", "音素を編集"),
+        "切换音符语言" | "Change note language" | "ノートの言語を変更" => lang.text("切换音符语言", "Change note language", "ノートの言語を変更"),
+        "切换音符模式" | "Change note mode" | "ノートモードを変更" => lang.text("切换音符模式", "Change note mode", "ノートモードを変更"),
+        "调整音符演绎" | "Adjust note expression" | "ノートの表現を調整" => lang.text("调整音符演绎", "Adjust note expression", "ノートの表現を調整"),
+        "调整颤音调制" | "Adjust vibrato" | "ビブラートを調整" => lang.text("调整颤音调制", "Adjust vibrato", "ビブラートを調整"),
+        "调整说唱音调" | "Adjust rap tone" | "ラップの声調を調整" => lang.text("调整说唱音调", "Adjust rap tone", "ラップの声調を調整"),
+        "调整说唱语调" | "Adjust rap intonation" | "ラップのイントネーションを調整" => lang.text("调整说唱语调", "Adjust rap intonation", "ラップのイントネーションを調整"),
+        "切换说唱声调" | "Change rap tone" | "ラップの声調を変更" => lang.text("切换说唱声调", "Change rap tone", "ラップの声調を変更"),
+        "调整音素时值" | "Adjust phoneme timing" | "音素の長さを調整" => lang.text("调整音素时值", "Adjust phoneme timing", "音素の長さを調整"),
+        "设置音符组声库" | "Set group voice" | "グループの歌声を設定" => lang.text("设置音符组声库", "Set group voice", "グループの歌声を設定"),
+        "批量切换音轨歌手" | "Change voices for selected tracks" | "選択トラックの歌声を変更" => lang.text("批量切换音轨歌手", "Change voices for selected tracks", "選択トラックの歌声を変更"),
+        "切换音轨歌手" | "Change track voice" | "トラックの歌声を変更" => lang.text("切换音轨歌手", "Change track voice", "トラックの歌声を変更"),
+        "切换歌声语言" | "Change voice language" | "歌声の言語を変更" => lang.text("切换歌声语言", "Change voice language", "歌声の言語を変更"),
+        "调整调音参数" | "Adjust tuning" | "チューニングを調整" => lang.text("调整调音参数", "Adjust tuning", "チューニングを調整"),
+        "调整歌声参数" | "Adjust voice parameters" | "歌声パラメーターを調整" => lang.text("调整歌声参数", "Adjust voice parameters", "歌声パラメーターを調整"),
+        "调整唱法" | "Adjust vocal modes" | "歌唱スタイルを調整" => lang.text("调整唱法", "Adjust vocal modes", "歌唱スタイルを調整"),
+        "重置不支持的唱法参数" | "Reset unsupported vocal modes" | "未対応の歌唱スタイル設定をリセット" => lang.text("重置不支持的唱法参数", "Reset unsupported vocal modes", "未対応の歌唱スタイル設定をリセット"),
+        "删除曲速" | "Delete tempo" | "テンポを削除" => lang.text("删除曲速", "Delete tempo", "テンポを削除"),
+        "删除拍号" | "Delete time signature" | "拍子を削除" => lang.text("删除拍号", "Delete time signature", "拍子を削除"),
+        "编辑曲速" | "Edit tempo" | "テンポを編集" => lang.text("编辑曲速", "Edit tempo", "テンポを編集"),
+        "插入曲速" | "Insert tempo" | "テンポを挿入" => lang.text("插入曲速", "Insert tempo", "テンポを挿入"),
+        "编辑拍号" | "Edit time signature" | "拍子を編集" => lang.text("编辑拍号", "Edit time signature", "拍子を編集"),
+        "插入拍号" | "Insert time signature" | "拍子を挿入" => lang.text("插入拍号", "Insert time signature", "拍子を挿入"),
+        "创建伴奏轨" | "Create instrumental track" | "伴奏トラックを作成" => lang.text("创建伴奏轨", "Create instrumental track", "伴奏トラックを作成"),
+        "导入伴奏" | "Import instrumental audio" | "伴奏をインポート" => lang.text("导入伴奏", "Import instrumental audio", "伴奏をインポート"),
+        "移除伴奏" | "Remove instrumental audio" | "伴奏を削除" => lang.text("移除伴奏", "Remove instrumental audio", "伴奏を削除"),
+        "移动伴奏" | "Move instrumental" | "伴奏を移動" => lang.text("移动伴奏", "Move instrumental", "伴奏を移動"),
+        "修改调式音阶" | "Change musical scale" | "スケールを変更" => lang.text("修改调式音阶", "Change musical scale", "スケールを変更"),
+        "创建音符" | "Create note" | "ノートを作成" => lang.text("创建音符", "Create note", "ノートを作成"),
+        "拖动音符" | "Move notes" | "ノートを移動" => lang.text("拖动音符", "Move notes", "ノートを移動"),
+        "剪切音高控制点" | "Cut pitch anchors" | "ピッチ制御点を切り取る" => lang.text("剪切音高控制点", "Cut pitch anchors", "ピッチ制御点を切り取る"),
+        "粘贴音高控制点" | "Paste pitch anchors" | "ピッチ制御点を貼り付ける" => lang.text("粘贴音高控制点", "Paste pitch anchors", "ピッチ制御点を貼り付ける"),
+        "复制音高控制点" | "Duplicate pitch anchors" | "ピッチ制御点を複製" => lang.text("复制音高控制点", "Duplicate pitch anchors", "ピッチ制御点を複製"),
+        "删除音高控制点" | "Delete pitch anchors" | "ピッチ制御点を削除" => lang.text("删除音高控制点", "Delete pitch anchors", "ピッチ制御点を削除"),
+        "创建音高控制点" | "Create pitch anchor" | "ピッチ制御点を作成" => lang.text("创建音高控制点", "Create pitch anchor", "ピッチ制御点を作成"),
+        "缩放音高控制点" | "Scale pitch anchors" | "ピッチ制御点を拡大縮小" => lang.text("缩放音高控制点", "Scale pitch anchors", "ピッチ制御点を拡大縮小"),
+        "移动音高控制点" | "Move pitch anchors" | "ピッチ制御点を移動" => lang.text("移动音高控制点", "Move pitch anchors", "ピッチ制御点を移動"),
+        "音高控制点升八度" | "Pitch anchors up one octave" | "ピッチ制御点を1オクターブ上げる" => lang.text("音高控制点升八度", "Pitch anchors up one octave", "ピッチ制御点を1オクターブ上げる"),
+        "音高控制点降八度" | "Pitch anchors down one octave" | "ピッチ制御点を1オクターブ下げる" => lang.text("音高控制点降八度", "Pitch anchors down one octave", "ピッチ制御点を1オクターブ下げる"),
+        "手绘音高" | "Draw pitch" | "ピッチを描く" => lang.text("手绘音高", "Draw pitch", "ピッチを描く"),
+        "擦除手绘音高" | "Erase pitch" | "ピッチを消去" => lang.text("擦除手绘音高", "Erase pitch", "ピッチを消去"),
+        "添加参数控制点" | "Add parameter point" | "パラメーター制御点を追加" => lang.text("添加参数控制点", "Add parameter point", "パラメーター制御点を追加"),
+        "清空参数控制点" | "Clear parameter points" | "パラメーター制御点をすべて消去" => lang.text("清空参数控制点", "Clear parameter points", "パラメーター制御点をすべて消去"),
+        "移动参数控制点" | "Move parameter points" | "パラメーター制御点を移動" => lang.text("移动参数控制点", "Move parameter points", "パラメーター制御点を移動"),
+        "擦除参数控制点" | "Erase parameter points" | "パラメーター制御点を消去" => lang.text("擦除参数控制点", "Erase parameter points", "パラメーター制御点を消去"),
+        "绘制参数曲线" | "Draw parameter curve" | "パラメーター曲線を描く" => lang.text("绘制参数曲线", "Draw parameter curve", "パラメーター曲線を描く"),
+        "剪切参数控制点" | "Cut parameter points" | "パラメーター制御点を切り取る" => lang.text("剪切参数控制点", "Cut parameter points", "パラメーター制御点を切り取る"),
+        "删除参数控制点" | "Delete parameter points" | "パラメーター制御点を削除" => lang.text("删除参数控制点", "Delete parameter points", "パラメーター制御点を削除"),
+        "粘贴参数控制点" | "Paste parameter points" | "パラメーター制御点を貼り付ける" => lang.text("粘贴参数控制点", "Paste parameter points", "パラメーター制御点を貼り付ける"),
+        "重复参数控制点" | "Duplicate parameter points" | "パラメーター制御点を複製" => lang.text("重复参数控制点", "Duplicate parameter points", "パラメーター制御点を複製"),
+        "参数插值模式" | "Parameter interpolation mode" | "パラメーター補間モード" => lang.text("参数插值模式", "Parameter interpolation mode", "パラメーター補間モード"),
+        "音轨混音" | "Track mixing" | "トラックミキシング" => lang.text("音轨混音", "Track mixing", "トラックミキシング"),
+        "调整混音" | "Adjust mixer" | "ミキサー調整" => lang.text("调整混音", "Adjust mixer", "ミキサー調整"),
+        _ => label,
+    }
+}
+
 fn item(ui: &mut Ui, text: &str, shortcut: &str, enabled: bool) -> bool {
     let response = ui.add_enabled(
         enabled,
@@ -55,7 +130,7 @@ pub fn menus(app: &mut App, ui: &mut Ui) {
         ui.menu_button(lang.text("编辑", "Edit", "編集"), |ui| {
             if item(
                 ui,
-                &format!("{} {}", lang.text("撤销", "Undo", "元に戻す"), app.editor.undo_label()),
+                &format!("{} {}", lang.text("撤销", "Undo", "元に戻す"), localized_undo_label(lang, app.editor.undo_label())),
                 "Ctrl+Z",
                 app.editor.can_undo(),
             ) {
