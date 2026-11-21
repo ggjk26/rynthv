@@ -135,9 +135,9 @@ fn start(app: &mut App, ctx: &Context, canvas: Rect, pos: Pos2, button: PointerB
         return false;
     }
     app.editor.begin(if button == PointerButton::Primary {
-        "手绘音高"
+        app.preferences.language.text("手绘音高", "Draw pitch", "ピッチを描く")
     } else {
-        "擦除手绘音高"
+        app.preferences.language.text("擦除手绘音高", "Erase pitch", "ピッチを消去")
     });
     app.gesture = Some(Gesture::Pitch(Box::new(PitchGesture {
         track: app.editor.track,
