@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use eframe::egui::*;
-pub use preferences::Preferences;
+pub use preferences::{Preferences, UiLanguage};
 
 const FILL: Color32 = Color32::from_rgb(61, 59, 63);
 const DIVIDER: Color32 = Color32::from_rgb(76, 74, 78);
@@ -37,14 +37,14 @@ impl Page {
         Self::Rendering,
         Self::Shortcuts,
     ];
-    fn label(self) -> &'static str {
+    fn label(self, language: UiLanguage) -> &'static str {
         match self {
-            Self::General => "常规",
-            Self::Audio => "音频与 MIDI",
-            Self::Editing => "编辑",
-            Self::Recording => "录制",
-            Self::Rendering => "渲染",
-            Self::Shortcuts => "快捷键",
+            Self::General => language.text("常规", "General", "一般"),
+            Self::Audio => language.text("音频与 MIDI", "Audio & MIDI", "オーディオ・MIDI"),
+            Self::Editing => language.text("编辑", "Editing", "編集"),
+            Self::Recording => language.text("录制", "Recording", "録音"),
+            Self::Rendering => language.text("渲染", "Rendering", "レンダリング"),
+            Self::Shortcuts => language.text("快捷键", "Shortcuts", "ショートカット"),
         }
     }
 }
@@ -73,11 +73,11 @@ pub fn show(app: &mut App, ctx: &Context) {
             title.horizontal(|ui| {
                 let (icon, _) = ui.allocate_exact_size(Vec2::splat(17.0), Sense::hover());
                 Icon::Settings.paint(ui, icon, MUTED);
-                ui.label(RichText::new("设置").font(section_title_font()));
+                ui.label(RichText::new(app.preferences.language.text("设置", "Settings", "設定")).font(section_title_font()));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     close = ui
                         .add(
-                            IconButton::new(Icon::Close, "关闭设置")
+                            IconButton::new(Icon::Close, app.preferences.language.text("关闭设置", "Close settings", "設定を閉じる"))
                                 .size(Vec2::splat(24.0))
                                 .icon_size(13.0),
                         )
@@ -101,7 +101,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                 .show(&mut nav, |ui| {
                     ui.spacing_mut().item_spacing.y = 12.0;
                     for candidate in Page::ALL {
-                        if navigation(ui, candidate, page == candidate).clicked() {
+                        if navigation(ui, candidate, page == candidate, app.preferences.language).clicked() {
                             page = candidate;
                         }
                     }
@@ -126,7 +126,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                 .show(&mut content, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
-                        RichText::new(page.label())
+                        RichText::new(page.label(app.preferences.language))
                             .font(section_title_font())
                             .size(15.0),
                     );
@@ -150,7 +150,7 @@ pub fn show(app: &mut App, ctx: &Context) {
     }
 }
 
-fn navigation(ui: &mut Ui, page: Page, selected: bool) -> Response {
+fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
     if selected || response.hovered() {
         ui.painter()
@@ -171,7 +171,7 @@ fn navigation(ui: &mut Ui, page: Page, selected: bool) -> Response {
     ui.painter().text(
         rect.left_center() + vec2(37.0, 0.0),
         Align2::LEFT_CENTER,
-        page.label(),
+        page.label(language),
         if selected {
             section_title_font()
         } else {
@@ -180,7 +180,7 @@ fn navigation(ui: &mut Ui, page: Page, selected: bool) -> Response {
         TEXT,
     );
     response.widget_info(|| {
-        WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, page.label())
+        WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, page.label(language))
     });
     response.on_hover_cursor(CursorIcon::PointingHand)
 }
