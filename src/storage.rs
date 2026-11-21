@@ -207,6 +207,11 @@ fn validate(p: &Project) -> Result<(), String> {
 /// Normalize obsolete SV1 controls on import only. Modern dF0VbrMod is a
 /// supported per-note vibrato control and must not be erased.
 fn normalize_legacy_project(project: &mut Project) {
+    // Older SVP revisions can omit render settings entirely. Supply only
+    // absent keys, leaving any explicitly configured export options intact.
+    for (key, value) in Project::default().render_config {
+        project.render_config.entry(key).or_insert(value);
+    }
     for group in project.library.iter_mut()
         .chain(project.tracks.iter_mut().map(|track| &mut track.main_group))
     {
