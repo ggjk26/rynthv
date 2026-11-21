@@ -24,6 +24,25 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
             app.synthesis.rescan_voices();
         }
     });
+    // Show imported roots from older synthesis.json layouts so the paths
+    // actually being searched remain visible to the user.
+    if app.synthesis.library.settings.roots.is_some() {
+        let legacy_paths: Vec<_> = app.synthesis.library.settings.database_roots()
+            .filter(|(label, _)| *label == "Legacy")
+            .map(|(_, path)| path.to_path_buf())
+            .collect();
+        if !legacy_paths.is_empty() {
+            ui.add_space(8.0);
+            text(ui, lang.text(
+                "从旧版配置 roots 读取的声库目录",
+                "Voicebank folders loaded from legacy roots",
+                "旧設定 roots から読み込んだ歌声フォルダー",
+            ));
+            for path in &legacy_paths {
+                path_label(ui, Some(path), lang);
+            }
+        }
+    }
     ui.add_space(8.0);
     text(ui, lang.text("SV1 原生声库根目录", "Native SV1 voicebank root", "SV1 ネイティブ歌声のルート"));
     path_label(ui, app.synthesis.library.settings.sv1_databases.as_deref(), lang);
