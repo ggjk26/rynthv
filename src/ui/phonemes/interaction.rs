@@ -122,9 +122,9 @@ pub(super) fn show(
         });
         if !enabled {
             response.clone().on_hover_text(if handle == Handle::Right {
-                "尾部边界随音符长度调整"
+                app.preferences.language.text("尾部边界随音符长度调整", "Ending boundary follows note length", "終端の境界はノートの長さに連動します")
             } else {
-                "当前声库暂不支持音素时值编辑"
+                app.preferences.language.text("当前声库暂不支持音素时值编辑", "This voice does not support phoneme timing editing yet", "この歌声は音素の長さ編集に未対応です")
             });
         }
     }
