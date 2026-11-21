@@ -25,7 +25,7 @@ fn selected_entry(app: &App) -> Option<&VoiceCatalogEntry> {
     app.synthesis.library.entry(&app.voice_selection()?)
 }
 
-fn family_name(entry: &VoiceCatalogEntry) -> &'static str {
+fn family_name(entry: &VoiceCatalogEntry, lang: crate::ui::settings::UiLanguage) -> &'static str {
     if entry.database_id.starts_with("svflat:") {
         // Flat JSON voices and extracted SFPK binary packages have different
         // resource layouts. The catalog keeps both metadata-only for now.
@@ -40,10 +40,10 @@ fn family_name(entry: &VoiceCatalogEntry) -> &'static str {
         };
     }
     match entry.family {
-        Some(VoiceFamily::Sv1) => "SV1 原生",
-        Some(VoiceFamily::Sv2Compatible) => "SV2 · 版本 1 兼容",
+        Some(VoiceFamily::Sv1) => lang.text("SV1 原生", "Native SV1", "SV1 ネイティブ"),
+        Some(VoiceFamily::Sv2Compatible) => lang.text("SV2 · 版本 1 兼容", "SV2 · version 1 compatible", "SV2 · バージョン1互換"),
         Some(VoiceFamily::Sv2) => "SV2",
-        None => "未知格式",
+        None => lang.text("未知格式", "Unknown format", "不明な形式"),
     }
 }
 
@@ -62,14 +62,14 @@ fn error_label(ui: &mut Ui, value: impl Into<String>) {
     );
 }
 
-fn language_name(language: &str) -> &str {
+fn language_name(language: &str, lang: crate::ui::settings::UiLanguage) -> &str {
     match language {
-        "mandarin" | "mandarin-xsampa" | "zh" | "ZH" => "普通话",
-        "english" | "english-arpabet" | "en" | "EN" => "英语",
-        "japanese" | "japanese-romaji" | "ja" | "JA" => "日语",
-        "spanish" | "spanish-xsampa" | "es" | "ES" => "西班牙语",
-        "cantonese" | "cantonese-xsampa" | "yue" | "YUE" => "粤语",
-        "korean" | "korean-xsampa" | "ko" | "KO" => "韩语",
+        "mandarin" | "mandarin-xsampa" | "zh" | "ZH" => lang.text("普通话", "Mandarin", "中国語（普通話）"),
+        "english" | "english-arpabet" | "en" | "EN" => lang.text("英语", "English", "英語"),
+        "japanese" | "japanese-romaji" | "ja" | "JA" => lang.text("日语", "Japanese", "日本語"),
+        "spanish" | "spanish-xsampa" | "es" | "ES" => lang.text("西班牙语", "Spanish", "スペイン語"),
+        "cantonese" | "cantonese-xsampa" | "yue" | "YUE" => lang.text("粤语", "Cantonese", "広東語"),
+        "korean" | "korean-xsampa" | "ko" | "KO" => lang.text("韩语", "Korean", "韓国語"),
         other => other,
     }
 }
