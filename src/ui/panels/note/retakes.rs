@@ -6,7 +6,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
     let duration = retakes::unavailable(app, RetakeComponent::Duration);
     let clicked = ui
         .add_enabled_ui(reason.is_none(), |ui| {
-            super::retake_buttons::show(ui, duration)
+            super::retake_buttons::show(ui, duration, app.preferences.language)
         })
         .inner;
     if let Some(component) = clicked {
@@ -18,7 +18,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
         Ok(None) => {
             ui.add_enabled(
                 false,
-                Button::new("默认采样").min_size(vec2(ui.available_width(), 28.0)),
+                Button::new(app.preferences.language.text("默认采样", "Default take", "デフォルトテイク")).min_size(vec2(ui.available_width(), 28.0)),
             );
         }
         Err(error) => {
