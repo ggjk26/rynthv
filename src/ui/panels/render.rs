@@ -73,8 +73,8 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             .on_disabled_hover_text(unavailable_reason)
             .clicked();
         if !ready && !app.editor.is_editing() {
-            if let Some(error) = &app.synthesis.error {
-                error(ui, error);
+            if let Some(message) = &app.synthesis.error {
+                error(ui, message);
             }
         }
         if app.synthesis.is_exporting() {
