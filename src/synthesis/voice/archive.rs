@@ -37,7 +37,11 @@ pub(super) struct Archive {
 
 impl Archive {
     pub fn load(path: &Path, context: &FormatContext) -> Result<Self> {
-        let bytes: Arc<[u8]> = fs::read(path)?.into();
+        Self::from_bytes(fs::read(path)?.into(), context)
+    }
+
+    /// Same authenticated loader for local files and opt-in embedded bytes.
+    pub fn from_bytes(bytes: Arc<[u8]>, context: &FormatContext) -> Result<Self> {
         if bytes.len() < 0x149 || bytes[..8] != [0xff, 0, 0xca, 0x7f, 3, 0, 0, 0] {
             return Err(VoiceError::new("Invalid DNNI v3 magic or truncated header"));
         }
