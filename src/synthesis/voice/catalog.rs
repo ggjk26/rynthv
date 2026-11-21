@@ -93,22 +93,49 @@ impl VoiceCatalog {
             }
             // Flat managers may install a voice in a revision subdirectory,
             // while SV2 uses the same nesting for DNNI files.
-            for revision in fs::read_dir(database.path())? {
-                let revision = revision?;
-                if !revision.file_type()?.is_dir() {
-                    continue;
-                }
-                match super::nofs::paths(&revision.path()) {
-                    Ok(paths) => {
-                        for path in paths {
-                            catalog.entries.push(entry_nofs(&path, flat_models)?);
+            // A broken/unreadable Flat subdirectory must not hide every
+            // other installed voicebank from the library catalog.
+            match fs::read_dir(database.path()) {
+                Ok(revisions) => {
+                    for revision in revisions {
+                        let revision = match revision {
+                            Ok(revision) => revision,
+                            Err(error) => {
+                                catalog.warnings.push(format!(
+                                    "无法枚举声库版本目录 {}：{error}",
+                                    database.path().display()
+                                ));
+                                continue;
+                            }
+                        };
+                        match revision.file_type() {
+                            Ok(kind) if kind.is_dir() => {}
+                            Ok(_) => continue,
+                            Err(error) => {
+                                catalog.warnings.push(format!(
+                                    "无法识别声库版本目录 {}：{error}",
+                                    revision.path().display()
+                                ));
+                                continue;
+                            }
+                        }
+                        match super::nofs::paths(&revision.path()) {
+                            Ok(paths) => {
+                                for path in paths {
+                                    catalog.entries.push(entry_nofs(&path, flat_models)?);
+                                }
+                            }
+                            Err(error) => catalog.warnings.push(format!(
+                                "无法读取声库版本目录 {}：{error}",
+                                revision.path().display()
+                            )),
                         }
                     }
-                    Err(error) => catalog.warnings.push(format!(
-                        "无法读取声库版本目录 {}：{error}",
-                        revision.path().display()
-                    )),
                 }
+                Err(error) => catalog.warnings.push(format!(
+                    "无法枚举声库子目录 {}：{error}",
+                    database.path().display()
+                )),
             }
         }
         let mut counts = std::collections::BTreeMap::new();
