@@ -74,13 +74,31 @@ impl VoiceCatalog {
         }
         let metadata = MetadataIndex::load(root);
         for database in fs::read_dir(root)? {
-            let database = database?;
-            if !database.file_type()?.is_dir() {
-                continue;
+            let database = match database {
+                Ok(database) => database,
+                Err(error) => {
+                    catalog.warnings.push(format!(
+                        "无法枚举声库目录 {}：{error}", root.display()
+                    ));
+                    continue;
+                }
+            };
+            match database.file_type() {
+                Ok(kind) if kind.is_dir() => {}
+                Ok(_) => continue,
+                Err(error) => {
+                    catalog.warnings.push(format!(
+                        "无法访问声库目录 {}：{error}", database.path().display()
+                    ));
+                    continue;
+                }
             }
             if let Ok(database_id) = uuid::Uuid::parse_str(&database.file_name().to_string_lossy())
+                && let Err(error) = dnni::scan(&database.path(), database_id, &mut catalog, &metadata)
             {
-                dnni::scan(&database.path(), database_id, &mut catalog, &metadata)?;
+                catalog.warnings.push(format!(
+                    "声库 {} 的模型版本扫描失败：{error}", database.path().display()
+                ));
             }
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
