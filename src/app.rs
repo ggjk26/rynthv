@@ -226,7 +226,7 @@ impl App {
             Ok(()) => {
                 self.editor.mark_saved();
                 self.path = Some(path);
-                self.status = "工程已保存".into();
+                self.status = self.preferences.language.text("工程已保存", "Project saved", "プロジェクトを保存しました").into();
                 true
             }
             Err(e) => {
@@ -346,20 +346,21 @@ impl App {
         }
     }
     fn dialogs(&mut self, ctx: &Context) {
+        let lang = self.preferences.language;
         if let Some(action) = self.pending {
             Modal::new(Id::new("unsaved")).show(ctx, |ui| {
-                ui.heading("保存工程更改？");
-                ui.label("当前工程包含尚未保存的编辑。");
+                ui.heading(lang.text("保存工程更改？", "Save project changes?", "プロジェクトの変更を保存しますか？"));
+                ui.label(lang.text("当前工程包含尚未保存的编辑。", "The current project has unsaved changes.", "現在のプロジェクトには未保存の変更があります。"));
                 ui.horizontal(|ui| {
-                    if ui.button("保存").clicked() && self.save_project(false) {
+                    if ui.button(lang.text("保存", "Save", "保存")).clicked() && self.save_project(false) {
                         self.pending = None;
                         self.perform_file(action, ctx);
                     }
-                    if ui.button("不保存").clicked() {
+                    if ui.button(lang.text("不保存", "Don\u0027t save", "保存しない")).clicked() {
                         self.pending = None;
                         self.perform_file(action, ctx);
                     }
-                    if ui.button("取消").clicked() {
+                    if ui.button(lang.text("取消", "Cancel", "キャンセル")).clicked() {
                         self.pending = None;
                     }
                 });
@@ -368,9 +369,9 @@ impl App {
         if let Some(error) = self.error.clone() {
             Modal::new(Id::new("error")).show(ctx, |ui| {
                 ui.set_max_width(480.0);
-                ui.heading("操作未完成");
+                ui.heading(lang.text("操作未完成", "Operation incomplete", "操作を完了できませんでした"));
                 ui.label(error);
-                if ui.button("确定").clicked() {
+                if ui.button(lang.text("确定", "OK", "確認")).clicked() {
                     self.error = None;
                 }
             });
@@ -378,10 +379,10 @@ impl App {
         if self.about {
             Modal::new(Id::new("about")).show(ctx, |ui| {
                 ui.heading(format!("RynthV {}", env!("CARGO_PKG_VERSION")));
-                ui.label("Rust + egui 歌声合成引擎");
-                ui.label("多音轨编辑、歌词与音高调整、MIDI 导入和 WAV 导出。");
-                ui.label("支持 Windows 和 Linux。");
-                if ui.button("关闭").clicked() {
+                ui.label(lang.text("Rust + egui 歌声合成引擎", "Rust + egui singing synthesis engine", "Rust + egui 歌声合成エンジン"));
+                ui.label(lang.text("多音轨编辑、歌词与音高调整、MIDI 导入和 WAV 导出。", "Multitrack editing, lyrics, pitch control, MIDI import and WAV export.", "マルチトラック編集、歌詞とピッチ調整、MIDI 読み込み、WAV 書き出しに対応。"));
+                ui.label(lang.text("支持 Windows 和 Linux。", "Supports Windows and Linux.", "Windows と Linux に対応。"));
+                if ui.button(lang.text("关闭", "Close", "閉じる")).clicked() {
                     self.about = false;
                 }
             });
@@ -394,6 +395,7 @@ impl App {
 }
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        let lang = self.preferences.language;
         let ctx = ui.ctx().clone();
         ui::piano::begin_keyboard_frame(self, &ctx);
         self.synthesis.poll();
@@ -468,11 +470,11 @@ impl eframe::App for App {
             let mut status_ui = ui::child(ui, status.shrink2(vec2(8.0, 1.0)), "status");
             status_ui.horizontal(|ui| {
                 let hint = if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchAnchor {
-                    "双击创建控制点 · 拖动框选 / 移动 · 四边手柄缩放 · Delete 删除 · Esc 取消 · Ctrl+Z 撤销"
+                    lang.text("双击创建控制点 · 拖动框选 / 移动 · 四边手柄缩放 · Delete 删除 · Esc 取消 · Ctrl+Z 撤销", "Double-click to add control points · Drag to select / move · Resize by handles · Delete · Esc · Ctrl+Z", "ダブルクリックで制御点を追加 · ドラッグで選択／移動 · ハンドルで拡縮 · Delete · Esc · Ctrl+Z")
                 } else if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchDraw {
-                    "左键拖动绘制音高 · 右键拖动擦除 · Esc 取消本次绘制 · Ctrl+Z 撤销 · 中键拖动视野"
+                    lang.text("左键拖动绘制音高 · 右键拖动擦除 · Esc 取消本次绘制 · Ctrl+Z 撤销 · 中键拖动视野", "Drag left button to draw pitch · Right button to erase · Esc cancel · Ctrl+Z undo · Middle button to pan", "左ドラッグでピッチ描画 · 右ドラッグで消去 · Esc キャンセル · Ctrl+Z 元に戻す · 中ドラッグで移動")
                 } else if self.status.is_empty() {
-                    "双击创建音符 · 拖动框选 · 中键拖动视野 · Shift+滚轮水平移动 · Ctrl+滚轮缩放"
+                    lang.text("双击创建音符 · 拖动框选 · 中键拖动视野 · Shift+滚轮水平移动 · Ctrl+滚轮缩放", "Double-click to add notes · Drag to select · Middle-drag to pan · Shift+wheel horizontally · Ctrl+wheel zoom", "ダブルクリックでノート追加 · ドラッグで範囲選択 · 中ドラッグで移動 · Shift+ホイールで横移動 · Ctrl+ホイールでズーム")
                 } else {
                     &self.status
                 };
