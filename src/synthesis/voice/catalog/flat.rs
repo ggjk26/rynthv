@@ -38,6 +38,7 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
     let mut entry = VoiceCatalogEntry {
         database_id: id,
         revision: 0,
+        version_label: None,
         model_version: None,
         family: None,
         directory: path.to_owned(),
@@ -57,6 +58,7 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
         match FlatVoice::open(path, model_root) {
             Ok(voice) => {
                 entry.revision = revision(&voice.version);
+                entry.version_label = Some(voice.version.clone());
                 entry.display_name = voice.name;
                 entry.vendor = voice.vendor;
                 entry.languages = voice.supported_languages;
@@ -89,6 +91,7 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
         match FlatManifest::open(&manifest_path) {
             Ok(manifest) => {
                 entry.revision = revision(&manifest.version);
+                entry.version_label = Some(manifest.version.clone());
                 entry.display_name = manifest.name;
                 entry.languages = manifest.phonesets;
                 let mut installed = 0usize;
