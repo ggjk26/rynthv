@@ -80,6 +80,25 @@ impl Editor {
         self.project.tracks[index].disp_color = color;
         self.finish();
     }
+    /// Explicit pronunciation is local to one note. Clearing the text returns
+    /// that note to automatic dictionary pronunciation.
+    pub fn set_note_phonemes(&mut self, id: EntityId, text: String) {
+        let value = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !self.notes().iter().any(|note| note.id == id && note.phonemes != value) {
+            return;
+        }
+        self.begin("编辑音符音素");
+        if let Some(note) = self.group_mut().and_then(|group| {
+            group.notes.iter_mut().find(|note| note.id == id)
+        }) {
+            note.phonemes = value;
+            // Phone-index-based timing properties cannot be safely reused
+            // after changing the token count or ordering.
+            note.attributes.remove("phonemes");
+        }
+        self.finish();
+    }
+
     pub fn set_lyric(&mut self, id: EntityId, lyric: String) {
         self.begin("填入歌词");
         if let Some(n) = self
