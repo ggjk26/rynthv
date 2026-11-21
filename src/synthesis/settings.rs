@@ -106,11 +106,8 @@ where
     }
     let mut paths = Vec::new();
     collect_legacy_roots(&value, &mut paths).map_err(serde::de::Error::custom)?;
-    if paths.is_empty() {
-        return Err(serde::de::Error::custom(
-            "声库 roots 没有可用的目录路径，请检查配置"
-        ));
-    }
+    // Empty legacy lists are valid: the user may not have configured any
+    // voicebank yet. The UI must still start and allow choosing folders.
     Ok(Some(value))
 }
 
@@ -229,5 +226,77 @@ impl SynthesisSettings {
                 selected.database_id, selected.revision
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod legacy_root_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn legacy_single_root_and_array_are_loadable() {
+        for roots in [
+            json!("C:\\Dreamtonics\\databases"),
+            json!(["C:\\Dreamtonics\\databases", "D:\\OtherVoices"]),
+        ] {
+            let settings: SynthesisSettings =
+                serde_json::from_value(json!({ "roots": roots })).unwrap();
+            assert!(settings.has_databases());
+            assert!(!settings.database_roots().collect::<Vec<_>>().is_empty());
+            assert_eq!(
+                serde_json::to_value(&settings).unwrap()["roots"],
+                roots,
+                "must preserve the user's original root data"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_named_roots_and_descriptor_lists_are_loadable() {
+        for roots in [
+            json!({"sv2": "C:\\Dreamtonics", "sv1": "D:\\Studio1"}),
+            json!([
+                {"kind": "sv2", "path": "C:\\Dreamtonics"},
+                {"name": "Legacy", "directory": "D:\\Studio1"}
+            ]),
+        ] {
+            let settings: SynthesisSettings =
+                serde_json::from_value(json!({ "roots": roots })).unwrap();
+            assert_eq!(settings.database_roots().count(), 2);
+        }
+    }
+
+    #[test]
+    fn empty_roots_allow_choosing_library_later() {
+        let settings: SynthesisSettings =
+            serde_json::from_value(json!({ "roots": [] })).unwrap();
+        assert!(!settings.has_databases());
+        let settings: SynthesisSettings =
+            serde_json::from_value(json!({ "roots": {} })).unwrap();
+        assert!(!settings.has_databases());
+    }
+
+    #[test]
+    fn explicit_roots_take_precedence_without_double_scan() {
+        let settings: SynthesisSettings = serde_json::from_value(json!({
+            "databases": "C:\\Dreamtonics",
+            "roots": ["C:\\Dreamtonics", "D:\\Studio1"]
+        }))
+        .unwrap();
+        let roots: Vec<_> = settings.database_roots().collect();
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].0, "SV2");
+        assert_eq!(roots[1].0, "Legacy");
+    }
+
+    #[test]
+    fn reject_corrupt_legacy_roots_and_other_unknown_fields() {
+        assert!(serde_json::from_value::<SynthesisSettings>(
+            json!({"roots": [42]})
+        ).is_err());
+        assert!(serde_json::from_value::<SynthesisSettings>(
+            json!({"unrelated_unknown_field": true})
+        ).is_err());
     }
 }
