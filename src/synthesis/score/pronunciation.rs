@@ -30,7 +30,21 @@ pub(super) fn resolve_note(
                 .and_then(|dict| dict.entries.get(note.lyrics.trim()).map(String::as_str))
         });
     let syllables = if let Some(phones) = explicit {
-        split_syllables(phones, language, tree)?
+        match split_syllables(phones, language, tree) {
+            Ok(syllables) => syllables,
+            Err(explicit_error) if !note.phonemes.trim().is_empty() => {
+                // A stale explicit phone need not invalidate the entire phrase
+                // if the note's current lyric has a valid dictionary reading.
+                frontend.resolve(language, &note.lyrics).map_err(|fallback_error| {
+                    VoiceError::new(format!(
+                        "音符 {} · {}：显式音素无效（{explicit_error}），歌词回退失败（{fallback_error}）",
+                        note.id,
+                        language.label()
+                    ))
+                })?
+            }
+            Err(error) => return Err(error),
+        }
     } else {
         frontend.resolve(language, &note.lyrics).map_err(|error| {
             VoiceError::new(format!("音符 {} · {}：{error}", note.id, language.label()))
