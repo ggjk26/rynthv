@@ -197,14 +197,14 @@ fn reset(
     attributes.activity = None;
     attributes.position = None;
     if !app.editor.begin_phoneme_edit(source) {
-        return Err("无法编辑当前音素".into());
+        return Err(app.preferences.language.text("无法编辑当前音素", "Cannot edit the current phoneme", "現在の音素を編集できません").into());
     }
     if app.editor.update_phoneme_attributes(source, attributes) {
         app.editor.finish_phoneme_edit();
         Ok(())
     } else {
         app.editor.cancel_phoneme_edit();
-        Err("无法重置当前音素的强度和爆破设置".into())
+        Err(app.preferences.language.text("无法重置当前音素的强度和爆破设置", "Cannot reset phoneme strength and impulse settings", "音素の強さと破裂音の設定をリセットできません").into())
     }
 }
 
