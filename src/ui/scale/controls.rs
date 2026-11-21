@@ -7,8 +7,9 @@ use eframe::egui::*;
 use serde_json::{Value, json};
 
 pub fn toolbar(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     ui.add_space(15.0);
-    ui.label(RichText::new("调式音阶").color(MUTED));
+    ui.label(RichText::new(lang.text("调式音阶", "Scale", "スケール")).color(MUTED));
     ui.add_space(8.0);
     ui.push_id("scale-toolbar", |ui| controls(app, ui, false));
 }
@@ -24,6 +25,7 @@ pub fn panel(app: &mut App, ui: &mut Ui) {
 
 fn controls(app: &mut App, ui: &mut Ui, vertical: bool) {
     let current = selection(app);
+    let lang = app.preferences.language;
     let mut tonic = None;
     let mut scale = None;
     ui.add_enabled_ui(current.editable, |ui| {
@@ -32,7 +34,7 @@ fn controls(app: &mut App, ui: &mut Ui, vertical: bool) {
         if !vertical {
             ui.add_space(3.0);
         }
-        scale = scale_selector(ui, &current, if vertical { width } else { 146.0 });
+        scale = scale_selector(ui, &current, if vertical { width } else { 146.0 }, lang);
     });
     if let Some(tonic) = tonic {
         update(app, "root", tonic.native_name());
@@ -60,7 +62,7 @@ fn tonic_selector(ui: &mut Ui, current: &Selection, width: f32) -> Option<Tonic>
     result
 }
 
-fn scale_selector(ui: &mut Ui, current: &Selection, width: f32) -> Option<Scale> {
+fn scale_selector(ui: &mut Ui, current: &Selection, width: f32, lang: crate::ui::settings::UiLanguage) -> Option<Scale> {
     let mut result = None;
     ComboBox::from_id_salt("scale-mode")
         .width(width)
@@ -68,7 +70,7 @@ fn scale_selector(ui: &mut Ui, current: &Selection, width: f32) -> Option<Scale>
         .show_ui(ui, |ui| {
             for value in Scale::ALL {
                 if ui
-                    .selectable_label(current.scale == Some(value), value.label())
+                    .selectable_label(current.scale == Some(value), value.localized_label(lang))
                     .clicked()
                 {
                     result = Some(value);
@@ -99,7 +101,7 @@ fn selection(app: &App) -> Selection {
         tonic,
         scale,
         tonic_label: tonic.map_or_else(|| raw_label(root), |value| value.short_label().into()),
-        scale_label: scale.map_or_else(|| raw_label(kind), |value| value.label().into()),
+        scale_label: scale.map_or_else(|| raw_label(kind), |value| value.localized_label(app.preferences.language).into()),
         editable: !app.editor.is_editing()
             && app.gesture.is_none()
             && app.group_gesture.is_none()
@@ -131,7 +133,7 @@ fn update(app: &mut App, field: &str, value: &str) {
         return;
     }
     app.commit_lyric();
-    app.editor.begin("修改调式音阶");
+    app.editor.begin(app.preferences.language.text("修改调式音阶", "Change musical scale", "スケールを変更"));
     if let Some(group) = app.editor.group_mut() {
         let raw = group
             .extra

@@ -1,10 +1,10 @@
 use crate::{
     model::RetakeComponent,
-    ui::{icons::Icon, theme::*},
+    ui::{icons::Icon, settings::UiLanguage, theme::*},
 };
 use eframe::egui::*;
 
-pub(super) fn show(ui: &mut Ui, duration_unavailable: Option<&str>) -> Option<RetakeComponent> {
+pub(super) fn show(ui: &mut Ui, duration_unavailable: Option<&str>, lang: UiLanguage) -> Option<RetakeComponent> {
     let width = ((ui.available_width() - 4.0) * 0.5).max(1.0);
     let mut clicked = None;
     ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
@@ -20,7 +20,7 @@ pub(super) fn show(ui: &mut Ui, duration_unavailable: Option<&str>) -> Option<Re
                     None
                 };
                 let response = ui
-                    .add_enabled_ui(reason.is_none(), |ui| button(ui, width, component))
+                    .add_enabled_ui(reason.is_none(), |ui| button(ui, width, component, lang))
                     .inner;
                 if response.clicked() {
                     clicked = Some(component);
@@ -33,13 +33,13 @@ pub(super) fn show(ui: &mut Ui, duration_unavailable: Option<&str>) -> Option<Re
     clicked
 }
 
-fn button(ui: &mut Ui, width: f32, component: RetakeComponent) -> Response {
+fn button(ui: &mut Ui, width: f32, component: RetakeComponent, lang: UiLanguage) -> Response {
     let enabled = ui.is_enabled();
     let label = match component {
-        RetakeComponent::All | RetakeComponent::PitchAndTimbre => "全部",
-        RetakeComponent::Duration => "时值",
-        RetakeComponent::Pitch => "音高",
-        RetakeComponent::Timbre => "音色",
+        RetakeComponent::All | RetakeComponent::PitchAndTimbre => lang.text("全部", "All", "すべて"),
+        RetakeComponent::Duration => lang.text("时值", "Duration", "長さ"),
+        RetakeComponent::Pitch => lang.text("音高", "Pitch", "ピッチ"),
+        RetakeComponent::Timbre => lang.text("音色", "Timbre", "音色"),
     };
     let (rect, response) = ui.allocate_exact_size(
         vec2(width, 88.0),
@@ -85,7 +85,7 @@ fn button(ui: &mut Ui, width: f32, component: RetakeComponent) -> Response {
         FontId::proportional(12.0),
         ink,
     );
-    response.on_hover_text(format!("重录{label}采样"))
+    response.on_hover_text(format!("{}: {label}", lang.text("重录采样", "Retake", "リテイク")) )
 }
 
 fn lips(ui: &Ui, center: Pos2, ink: Color32) {

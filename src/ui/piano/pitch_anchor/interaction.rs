@@ -20,7 +20,7 @@ pub(in crate::ui::piano) fn interaction(
     }
     let Some(reference) = app.editor.active_ref().cloned() else {
         if response.double_clicked() {
-            app.status = "请先点击音符组标题，再添加音高控制点".into();
+            app.status = app.preferences.language.text("请先点击音符组标题，再添加音高控制点", "Select the note group header before adding pitch points", "ピッチ制御点の追加前にノートグループの見出しを選択してください").into();
         }
         return;
     };
@@ -58,7 +58,7 @@ pub(in crate::ui::piano) fn interaction(
         let (time, pitch) = geometry::sample(app, canvas, &reference, pointer);
         let point = PitchPoint::new(time, pitch);
         anchor_clear(app);
-        app.editor.begin("创建音高控制点");
+        app.editor.begin(app.preferences.language.text("创建音高控制点", "Create pitch anchor", "ピッチ制御点を作成"));
         if let Some(group) = app.editor.group_mut() {
             group.pitch_controls.push(PitchControl::Point(point));
         }
@@ -109,18 +109,19 @@ pub(in crate::ui::piano) fn interaction(
 }
 
 fn context_menu(app: &mut App, response: &Response) {
+    let lang = app.preferences.language;
     response.context_menu(|ui| {
         if ui
             .add_enabled(
                 !app.piano_anchor.ids.is_empty(),
-                Button::new("删除所选音高控制点").shortcut_text("Delete"),
+                Button::new(lang.text("删除所选音高控制点", "Delete selected pitch anchors", "選択したピッチ制御点を削除")).shortcut_text("Delete"),
             )
             .clicked()
         {
             anchor_delete(app);
             ui.close();
         }
-        if ui.button("全选音高控制点").clicked() {
+        if ui.button(lang.text("全选音高控制点", "Select all pitch anchors", "すべてのピッチ制御点を選択")).clicked() {
             anchor_select_all(app);
             ui.close();
         }

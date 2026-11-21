@@ -96,9 +96,9 @@ pub(super) fn start(app: &mut App, ui: &Ui, canvas: Rect) {
             return;
         }
         app.editor.begin(if handle.is_some() {
-            "缩放音高控制点"
+            app.preferences.language.text("缩放音高控制点", "Scale pitch anchors", "ピッチ制御点を拡大縮小")
         } else {
-            "移动音高控制点"
+            app.preferences.language.text("移动音高控制点", "Move pitch anchors", "ピッチ制御点を移動")
         });
         Kind::Transform {
             original,

@@ -40,7 +40,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGrou
             let text = if takes.active_take_id == 0 {
                 String::new()
             } else {
-                retakes::label(takes.active_take_id)
+                retakes::localized_label(takes.active_take_id, app.preferences.language)
             };
             let galley =
                 ui.painter()
@@ -98,8 +98,9 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGrou
             response
                 .on_hover_cursor(CursorIcon::Default)
                 .on_hover_text(format!(
-                    "{} · 点击切换此音符的采样",
-                    retakes::label(takes.active_take_id)
+                    "{} · {}",
+                    retakes::localized_label(takes.active_take_id, app.preferences.language),
+                    app.preferences.language.text("点击切换此音符的采样", "Click to switch this note's take", "クリックしてこのノートのテイクを切り替え")
                 ));
         }
     }

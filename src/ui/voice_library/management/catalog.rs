@@ -36,9 +36,9 @@ pub(super) fn entries(app: &App, state: &State) -> Vec<VoiceCatalogEntry> {
             let matches = query.is_empty()
                 || entry.display_name.to_lowercase().contains(&query)
                 || entry.vendor.to_lowercase().contains(&query)
-                || family_name(entry).to_lowercase().contains(&query)
+                || family_name(entry, app.preferences.language).to_lowercase().contains(&query)
                 || entry.languages.iter().any(|s| {
-                    language_name(s).contains(&query) || s.to_lowercase().contains(&query)
+                    language_name(s, app.preferences.language).to_lowercase().contains(&query) || s.to_lowercase().contains(&query)
                 });
             if !matches {
                 continue;

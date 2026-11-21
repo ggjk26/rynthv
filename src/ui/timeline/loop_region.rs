@@ -66,6 +66,7 @@ pub fn show(
     view: &Viewport,
     transport: &mut Transport,
     options: RulerOptions,
+    lang: crate::ui::settings::UiLanguage,
 ) {
     let response = ui.interact(ruler, id, Sense::click_and_drag());
     let drag_id = id.with("loop-drag");
@@ -136,12 +137,12 @@ pub fn show(
             let Some(at) = ui.ctx().data(|data| data.get_temp::<i64>(menu_id)) else {
                 return;
             };
-            if ui.button("将循环开始标记移至此处").clicked() {
+            if ui.button(lang.text("将循环开始标记移至此处", "Set loop start here", "ループ開始をここに設定")).clicked() {
                 transport.loop_region.place_start(at);
                 transport.looping = true;
                 ui.close();
             }
-            if ui.button("将循环结束标记移至此处").clicked() {
+            if ui.button(lang.text("将循环结束标记移至此处", "Set loop end here", "ループ終了をここに設定")).clicked() {
                 transport.loop_region.place_end(at);
                 transport.looping = true;
                 ui.close();

@@ -74,6 +74,7 @@ fn focus(app: &mut App, ctx: &Context) {
 }
 
 pub fn show(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0, PANEL);
     let canvas = Rect::from_min_max(pos2(rect.left() + GUTTER, rect.top()), rect.max);
@@ -139,7 +140,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         ui.painter().text(
             canvas.center(),
             Align2::CENTER_CENTER,
-            "音素时值 · 等待当前音符组合成准备结果",
+            lang.text("音素时值 · 等待当前音符组合成准备结果", "Phoneme timing · waiting for synthesis data", "音素タイミング · 合成データを待機中"),
             FontId::proportional(12.0),
             MUTED,
         );
@@ -165,7 +166,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     menu::show(app, ui, &response, &mapping, &phones);
     playhead_line(ui, canvas, &app.view.piano, app.editor.transport.position);
     if response.hovered() {
-        app.status = "拖动音素块调整强度 · 拖动边界调整时值 · 双击重置".into();
+        app.status = lang.text("拖动音素块调整强度 · 拖动边界调整时值 · 双击重置", "Drag phoneme blocks to adjust strength · drag boundaries for timing · double-click to reset", "音素ブロックをドラッグして強さを調整 · 境界をドラッグして長さを調整 · ダブルクリックでリセット").into();
     }
 }
 

@@ -33,6 +33,8 @@ impl VoiceAvailability {
 pub struct VoiceCatalogEntry {
     pub database_id: String,
     pub revision: u32,
+    /// Full release label (e.g. Flat 106b1) when revision is only numeric.
+    pub version_label: Option<String>,
     pub model_version: Option<u8>,
     pub family: Option<VoiceFamily>,
     pub directory: PathBuf,
@@ -64,26 +66,73 @@ impl VoiceCatalog {
     pub fn scan_with_models(root: &Path, flat_models: Option<&Path>) -> Result<Self> {
         let mut catalog = Self::default();
         if super::nofs::is_file(root) {
-            catalog.entries.push(entry_nofs(root, flat_models)?);
+            match entry_nofs(root, flat_models) {
+                Ok(entry) => catalog.entries.push(entry),
+                Err(error) => catalog.warnings.push(format!(
+                    "声库文件 {} 解析失败：{error}", root.display()
+                )),
+            }
             return Ok(catalog);
         }
         for path in super::nofs::paths(root)? {
-            catalog.entries.push(entry_nofs(&path, flat_models)?);
+            match entry_nofs(&path, flat_models) {
+                Ok(entry) => catalog.entries.push(entry),
+                Err(error) => catalog.warnings.push(format!(
+                    "声库文件 {} 解析失败：{error}", path.display()
+                )),
+            }
         }
         let metadata = MetadataIndex::load(root);
+        // Also accept a standalone, human-named folder containing DNNI
+        // models (common in manually extracted voicebank collections).
+        // Official UUID/revision installations remain handled below.
+        if let Some(entry) = dnni::scan_named(root, &metadata)? {
+            catalog.entries.push(entry);
+        }
         for database in fs::read_dir(root)? {
-            let database = database?;
-            if !database.file_type()?.is_dir() {
-                continue;
+            let database = match database {
+                Ok(database) => database,
+                Err(error) => {
+                    catalog.warnings.push(format!(
+                        "无法枚举声库目录 {}：{error}", root.display()
+                    ));
+                    continue;
+                }
+            };
+            match database.file_type() {
+                Ok(kind) if kind.is_dir() => {}
+                Ok(_) => continue,
+                Err(error) => {
+                    catalog.warnings.push(format!(
+                        "无法访问声库目录 {}：{error}", database.path().display()
+                    ));
+                    continue;
+                }
             }
-            if let Ok(database_id) = uuid::Uuid::parse_str(&database.file_name().to_string_lossy())
-            {
-                dnni::scan(&database.path(), database_id, &mut catalog, &metadata)?;
+            if let Ok(database_id) = uuid::Uuid::parse_str(&database.file_name().to_string_lossy()) {
+                if let Err(error) = dnni::scan(&database.path(), database_id, &mut catalog, &metadata) {
+                    catalog.warnings.push(format!(
+                        "声库 {} 的模型版本扫描失败：{error}", database.path().display()
+                    ));
+                }
+            } else {
+                match dnni::scan_named(&database.path(), &metadata) {
+                    Ok(Some(entry)) => catalog.entries.push(entry),
+                    Ok(None) => {}
+                    Err(error) => catalog.warnings.push(format!(
+                        "无法检查独立声库目录 {}：{error}", database.path().display()
+                    )),
+                }
             }
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
                     for path in paths {
-                        catalog.entries.push(entry_nofs(&path, flat_models)?);
+                        match entry_nofs(&path, flat_models) {
+                            Ok(entry) => catalog.entries.push(entry),
+                            Err(error) => catalog.warnings.push(format!(
+                                "声库文件 {} 解析失败：{error}", path.display()
+                            )),
+                        }
                     }
                 }
                 Err(error) => catalog.warnings.push(format!(
@@ -93,22 +142,54 @@ impl VoiceCatalog {
             }
             // Flat managers may install a voice in a revision subdirectory,
             // while SV2 uses the same nesting for DNNI files.
-            for revision in fs::read_dir(database.path())? {
-                let revision = revision?;
-                if !revision.file_type()?.is_dir() {
-                    continue;
-                }
-                match super::nofs::paths(&revision.path()) {
-                    Ok(paths) => {
-                        for path in paths {
-                            catalog.entries.push(entry_nofs(&path, flat_models)?);
+            // A broken/unreadable Flat subdirectory must not hide every
+            // other installed voicebank from the library catalog.
+            match fs::read_dir(database.path()) {
+                Ok(revisions) => {
+                    for revision in revisions {
+                        let revision = match revision {
+                            Ok(revision) => revision,
+                            Err(error) => {
+                                catalog.warnings.push(format!(
+                                    "无法枚举声库版本目录 {}：{error}",
+                                    database.path().display()
+                                ));
+                                continue;
+                            }
+                        };
+                        match revision.file_type() {
+                            Ok(kind) if kind.is_dir() => {}
+                            Ok(_) => continue,
+                            Err(error) => {
+                                catalog.warnings.push(format!(
+                                    "无法识别声库版本目录 {}：{error}",
+                                    revision.path().display()
+                                ));
+                                continue;
+                            }
+                        }
+                        match super::nofs::paths(&revision.path()) {
+                            Ok(paths) => {
+                                for path in paths {
+                                    match entry_nofs(&path, flat_models) {
+                                        Ok(entry) => catalog.entries.push(entry),
+                                        Err(error) => catalog.warnings.push(format!(
+                                            "声库文件 {} 解析失败：{error}", path.display()
+                                        )),
+                                    }
+                                }
+                            }
+                            Err(error) => catalog.warnings.push(format!(
+                                "无法读取声库版本目录 {}：{error}",
+                                revision.path().display()
+                            )),
                         }
                     }
-                    Err(error) => catalog.warnings.push(format!(
-                        "无法读取声库版本目录 {}：{error}",
-                        revision.path().display()
-                    )),
                 }
+                Err(error) => catalog.warnings.push(format!(
+                    "无法枚举声库子目录 {}：{error}",
+                    database.path().display()
+                )),
             }
         }
         let mut counts = std::collections::BTreeMap::new();

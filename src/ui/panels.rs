@@ -13,6 +13,7 @@ use crate::app::App;
 use eframe::egui::*;
 
 pub fn show(app: &mut App, ui: &mut Ui, column: Column) {
+    let lang = app.preferences.language;
     let rect = ui.max_rect();
     if ui.rect_contains_pointer(rect) && ui.input(|input| input.pointer.any_pressed()) {
         super::lanes::parameter_deactivate(app);
@@ -53,7 +54,7 @@ pub fn show(app: &mut App, ui: &mut Ui, column: Column) {
                 && matches!(column, Column::Note | Column::Voice | Column::Dictionary)
             {
                 controls::padded(ui, |ui| {
-                    ui.weak("当前选择的是伴奏轨，请选择歌声音轨以编辑此项。");
+                    ui.weak(lang.text("当前选择的是伴奏轨，请选择歌声音轨以编辑此项。", "An instrumental track is selected. Select a vocal track to edit these properties.", "伴奏トラックが選択されています。歌声トラックを選択してください。"));
                 });
                 return;
             }
@@ -63,7 +64,7 @@ pub fn show(app: &mut App, ui: &mut Ui, column: Column) {
                 Column::Render => render::show(app, ui),
                 Column::Dictionary => dictionary::show(app, ui, rect.height() - header.height()),
                 Column::Script => controls::padded(ui, |ui| {
-                    ui.weak("脚本运行环境尚未接入");
+                    ui.weak(lang.text("脚本运行环境尚未接入", "Scripting runtime is not available yet", "スクリプト実行環境は未対応です"));
                 }),
                 Column::Editor => {}
             }

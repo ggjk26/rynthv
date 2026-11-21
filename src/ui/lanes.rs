@@ -3,6 +3,7 @@ mod commands;
 mod geometry;
 mod gesture;
 mod header;
+pub(crate) use header::target_name;
 mod paint;
 mod session;
 
@@ -28,6 +29,7 @@ use geometry::Mapping;
 use std::collections::BTreeSet;
 
 pub fn show(app: &mut App, ui: &mut Ui, id: u64) {
+    let lang = app.preferences.language;
     let Some(index) = app.view.lanes.iter().position(|lane| lane.id == id) else {
         return;
     };
@@ -134,43 +136,43 @@ pub fn show(app: &mut App, ui: &mut Ui, id: u64) {
         focus(app, &lane);
         let selected = parameter_has_selection(app);
         if ui
-            .add_enabled(selected, Button::new("复制控制点"))
+            .add_enabled(selected, Button::new(lang.text("复制控制点", "Copy control points", "制御点をコピー")))
             .clicked()
         {
             parameter_copy(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(selected, Button::new("剪切控制点"))
+            .add_enabled(selected, Button::new(lang.text("剪切控制点", "Cut control points", "制御点を切り取り")))
             .clicked()
         {
             parameter_cut(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(parameter_can_paste(app), Button::new("粘贴控制点"))
+            .add_enabled(parameter_can_paste(app), Button::new(lang.text("粘贴控制点", "Paste control points", "制御点を貼り付け")))
             .clicked()
         {
             parameter_paste(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(selected, Button::new("删除控制点"))
+            .add_enabled(selected, Button::new(lang.text("删除控制点", "Delete control points", "制御点を削除")))
             .clicked()
         {
             parameter_delete(app);
             ui.close();
         }
-        if ui.button("选择全部控制点").clicked() {
+        if ui.button(lang.text("选择全部控制点", "Select all control points", "すべての制御点を選択")).clicked() {
             parameter_select_all(app);
             ui.close();
         }
         ui.separator();
         if ui
-            .add_enabled(!app.editor.is_editing(), Button::new("清空此参数的控制点"))
+            .add_enabled(!app.editor.is_editing(), Button::new(lang.text("清空此参数的控制点", "Clear control points for this parameter", "このパラメーターの制御点をすべて削除")))
             .clicked()
         {
-            app.editor.begin("清空参数控制点");
+            app.editor.begin(app.preferences.language.text("清空参数控制点", "Clear parameter points", "パラメーター制御点をすべて消去"));
             match app
                 .editor
                 .replace_automation_points(&lane.foreground, Vec::new())
@@ -188,16 +190,16 @@ pub fn show(app: &mut App, ui: &mut Ui, id: u64) {
     if response.hovered() {
         app.status = match lane.tool {
             ParameterTool::ControlPoints => {
-                "双击添加控制点 · 拖动移动 / 框选 · Ctrl+点击切换选择 · Shift+拖动选择时间范围"
+                lang.text("双击添加控制点 · 拖动移动 / 框选 · Ctrl+点击切换选择 · Shift+拖动选择时间范围", "Double-click to add · Drag to move/select · Ctrl+click to toggle · Shift+drag to select time range", "ダブルクリックで追加 · ドラッグで移動／範囲選択 · Ctrl+クリックで切替 · Shift+ドラッグで時間範囲を選択")
             }
             ParameterTool::Freehand => {
-                "左键拖动手绘曲线 · 右键拖动擦除控制点 · Esc 取消 · Ctrl+Z 撤销"
+                lang.text("左键拖动手绘曲线 · 右键拖动擦除控制点 · Esc 取消 · Ctrl+Z 撤销", "Left-drag to draw · Right-drag to erase · Esc cancel · Ctrl+Z undo", "左ドラッグで描画 · 右ドラッグで消去 · Esc キャンセル · Ctrl+Z 元に戻す")
             }
-            ParameterTool::Line => "左键拖动绘制直线 · 右键拖动擦除控制点 · Esc 取消 · Ctrl+Z 撤销",
+            ParameterTool::Line => lang.text("左键拖动绘制直线 · 右键拖动擦除控制点 · Esc 取消 · Ctrl+Z 撤销", "Left-drag to draw lines · Right-drag to erase · Esc cancel · Ctrl+Z undo", "左ドラッグで直線描画 · 右ドラッグで消去 · Esc キャンセル · Ctrl+Z 元に戻す"),
         }
         .into();
         if !editable(app, &lane.foreground) {
-            app.status = "当前声库不支持口型参数；已导入的曲线仍可查看与清空".into();
+            app.status = lang.text("当前声库不支持口型参数；已导入的曲线仍可查看与清空", "Current voice does not support mouth opening; imported curves can be viewed or cleared", "現在の歌声は口の開きに未対応です。読み込んだカーブは表示・消去できます。").into();
         }
     }
 }

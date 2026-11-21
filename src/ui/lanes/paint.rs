@@ -11,8 +11,8 @@ pub(super) fn show(app: &App, ui: &Ui, lane: &Lane, mapping: &Mapping, selected:
     let colors = TrackColors::new(app.editor.current_track());
     let mut background = mapping.clone();
     background.target = lane.background.clone();
-    axes(ui, mapping, false);
-    axes(ui, &background, true);
+    axes(ui, mapping, false, app.preferences.language);
+    axes(ui, &background, true, app.preferences.language);
     let painter = ui
         .painter()
         .with_clip_rect(mapping.canvas.intersect(ui.clip_rect()));
@@ -87,7 +87,7 @@ fn curve(ui: &Ui, mapping: &Mapping, automation: Option<&Automation>, color: Col
     painter.add(Shape::line(points, Stroke::new(1.4, color)));
 }
 
-fn axes(ui: &Ui, mapping: &Mapping, right: bool) {
+fn axes(ui: &Ui, mapping: &Mapping, right: bool, lang: crate::ui::settings::UiLanguage) {
     let rect = mapping.canvas;
     let (low, high) = mapping.visible_range();
     if high <= low {
@@ -121,7 +121,7 @@ fn axes(ui: &Ui, mapping: &Mapping, right: bool) {
         painter.text(
             pos2(x, y),
             align,
-            axis_label(&mapping.target, value, step),
+            axis_label(&mapping.target, value, step, lang),
             FontId::proportional(10.0),
             color,
         );
@@ -143,13 +143,13 @@ fn nice_step(value: f64) -> f64 {
         }
 }
 
-fn axis_label(target: &AutomationTarget, value: f64, step: f64) -> String {
+fn axis_label(target: &AutomationTarget, value: f64, step: f64, lang: crate::ui::settings::UiLanguage) -> String {
     if matches!(target, AutomationTarget::Parameter(Parameter::Tension)) {
         if (value - 1.0).abs() < 1e-6 {
-            return "紧张".into();
+            return lang.text("紧张", "Tense", "緊張").into();
         }
         if (value + 1.0).abs() < 1e-6 {
-            return "放松".into();
+            return lang.text("放松", "Relaxed", "リラックス").into();
         }
     }
     let decimals = if step >= 1.0 {

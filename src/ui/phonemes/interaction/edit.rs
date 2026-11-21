@@ -7,7 +7,7 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
     match capture.handle {
         Handle::Left | Handle::Right => {
             let target = if capture.handle == Handle::Right {
-                right_source(&capture.original, index).ok_or("此音素没有可独立编辑的右边界")?
+                right_source(&capture.original, index).ok_or(app.preferences.language.text("此音素没有可独立编辑的右边界", "This phoneme has no independently editable right boundary", "この音素には個別に編集できる右境界がありません"))?
             } else {
                 index
             };
@@ -27,7 +27,7 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
             });
             let upper = original.end_seconds;
             if lower > upper {
-                return Err("音素边界的顺序无效".into());
+                return Err(app.preferences.language.text("音素边界的顺序无效", "Invalid phoneme boundary order", "音素境界の順序が無効です").into());
             }
             let begin = capture.mapping.seconds(pointer.x).clamp(lower, upper);
             let note = capture
@@ -36,12 +36,12 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
                 .notes
                 .iter()
                 .find(|note| note.id == capture.source.note_id)
-                .ok_or("音素源音符不存在")?;
+                .ok_or(app.preferences.language.text("音素源音符不存在", "Source note for phoneme not found", "音素の元のノートが見つかりません"))?;
             let onset = note
                 .onset
                 .0
                 .checked_add(capture.mapping.input.content_offset.0)
-                .ok_or("音素源音符起点超出范围")?;
+                .ok_or(app.preferences.language.text("音素源音符起点超出范围", "Source note onset is out of range", "音素の元のノートの開始位置が範囲外です"))?;
             let note_seconds = capture
                 .mapping
                 .input
@@ -54,7 +54,7 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
             }
         }
         Handle::Strength => {
-            phone.strength.ok_or("当前音素没有可编辑的强度")?;
+            phone.strength.ok_or(app.preferences.language.text("当前音素没有可编辑的强度", "Phoneme strength cannot be edited", "この音素の強さは編集できません"))?;
             let strength = capture.mapping.strength_at(pointer.y);
             attributes.strength = Some(strength);
             capture.preview[index].strength = Some(strength);
@@ -64,8 +64,8 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
             if !rect.is_positive() {
                 return Ok(());
             }
-            phone.position.ok_or("当前音素没有可编辑的爆破位置")?;
-            phone.activity.ok_or("当前音素没有可编辑的爆破强度")?;
+            phone.position.ok_or(app.preferences.language.text("当前音素没有可编辑的爆破位置", "Phoneme impulse position cannot be edited", "この音素の破裂位置は編集できません"))?;
+            phone.activity.ok_or(app.preferences.language.text("当前音素没有可编辑的爆破强度", "Phoneme impulse strength cannot be edited", "この音素の破裂強度は編集できません"))?;
             let position = (f64::from(pointer.x - rect.left()) / f64::from(rect.width()))
                 .clamp(0.0, 1.0) as f32 as f64;
             let height =
@@ -81,7 +81,7 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
         .editor
         .update_phoneme_attributes(capture.source, attributes)
     {
-        return Err("无法更新当前音素，请重新选择音符组".into());
+        return Err(app.preferences.language.text("无法更新当前音素，请重新选择音符组", "Cannot update phoneme; reselect the note group", "音素を更新できません。ノートグループを再選択してください").into());
     }
     capture.changed = attributes != capture.attributes;
     Ok(())

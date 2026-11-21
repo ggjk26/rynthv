@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::{artwork, error_label, family_name, selected_entry, weak};
+use super::{artwork, error_label, family_name, localized_diagnostic, selected_entry, weak};
 use crate::{
     app::App,
     synthesis::{
@@ -14,6 +14,7 @@ use eframe::egui::*;
 const POPUP_FILL: Color32 = Color32::from_rgb(61, 59, 64);
 
 pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let entry = selected_entry(app);
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 60.0), Sense::click());
     ui.painter().rect(
@@ -35,7 +36,7 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
             label_rect.left_center() - vec2(0.0, if entry.is_some() { 9.0 } else { 0.0 }),
             Align2::LEFT_CENTER,
             entry.map_or_else(
-                || app.voice_name().unwrap_or("选择歌声"),
+                || app.voice_name().unwrap_or(lang.text("选择歌声", "Select voice", "歌声を選択")),
                 |entry| entry.display_name.as_str(),
             ),
             FontId::proportional(13.0),
@@ -47,7 +48,7 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
             .text(
                 label_rect.left_center() + vec2(0.0, 12.0),
                 Align2::LEFT_CENTER,
-                family_name(entry),
+                family_name(entry, lang),
                 FontId::proportional(10.5),
                 MUTED,
             );
@@ -57,12 +58,13 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
         Rect::from_center_size(rect.right_center() - vec2(16.0, 0.0), Vec2::splat(12.0)),
         MUTED,
     );
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "选择歌声"));
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, lang.text("选择歌声", "Select voice", "歌声を選択")));
     popup(app, &response.on_hover_cursor(CursorIcon::Default));
 }
 
 /// Shared by the track header and the voice panel; choices apply to this track.
 pub fn popup(app: &mut App, anchor: &Response) {
+    let lang = app.preferences.language;
     Popup::menu(anchor)
         .width(288.0)
         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
@@ -76,14 +78,14 @@ pub fn popup(app: &mut App, anchor: &Response) {
         .show(|ui| {
             ui.set_width(280.0);
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
-            header(ui);
+            header(ui, lang);
             separator(ui);
-            if menu_row(ui, "管理歌声", Some(Icon::Cloud), true).clicked() {
+            if menu_row(ui, lang.text("管理歌声", "Manage voices", "歌声を管理"), Some(Icon::Cloud), true).clicked() {
                 app.voice_manager = true;
                 ui.close();
             }
             separator(ui);
-            if menu_row(ui, "取消当前音轨歌声", None, app.has_voice()).clicked() {
+            if menu_row(ui, lang.text("取消当前音轨歌声", "Remove track voice", "トラックの歌声を解除"), None, app.has_voice()).clicked() {
                 app.unload_voice();
                 ui.close();
             }
@@ -91,7 +93,7 @@ pub fn popup(app: &mut App, anchor: &Response) {
             if app.synthesis.library.is_scanning() {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    weak(ui, "正在扫描歌声…");
+                    weak(ui, lang.text("正在扫描歌声…", "Scanning voices…", "歌声をスキャン中…"));
                 });
             }
             let entries = representative_entries(app);
@@ -99,14 +101,14 @@ pub fn popup(app: &mut App, anchor: &Response) {
                 error_label(
                     ui,
                     if entries.is_empty() {
-                        "无法读取声库目录，请在“管理歌声”中查看原因。"
+                        lang.text("无法读取声库目录，请在“管理歌声”中查看原因。", "Cannot read voice directories; check Manage voices for details.", "歌声フォルダーを読み込めません。歌声管理で詳細を確認してください。")
                     } else {
-                        "部分声库目录无法读取，已列出可读取的歌声。"
+                        lang.text("部分声库目录无法读取，已列出可读取的歌声。", "Some voice directories could not be read; available voices are listed.", "一部の歌声フォルダーを読み込めませんでした。利用可能な歌声のみ表示しています。")
                     },
                 );
             }
             if entries.is_empty() && !app.synthesis.library.is_scanning() {
-                weak(ui, "没有可选歌声，请在“管理歌声”中设置 databases 目录。");
+                weak(ui, lang.text("没有可选歌声，请在“管理歌声”中设置 databases 目录。", "No available voices. Set the databases directory in Manage voices.", "利用できる歌声がありません。歌声管理で databases フォルダーを設定してください。"));
             }
             let selected = app.voice_selection();
             let mut choose = None;
@@ -126,9 +128,9 @@ pub fn popup(app: &mut App, anchor: &Response) {
                         if category > 0 {
                             separator(ui);
                             let title = match category {
-                                1 => "SV2 · 版本 1 兼容歌声",
-                                2 => "SV1 原生歌声",
-                                _ => "其他歌声 · 暂不可用",
+                                1 => lang.text("SV2 · 版本 1 兼容歌声", "SV2 · Version 1 compatible voices", "SV2 · バージョン1互換歌声"),
+                                2 => lang.text("SV1 原生歌声", "Native SV1 voices", "SV1 ネイティブ歌声"),
+                                _ => lang.text("其他歌声 · 暂不可用", "Other voices · unavailable", "その他の歌声 · 利用不可"),
                             };
                             menu_row(ui, title, None, false);
                         }
@@ -137,7 +139,7 @@ pub fn popup(app: &mut App, anchor: &Response) {
                                 database_id: entry.database_id.clone(),
                                 revision: entry.revision,
                             };
-                            if card(ui, entry, selected.as_ref() == Some(&selection)).clicked() {
+                            if card(ui, entry, selected.as_ref() == Some(&selection), lang).clicked() {
                                 choose = Some(selection);
                             }
                         }
@@ -189,12 +191,12 @@ fn category_of(entry: &VoiceCatalogEntry) -> u8 {
     }
 }
 
-fn header(ui: &mut Ui) {
+fn header(ui: &mut Ui, lang: crate::ui::settings::UiLanguage) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
     ui.painter().text(
         rect.left_center() + vec2(8.0, 0.0),
         Align2::LEFT_CENTER,
-        "歌声",
+        lang.text("歌声", "Voices", "歌声"),
         section_title_font(),
         TEXT,
     );
@@ -252,7 +254,7 @@ fn separator(ui: &mut Ui) {
     );
 }
 
-fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool) -> Response {
+fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool, lang: crate::ui::settings::UiLanguage) -> Response {
     let enabled = entry.availability.is_loadable();
     let (rect, response) = ui.allocate_exact_size(
         vec2(ui.available_width(), 76.0),
@@ -287,7 +289,7 @@ fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool) -> Response {
         Align2::LEFT_TOP,
         match &entry.availability {
             VoiceAvailability::Loadable => entry.genres.join(", "),
-            VoiceAvailability::Unsupported(reason) => reason.clone(),
+            VoiceAvailability::Unsupported(reason) => localized_diagnostic(reason, lang),
         },
         FontId::proportional(12.0),
         MUTED,
@@ -317,13 +319,14 @@ fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool) -> Response {
         .on_hover_cursor(CursorIcon::Default)
         .on_hover_text(match &entry.availability {
             VoiceAvailability::Loadable => format!(
-                "{} · {} · 版本 {}\n{}",
+                "{} · {} · {} {}\n{}",
+                lang.text("版本", "Version", "バージョン"),
                 entry.display_name,
-                family_name(entry),
+                family_name(entry, lang),
                 entry.revision,
                 entry.vendor
             ),
-            VoiceAvailability::Unsupported(reason) => format!("{}\n{reason}", entry.display_name),
+            VoiceAvailability::Unsupported(reason) => format!("{}\n{}", entry.display_name, localized_diagnostic(reason, lang)),
         })
 }
 

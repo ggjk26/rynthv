@@ -115,7 +115,7 @@ fn copy_notes(app: &mut App, ctx: &Context) -> bool {
     match app.editor.copy() {
         Ok(Some(text)) => {
             ctx.copy_text(text);
-            app.status = "已复制音符".into();
+            app.status = app.preferences.language.text("已复制音符", "Notes copied", "ノートをコピーしました").into();
             true
         }
         Ok(None) => false,
@@ -182,7 +182,7 @@ pub(super) fn duplicate(app: &mut App) {
 fn report_paste(app: &mut App, result: Result<usize, String>) {
     match result {
         Ok(0) => {}
-        Ok(count) => app.status = format!("已粘贴 {count} 个音符"),
+        Ok(count) => app.status = format!("{} {count} {}", app.preferences.language.text("已粘贴", "Pasted", "貼り付け完了："), app.preferences.language.text("个音符", "notes", "ノート")),
         Err(error) => app.status = error,
     }
 }

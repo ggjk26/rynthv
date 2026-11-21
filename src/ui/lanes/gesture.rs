@@ -227,9 +227,9 @@ fn start(
     let transaction = !matches!(kind, Kind::Select { .. });
     if transaction {
         app.editor.begin(match kind {
-            Kind::Move => "移动参数控制点",
-            Kind::Erase { .. } => "擦除参数控制点",
-            _ => "绘制参数曲线",
+            Kind::Move => app.preferences.language.text("移动参数控制点", "Move parameter points", "パラメーター制御点を移動"),
+            Kind::Erase { .. } => app.preferences.language.text("擦除参数控制点", "Erase parameter points", "パラメーター制御点を消去"),
+            _ => app.preferences.language.text("绘制参数曲线", "Draw parameter curve", "パラメーター曲線を描く"),
         });
     }
     let selected = app.parameter_lane.selected.clone();

@@ -4,6 +4,7 @@
 //! Decoded model resources are not serialized.
 
 mod archive;
+mod bundled;
 mod catalog;
 mod config;
 mod duration_frontend;
@@ -16,6 +17,7 @@ mod nofs;
 mod phones;
 mod preparation;
 mod prepared;
+mod sidecar;
 pub mod session_identity;
 mod stream;
 mod tensor;

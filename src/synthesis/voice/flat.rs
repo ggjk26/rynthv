@@ -170,6 +170,18 @@ impl FlatManifest {
         if model_ids.is_empty() {
             notes.push("config.json 未内嵌 Flat 模型清单".to_owned());
         }
+        for (index, id) in model_ids.iter().enumerate() {
+            if !valid_model_id(id) {
+                notes.push(format!(
+                    "models[{index}] 不是有效的本地模型标识，已跳过文件定位"
+                ));
+            }
+        }
+        for (index, role) in model_types.iter().enumerate() {
+            if !role.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+                notes.push(format!("model_types[{index}] 包含不支持的角色字符"));
+            }
+        }
         notes.push("info.nofs 是未解析的二进制资源；仅解析相邻 config.json".to_owned());
         Ok(Self {
             name: optional_text(object, "name")?.unwrap_or("SV Flat Package").to_owned(),
@@ -257,6 +269,14 @@ fn version(object: &Map<String, Value>) -> Result<String> {
     }
 }
 
+/// Flat package manifests are descriptive; reject unsafe path components
+/// before attempting read-only model file discovery.
+pub(crate) fn valid_model_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
 fn verify_model_id(text: &str, field: &str) -> Result<String> {
     if text.len() != 32 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(VoiceError::new(format!("{field} 必须是 32 位十六进制模型标识")));
@@ -264,24 +284,43 @@ fn verify_model_id(text: &str, field: &str) -> Result<String> {
     Ok(text.to_ascii_lowercase())
 }
 
-fn locate_model(root: &Path, id: &str, preferred_folder: &str) -> Option<PathBuf> {
-    // The Flat field name is not a guaranteed DNNI stage role. Search common
-    // install layouts without assuming which executable stage consumes it.
-    // The validated 32-hex ID cannot escape the configured directory.
+/// Read-only discovery of locally installed model dependencies, not a
+/// statement that any Flat stage can be executed by this synthesizer.
+pub(in crate::synthesis::voice) fn locate_model(
+    root: &Path,
+    id: &str,
+    preferred_folder: &str,
+) -> Option<PathBuf> {
+    // Never interpret manifest-controlled IDs as paths.
+    if !valid_model_id(id) {
+        return None;
+    }
     let folders = [
         preferred_folder, "acoustic", "duration", "pitch",
         "f0", "vocoder", "sing", "timing", "base_model", "models",
     ];
-    let direct = root.join(format!("{id}.dnni"));
-    if direct.is_file() {
-        return Some(direct);
-    }
-    for folder in folders {
-        let parent = root.join(folder);
-        for name in [format!("{id}.dnni"), id.to_owned()] {
-            let candidate = parent.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
+    let extension_name = format!("{id}.dnni");
+    for parent in std::iter::once(root.to_path_buf())
+        .chain(folders.into_iter().map(|folder| root.join(folder)))
+    {
+        for name in [extension_name.as_str(), id] {
+            let direct = parent.join(name);
+            if direct.is_file() {
+                return Some(direct);
+            }
+        }
+        // Flat packages copied between Windows and Linux can preserve mixed
+        // case filenames. Limit scanning work for untrusted install layouts.
+        if let Ok(entries) = fs::read_dir(&parent) {
+            for entry in entries.take(2048).flatten() {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if (name.eq_ignore_ascii_case(&extension_name)
+                    || name.eq_ignore_ascii_case(id))
+                    && entry.file_type().is_ok_and(|kind| kind.is_file())
+                {
+                    return Some(entry.path());
+                }
             }
         }
     }

@@ -44,7 +44,7 @@ pub fn anchor_cut(app: &mut App) {
     }
     anchor_copy(app);
     let ids = app.piano_anchor.ids.clone();
-    app.editor.begin("剪切音高控制点");
+    app.editor.begin(app.preferences.language.text("剪切音高控制点", "Cut pitch anchors", "ピッチ制御点を切り取る"));
     if let Some(group) = app.editor.group_mut() {
         group
             .pitch_controls
@@ -64,7 +64,7 @@ pub fn anchor_paste(app: &mut App) {
     let controls = app.piano_anchor.clipboard.clone();
     let pitch_offset = app.piano_anchor.clipboard_pitch_offset;
     let at = app.editor.transport.position;
-    insert(app, controls, pitch_offset, at, "粘贴音高控制点");
+    insert(app, controls, pitch_offset, at, app.preferences.language.text("粘贴音高控制点", "Paste pitch anchors", "ピッチ制御点を貼り付ける"));
 }
 
 pub fn anchor_duplicate(app: &mut App) {
@@ -93,7 +93,7 @@ pub fn anchor_duplicate(app: &mut App) {
     }
     let pitch_offset = reference.pitch_offset;
     let at = left.saturating_add(reference.blick_offset);
-    insert(app, controls, pitch_offset, at, "复制音高控制点");
+    insert(app, controls, pitch_offset, at, app.preferences.language.text("复制音高控制点", "Duplicate pitch anchors", "ピッチ制御点を複製"));
 }
 
 pub fn anchor_shift_octave(app: &mut App, up: bool) {
@@ -132,9 +132,9 @@ pub fn anchor_shift_octave(app: &mut App, up: bool) {
         return;
     }
     app.editor.begin(if up {
-        "音高控制点升八度"
+        app.preferences.language.text("音高控制点升八度", "Pitch anchors up one octave", "ピッチ制御点を1オクターブ上げる")
     } else {
-        "音高控制点降八度"
+        app.preferences.language.text("音高控制点降八度", "Pitch anchors down one octave", "ピッチ制御点を1オクターブ下げる")
     });
     app.editor.group_mut().unwrap().pitch_controls = controls;
     app.editor.finish();

@@ -1,4 +1,4 @@
-use super::super::{context, error_label, text, weak};
+use super::super::{context, error_label, localized_diagnostic, text, weak};
 use crate::{
     app::App,
     synthesis::{runtime::VoiceState, voice::VoiceCatalogEntry},
@@ -10,16 +10,17 @@ pub(super) fn status(
     ui: &mut Ui,
     selection: &crate::synthesis::settings::VoiceSelection,
 ) {
+    let lang = app.preferences.language;
     match app.synthesis.voice_state(selection) {
         VoiceState::Loading => {
             ui.horizontal(|ui| {
                 ui.spinner();
-                weak(ui, "正在准备歌声，请稍候…");
+                weak(ui, lang.text("正在准备歌声，请稍候…", "Preparing voice…", "歌声を準備中…"));
             });
         }
         VoiceState::Loaded(_) if app.synthesis.voice_error(selection).is_none() => {
-            text(ui, RichText::new("已加载").color(GREEN));
-            weak(ui, "编辑音符后自动合成，按空格键试听。");
+            text(ui, RichText::new(lang.text("已加载", "Loaded", "読み込み完了")).color(GREEN));
+            weak(ui, lang.text("编辑音符后自动合成，按空格键试听。", "Synthesis updates after editing notes. Press Space to preview.", "ノート編集後に自動合成します。Space キーで試聴できます。"));
         }
         _ => {}
     }
@@ -28,12 +29,12 @@ pub(super) fn status(
         error_label(
             ui,
             if matches!(app.synthesis.voice_state(selection), VoiceState::Failed(_)) {
-                "歌声加载失败"
+                lang.text("歌声加载失败", "Voice loading failed", "歌声の読み込みに失敗しました")
             } else {
-                "合成环境准备失败"
+                lang.text("合成环境准备失败", "Synthesis backend initialization failed", "合成環境の準備に失敗しました")
             },
         );
-        ui.collapsing("查看错误详情", |ui| error_label(ui, &error));
+        ui.collapsing(lang.text("查看错误详情", "Show error details", "エラーの詳細を表示"), |ui| error_label(ui, localized_diagnostic(&error, lang)));
         if app
             .synthesis
             .inventory(selection)
@@ -45,17 +46,19 @@ pub(super) fn status(
 }
 
 pub(super) fn diagnostics(app: &App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
-    weak(ui, "声库目录");
+    let lang = app.preferences.language;
+    weak(ui, lang.text("声库目录", "Voice directory", "歌声フォルダー"));
     text(ui, entry.directory.display().to_string());
     if let Some(voice) = app.synthesis.inventory(&entry.selection()) {
         weak(
             ui,
             format!(
-                "{} 个文件 · {} 个资源 · {} 棵模块树 · {} 个张量",
-                voice.files.len(),
-                voice.resource_count,
-                voice.graph_count,
-                voice.tensor_count
+                "{} {} · {} {} · {} {} · {} {}",
+                voice.files.len(), lang.text("个文件", "files", "ファイル"),
+                voice.resource_count, lang.text("个资源", "resources", "リソース"),
+                voice.graph_count, lang.text("棵模块树", "module trees", "モジュールツリー"),
+                voice.tensor_count, lang.text("个张量", "tensors", "テンソル"),
+
             ),
         );
         if let Some(prepared) = voice.preparation() {
@@ -69,23 +72,21 @@ pub(super) fn diagnostics(app: &App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             }
             weak(
                 ui,
-                format!(
-                    "已装配 {affine} 个线性层、{unary} 个逐元素模块；{other} 个模块由阶段执行器处理或尚未装配"
-                ),
+                format!("{} {affine} {}, {unary} {}; {other} {}", lang.text("已装配", "Prepared", "構築済み"), lang.text("个线性层", "affine layers", "線形層"), lang.text("个逐元素模块", "elementwise modules", "要素ごとのモジュール"), lang.text("个模块由阶段执行器处理或尚未装配", "modules handled by stage executors or not yet prepared", "個のモジュールはステージ実行器が処理、または未構築です")),
             );
         }
         if let Some(elapsed) = app.synthesis.load_elapsed(&entry.selection()) {
-            weak(ui, format!("加载耗时 {:.2} 秒", elapsed.as_secs_f64()));
+            weak(ui, format!("{} {:.2} {}", lang.text("加载耗时", "Load time", "読み込み時間"), elapsed.as_secs_f64(), lang.text("秒", "s", "秒")));
         }
     }
     if let Some(catalog) = app.synthesis.library.catalog()
         && !catalog.warnings.is_empty()
     {
         ui.collapsing(
-            format!("扫描提示（{}）", catalog.warnings.len()),
+            format!("{} ({})", lang.text("扫描提示", "Scan warnings", "スキャンの警告"), catalog.warnings.len()),
             |ui| {
                 for warning in &catalog.warnings {
-                    weak(ui, warning);
+                    weak(ui, localized_diagnostic(warning, lang));
                 }
             },
         );

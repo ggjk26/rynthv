@@ -10,6 +10,7 @@ pub fn load(path: &Path) -> Result<Project, String> {
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
     let mut project: Project =
         serde_json::from_slice(&bytes).map_err(|e| format!("SVP 解析失败：{e}"))?;
+    normalize_legacy_project(&mut project);
     validate(&project)?;
     let base = std::path::absolute(path).map_err(|e| e.to_string())?;
     for track in &mut project.tracks {
@@ -72,12 +73,6 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 fn validate(p: &Project) -> Result<(), String> {
     let bad = |s: &str| Err(format!("工程校验失败：{s}"));
-    if p.version != SVP_VERSION {
-        return bad(&format!(
-            "当前支持 SVP version {SVP_VERSION}，文件版本为 {}",
-            p.version
-        ));
-    }
     identity::validate(p)?;
     if p.tracks.is_empty() {
         return bad("至少需要一条音轨");
@@ -206,4 +201,70 @@ fn validate(p: &Project) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+
+/// Normalize obsolete SV1 controls on import only. Modern dF0VbrMod is a
+/// supported per-note vibrato control and must not be erased.
+fn normalize_legacy_project(project: &mut Project) {
+    // Older SVP revisions can omit render settings entirely. Supply only
+    // absent keys, leaving any explicitly configured export options intact.
+    for (key, value) in Project::default().render_config {
+        project.render_config.entry(key).or_insert(value);
+    }
+    for group in project.library.iter_mut()
+        .chain(project.tracks.iter_mut().map(|track| &mut track.main_group))
+    {
+        for key in ["dF0Vbr", "dF0VbrEnv"] {
+            group.parameters.remove(key);
+            group.vocal_modes.remove(key);
+        }
+        for note in &mut group.notes {
+            for key in ["dF0Vbr", "dF0VbrEnv"] {
+                note.attributes.remove(key);
+                note.extra.remove(key);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod legacy_compat_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn accepts_svp_113_and_missing_optional_fields() {
+        let mut value = serde_json::to_value(Project::default()).unwrap();
+        value["version"] = json!(113);
+        let note = Note::new(0, QUARTER, 60);
+        let mut note = serde_json::to_value(note).unwrap();
+        note.as_object_mut().unwrap().remove("phonemes");
+        note.as_object_mut().unwrap().remove("attributes");
+        note.as_object_mut().unwrap().remove("musicalType");
+        value["tracks"][0]["mainGroup"]["notes"] = json!([note]);
+        value.as_object_mut().unwrap().remove("library");
+        value.as_object_mut().unwrap().remove("renderConfig");
+        value["time"].as_object_mut().unwrap().remove("startTimeSeconds");
+        let project: Project = serde_json::from_value(value).unwrap();
+        assert_eq!(project.version, 113);
+        assert_eq!(project.tracks[0].main_group.notes[0].musical_type, "singing");
+        validate(&project).unwrap();
+    }
+
+    #[test]
+    fn old_vibrato_is_removed_but_supported_modulator_remains() {
+        let mut project = Project::default();
+        let group = &mut project.tracks[0].main_group;
+        group.parameters.insert("dF0Vbr".into(), Automation::default());
+        let mut note = Note::new(0, QUARTER, 60);
+        note.attributes.insert("dF0Vbr".into(), json!(0.3));
+        note.attributes.insert("dF0VbrMod".into(), json!(1.2));
+        group.notes.push(note);
+        normalize_legacy_project(&mut project);
+        let group = &project.tracks[0].main_group;
+        assert!(!group.parameters.contains_key("dF0Vbr"));
+        assert!(!group.notes[0].attributes.contains_key("dF0Vbr"));
+        assert_eq!(group.notes[0].attributes["dF0VbrMod"], json!(1.2));
+    }
 }

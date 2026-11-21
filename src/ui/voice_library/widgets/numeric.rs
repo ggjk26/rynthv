@@ -78,6 +78,7 @@ pub(super) fn control(
     enabled: &[bool],
     geometry: Geometry,
     spec: Spec<'_>,
+    lang: crate::ui::settings::UiLanguage,
 ) -> ControlResponse {
     let state_id = id.with("state");
     let mut state = ui.data_mut(|data| data.get_temp::<State>(state_id).unwrap_or_default());
@@ -207,7 +208,7 @@ pub(super) fn control(
         } else {
             CursorIcon::NotAllowed
         })
-        .on_hover_text("双击输入数值；右键恢复默认值");
+        .on_hover_text(lang.text("双击输入数值；右键恢复默认值", "Double-click to enter a value; right-click to reset", "ダブルクリックで数値入力、右クリックで初期値に戻す"));
     state.frame = frame;
     ui.data_mut(|data| data.insert_temp(state_id, state));
     result

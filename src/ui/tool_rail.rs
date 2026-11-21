@@ -10,6 +10,7 @@ use eframe::egui::*;
 pub const WIDTH: f32 = 42.0;
 
 pub fn show(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let rect = ui.max_rect();
     // Paint the shell before the inset content applies its smaller clip rectangle.
     ui.painter().rect_filled(rect, 4, PANEL);
@@ -20,7 +21,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     content.spacing_mut().item_spacing.y = 12.0;
     for panel in Column::PANELS {
         if content
-            .add(button(panel.icon(), panel.label()).selected(app.view.columns.contains(&panel)))
+            .add(button(panel.icon(), panel.localized_label(lang)).selected(app.view.columns.contains(&panel)))
             .clicked()
         {
             app.view.toggle(panel);
@@ -35,10 +36,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         Stroke::new(1.0, EDGE),
     );
     content.add_space(5.0);
-    if content.add(button(Icon::Cloud, "管理歌声")).clicked() {
+    if content.add(button(Icon::Cloud, lang.text("管理歌声", "Manage voices", "歌声を管理"))).clicked() {
         app.voice_manager = true;
     }
-    if content.add(button(Icon::Settings, "设置")).clicked() {
+    if content.add(button(Icon::Settings, lang.text("设置", "Settings", "設定"))).clicked() {
         app.settings = true;
     }
 }

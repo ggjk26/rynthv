@@ -35,7 +35,7 @@ pub(super) fn start_gesture(
         } else {
             NoteDrag::Move
         };
-        app.editor.begin("拖动音符");
+        app.editor.begin(app.preferences.language.text("拖动音符", "Move notes", "ノートを移動"));
         let mut selected: Vec<_> = app
             .editor
             .notes()
@@ -54,9 +54,24 @@ pub(super) fn start_gesture(
                 .notes
                 .extend(selected.clone());
         }
+        // Only a single resized note can exchange duration with a directly
+        // touching neighbour; multi-selection retains its existing behavior.
+        let adjacent = if selected.len() == 1 {
+            let source = &selected[0];
+            app.editor.notes().iter().find(|candidate| {
+                candidate.id != source.id && match kind {
+                    NoteDrag::Left => candidate.onset.checked_add(candidate.duration) == Some(source.onset),
+                    NoteDrag::Right => source.onset.checked_add(source.duration) == Some(candidate.onset),
+                    NoteDrag::Move => false,
+                }
+            }).cloned()
+        } else {
+            None
+        };
         app.gesture = Some(Gesture::Notes {
             origin,
             notes: selected,
+            adjacent,
             kind,
             anchor: match kind {
                 NoteDrag::Right => note.onset + note.duration,
@@ -64,7 +79,7 @@ pub(super) fn start_gesture(
             },
         });
     } else if app.piano_tool == super::Tool::NoteDraw || modifiers.ctrl {
-        app.editor.begin("创建音符");
+        app.editor.begin(app.preferences.language.text("创建音符", "Create note", "ノートを作成"));
         let beat = beat_at(rect, &app.view.piano, origin.x);
         let at = ticks(if app.view.snap && !(modifiers.ctrl && modifiers.alt) {
             app.view.snap_beat(beat)
@@ -111,6 +126,7 @@ pub(super) fn update_gesture(app: &mut App, ui: &Ui, rect: Rect) {
         Gesture::Notes {
             origin,
             notes,
+            adjacent,
             kind,
             anchor,
         } => {
@@ -147,7 +163,30 @@ pub(super) fn update_gesture(app: &mut App, ui: &Ui, rect: Rect) {
                 }
                 NoteDrag::Right => delta.max(-max_shrink),
             };
+            if let Some(neighbor) = adjacent {
+                // The boundary moves, but the combined time span is invariant.
+                // Both notes must remain at least one editing grid unit long.
+                delta = match kind {
+                    NoteDrag::Right => delta.min((neighbor.duration - minimum).max(0)),
+                    NoteDrag::Left => delta.max(-(neighbor.duration - minimum).max(0)),
+                    NoteDrag::Move => delta,
+                };
+            }
             for n in &mut app.editor.group_mut().unwrap().notes {
+                if let Some(neighbor) = adjacent
+                    && n.id == neighbor.id
+                {
+                    match kind {
+                        NoteDrag::Right => {
+                            n.onset = neighbor.onset + delta;
+                            n.duration = neighbor.duration - delta;
+                        }
+                        NoteDrag::Left => {
+                            n.duration = neighbor.duration + delta;
+                        }
+                        NoteDrag::Move => {}
+                    }
+                }
                 if let Some(old) = notes.iter().find(|old| old.id == n.id) {
                     match kind {
                         NoteDrag::Move => {

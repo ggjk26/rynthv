@@ -33,12 +33,22 @@ impl Runtime {
             if voice.is_some_and(|v| v.live.is_some()) {
                 continue;
             }
-            // Unassigned tracks are silent. A specified but unavailable singer
-            // remains pending instead of silently substituting another voice.
-            if !self.routes.contains_key(id)
-                && !self.binding_errors.contains_key(id)
-                && !self.pending_voices.contains(id)
-            {
+            // A missing or failed singer must not hold the entire project
+            // transport in a permanent buffering state. It is reported in the
+            // render panel; other singers and accompaniment remain playable.
+            // Only a voice still loading/preparing can block its time span.
+            if self.binding_errors.contains_key(id) {
+                continue;
+            }
+            if let Some(voice) = voice {
+                if matches!(voice.state, super::VoiceState::Failed(_))
+                    || (voice.worker.is_none() && !voice.ready)
+                    || (voice.error.is_some() && !voice.waiting && voice.stats.running == 0
+                        && voice.stats.queued == 0 && !voice.ready)
+                {
+                    continue;
+                }
+            } else if !self.pending_voices.contains(id) || !self.library.is_scanning() {
                 continue;
             }
             let output = &plan.output_controls[id];

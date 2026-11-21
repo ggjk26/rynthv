@@ -50,11 +50,12 @@ pub(super) fn combo<T: PartialEq + Clone>(
     id: &str,
     value: &mut T,
     options: &[(T, &str)],
+    lang: crate::ui::settings::UiLanguage,
 ) {
     let label = options
         .iter()
         .find(|(v, _)| v == value)
-        .map_or("未支持的值", |(_, label)| *label);
+        .map_or(lang.text("未支持的值", "Unsupported value", "未対応の値"), |(_, label)| *label);
     ComboBox::from_id_salt(id)
         .width(ui.available_width())
         .selected_text(label)

@@ -3,6 +3,7 @@ use crate::{app::App, editor::GroupEdit, model::*};
 use eframe::egui::*;
 
 pub fn show(app: &mut App, ui: &mut Ui, timeline_left: f32, scroll: f32) {
+    let lang = app.preferences.language;
     let rect = ui.max_rect();
     let tracks = app.editor.project.tracks.clone();
     let mut track_rects = Vec::new();
@@ -63,7 +64,7 @@ pub fn show(app: &mut App, ui: &mut Ui, timeline_left: f32, scroll: f32) {
             app.editor.select_track(track.id);
         }
         response.context_menu(|ui| {
-            if ui.button("插入新的音符组").clicked() {
+            if ui.button(lang.text("插入新的音符组", "Insert new note group", "新しいノートグループを挿入")).clicked() {
                 let at = ui
                     .ctx()
                     .data(|d| d.get_temp::<i64>(context_id))
@@ -73,8 +74,8 @@ pub fn show(app: &mut App, ui: &mut Ui, timeline_left: f32, scroll: f32) {
                 ui.close();
             }
             ui.separator();
-            ui.add_enabled(false, Button::new("粘贴"));
-            ui.add_enabled(false, Button::new("作为链接音符组粘贴"));
+            ui.add_enabled(false, Button::new(lang.text("粘贴", "Paste", "貼り付け")));
+            ui.add_enabled(false, Button::new(lang.text("作为链接音符组粘贴", "Paste as linked group", "リンクグループとして貼り付け")));
         });
         let mut references: Vec<_> = track.visible_references().collect();
         references.sort_by_key(|r| app.editor.reference == Some(r.id));
@@ -141,10 +142,28 @@ fn group(app: &mut App, ui: &mut Ui, body: Rect, track: &Track, reference: &Grou
         FontId::proportional(11.0),
         Color32::WHITE,
     );
+    // Scale each clip preview to its own audible pitch range rather than
+    // clipping everything around an arbitrary MIDI 60 reference.
+    let pitch_range = group.notes.iter()
+        .filter(|note| reference.note_range(note).is_some())
+        .map(|note| note.pitch + reference.pitch_offset)
+        .fold(None::<(i32, i32)>, |range, pitch| {
+            Some(range.map_or((pitch, pitch), |(low, high)| (low.min(pitch), high.max(pitch))))
+        });
     for note in &group.notes {
         if let Some((start, end)) = reference.note_range(note) {
-            let y = (body.top() + 40.0 - (note.pitch + reference.pitch_offset - 60) as f32 * 0.6)
-                .clamp(body.top() + 22.0, body.bottom() - 5.0);
+            let y = if let Some((low, high)) = pitch_range {
+                if high == low {
+                    body.center().y + 5.0
+                } else {
+                    let fraction = (high - note.pitch - reference.pitch_offset) as f32
+                        / (high - low) as f32;
+                    // Leave space for the clip title above the note preview.
+                    body.top() + 22.0 + fraction * (body.height() - 27.0)
+                }
+            } else {
+                body.center().y
+            };
             content.line_segment(
                 [
                     pos2(x_at(body, &app.view.arrangement, beats(start)), y),

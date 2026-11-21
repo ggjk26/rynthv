@@ -80,7 +80,7 @@ pub(super) fn apply(
         if gesture.is_some_and(|gesture| gesture.widget == widget) {
             if !update(&mut app.editor) {
                 finish(app, ctx, true);
-                app.error = Some("无法更新当前歌声参数，请重新选择音符组后重试。".into());
+                app.error = Some(app.preferences.language.text("无法更新当前歌声参数，请重新选择音符组后重试。", "Cannot update current voice parameters. Reselect the note group and retry.", "歌声パラメーターを更新できません。ノートグループを選択し直して再試行してください。").into());
                 return;
             }
             app.status.clear();

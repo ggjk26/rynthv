@@ -122,9 +122,9 @@ pub(super) fn show(
         });
         if !enabled {
             response.clone().on_hover_text(if handle == Handle::Right {
-                "尾部边界随音符长度调整"
+                app.preferences.language.text("尾部边界随音符长度调整", "Ending boundary follows note length", "終端の境界はノートの長さに連動します")
             } else {
-                "当前声库暂不支持音素时值编辑"
+                app.preferences.language.text("当前声库暂不支持音素时值编辑", "This voice does not support phoneme timing editing yet", "この歌声は音素の長さ編集に未対応です")
             });
         }
     }
@@ -197,14 +197,14 @@ fn reset(
     attributes.activity = None;
     attributes.position = None;
     if !app.editor.begin_phoneme_edit(source) {
-        return Err("无法编辑当前音素".into());
+        return Err(app.preferences.language.text("无法编辑当前音素", "Cannot edit the current phoneme", "現在の音素を編集できません").into());
     }
     if app.editor.update_phoneme_attributes(source, attributes) {
         app.editor.finish_phoneme_edit();
         Ok(())
     } else {
         app.editor.cancel_phoneme_edit();
-        Err("无法重置当前音素的强度和爆破设置".into())
+        Err(app.preferences.language.text("无法重置当前音素的强度和爆破设置", "Cannot reset phoneme strength and impulse settings", "音素の強さと破裂音の設定をリセットできません").into())
     }
 }
 

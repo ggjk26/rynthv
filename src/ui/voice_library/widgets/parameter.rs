@@ -9,6 +9,7 @@ pub(crate) fn parameter_slider(
     ui: &mut Ui,
     parameter: VoiceParameter,
     value: &mut f64,
+    lang: crate::ui::settings::UiLanguage,
 ) -> ControlResponse {
     let step = parameter.step();
     let tuning = VoiceParameter::TUNING.contains(&parameter);
@@ -19,16 +20,29 @@ pub(crate) fn parameter_slider(
         ui,
         ui.make_persistent_id(parameter.key()),
         rect,
-        parameter.label(),
+        match parameter {
+            VoiceParameter::Loudness => lang.text("响度", "Loudness", "ラウドネス"),
+            VoiceParameter::Tension => lang.text("张力", "Tension", "テンション"),
+            VoiceParameter::Breathiness => lang.text("气声", "Breathiness", "ブレス"),
+            VoiceParameter::Gender => lang.text("性别", "Gender", "ジェンダー"),
+            VoiceParameter::ToneShift => lang.text("声区转换", "Tone shift", "声区シフト"),
+            VoiceParameter::PitchShift => lang.text("音高转换", "Pitch shift", "ピッチシフト"),
+            VoiceParameter::KeyShift => lang.text("调性转换", "Key shift", "キーシフト"),
+        },
         value,
         Spec {
             range: parameter.range(),
             step,
             fine_step,
             decimals,
-            unit: parameter.unit(),
+            unit: match parameter {
+                VoiceParameter::ToneShift | VoiceParameter::PitchShift => lang.text("音分", "cents", "セント"),
+                VoiceParameter::KeyShift => lang.text("半音", "semitones", "半音"),
+                _ => parameter.unit(),
+            },
             snap_input: tuning,
         },
+        lang,
     )
 }
 
@@ -39,6 +53,7 @@ fn slider_at(
     label: &str,
     value: &mut f64,
     spec: Spec<'_>,
+    lang: crate::ui::settings::UiLanguage,
 ) -> ControlResponse {
     let bounds = Rect::from_min_max(
         pos2(rect.left() + 9.5, rect.top() + 22.0),
@@ -60,6 +75,7 @@ fn slider_at(
             centered: false,
         },
         spec,
+        lang,
     );
     let amount = ((*value - range.0) / (range.1 - range.0)).clamp(0.0, 1.0) as f32;
     let center = pos2(lerp(bounds.x_range(), amount), rect.top() + 32.0);

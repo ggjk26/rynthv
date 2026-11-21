@@ -8,6 +8,7 @@ use crate::{
 use eframe::egui::*;
 
 pub(super) fn show(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let mut config = app.editor.project.render_config.clone();
     let mut tracks: Vec<_> = app
         .editor
@@ -29,7 +30,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
     let original_tracks = tracks.clone();
     let mut export_clicked = false;
     padded(ui, |ui| {
-        ui.weak("目标文件夹");
+        ui.weak(lang.text("目标文件夹", "Destination folder", "保存先フォルダー"));
         let mut directory = string(&config, "destination");
         ui.horizontal(|ui| {
             let width = (ui.available_width() - 34.0).max(20.0);
@@ -40,8 +41,8 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                     .margin(vec2(7.0, 5.0))
                     .background_color(BORDER),
             );
-            if folder_button(ui).clicked() {
-                let mut picker = rfd::FileDialog::new().set_title("选择导出文件夹");
+            if folder_button(ui, lang).clicked() {
+                let mut picker = rfd::FileDialog::new().set_title(lang.text("选择导出文件夹", "Select export folder", "書き出し先を選択"));
                 if !directory.is_empty() {
                     picker = picker.set_directory(&directory);
                 }
@@ -51,29 +52,41 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             }
         });
         config.insert("destination".into(), directory.into());
-        ui.weak("文件名称");
+        ui.weak(lang.text("文件名称", "File name", "ファイル名"));
         let mut name = string(&config, "filename");
         field(ui, &mut name);
         config.insert("filename".into(), name.into());
         ui.add_space(12.0);
         let ready = !app.editor.is_editing() && app.synthesis.export_ready(app.editor.revision);
+        let unavailable_reason = app.synthesis.error.as_deref().unwrap_or_else(|| {
+            lang.text(
+                "等待伴奏加载和当前歌声合成完成后导出",
+                "Wait until accompaniment and voice synthesis finish",
+                "伴奏の読み込みと歌声合成の完了後に書き出せます",
+            )
+        });
         export_clicked = ui
             .add_enabled(
                 ready,
-                Button::new("导出为文件").min_size(vec2(ui.available_width(), 28.0)),
+                Button::new(lang.text("导出为文件", "Export to files", "ファイルに書き出す")).min_size(vec2(ui.available_width(), 28.0)),
             )
-            .on_disabled_hover_text("等待伴奏加载和当前歌声合成完成后导出")
+            .on_disabled_hover_text(unavailable_reason)
             .clicked();
+        if !ready && !app.editor.is_editing() {
+            if let Some(message) = &app.synthesis.error {
+                error(ui, message);
+            }
+        }
         if app.synthesis.is_exporting() {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("正在导出…");
+                ui.label(lang.text("正在导出…", "Exporting…", "書き出し中…"));
             });
         }
         if let Some(result) = &app.synthesis.export_result {
             match result {
                 Ok(paths) => {
-                    ui.label(format!("已导出 {} 个文件", paths.len()))
+                    ui.label(format!("{} {} {}", lang.text("已导出", "Exported", "書き出し済み"), paths.len(), lang.text("个文件", "files", "ファイル")))
                         .on_hover_text(
                             paths
                                 .iter()
@@ -86,7 +99,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             }
         }
     });
-    section(ui, "音轨", |ui| {
+    section(ui, lang.text("音轨", "Tracks", "トラック"), |ui| {
         let mut mix = config
             .get("exportMixDown")
             .and_then(serde_json::Value::as_bool)
@@ -98,7 +111,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                 ui.set_min_height(190.0);
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 3.0;
-                track_row(ui, &mut mix, "混音导出", TEXT);
+                track_row(ui, &mut mix, lang.text("混音导出", "Mixdown", "ミックスダウン"), TEXT);
                 for (_, name, enabled, color) in &mut tracks {
                     track_row(ui, enabled, name, *color);
                 }
@@ -106,7 +119,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
         config.insert("exportMixDown".into(), mix.into());
         pair(ui, |ui, width| {
             if ui
-                .add_sized(vec2(width, 28.0), Button::new("全选"))
+                .add_sized(vec2(width, 28.0), Button::new(lang.text("全选", "Select all", "すべて選択")))
                 .clicked()
             {
                 config.insert("exportMixDown".into(), true.into());
@@ -115,7 +128,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                 }
             }
             if ui
-                .add_sized(vec2(width, 28.0), Button::new("取消全选"))
+                .add_sized(vec2(width, 28.0), Button::new(lang.text("取消全选", "Deselect all", "すべて解除")))
                 .clicked()
             {
                 config.insert("exportMixDown".into(), false.into());
@@ -125,44 +138,49 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             }
         });
     });
-    section(ui, "格式", |ui| {
+    section(ui, lang.text("格式", "Format", "形式"), |ui| {
         numeric(
             ui,
             &mut config,
             "numChannels",
-            "声道",
-            &[(1, "单声道"), (2, "立体声")],
+            lang.text("声道", "Channels", "チャンネル"),
+            &[(1, lang.text("单声道", "Mono", "モノラル")), (2, lang.text("立体声", "Stereo", "ステレオ"))],
+            lang,
         );
-        ui.weak("气声输出");
+        ui.weak(lang.text("气声输出", "Aspiration output", "息成分の書き出し"));
+        ui.small(lang.text("独立气声分轨尚未由合成引擎提供；当前仅支持完整音频。", "Separate aspiration stems are not available from the synthesis engine yet; only full audio can be exported.", "合成エンジンは息成分の個別出力に未対応です。現在は全音声のみ書き出せます。"));
         let mut aspiration = string(&config, "aspirationFormat");
         combo(
             ui,
             "aspiration-format",
             &mut aspiration,
-            &[("noAspiration".to_owned(), "无")],
+            &[("noAspiration".to_owned(), lang.text("无", "None", "なし"))],
+            lang,
         );
         config.insert("aspirationFormat".into(), aspiration.into());
         numeric(
             ui,
             &mut config,
             "bitDepth",
-            "位深度",
-            &[(16, "16 位"), (24, "24 位"), (32, "32 位浮点")],
+            lang.text("位深度", "Bit depth", "ビット深度"),
+            &[(16, lang.text("16 位", "16-bit", "16ビット")), (24, lang.text("24 位", "24-bit", "24ビット")), (32, lang.text("32 位浮点", "32-bit float", "32ビット浮動小数点"))],
+            lang,
         );
         numeric(
             ui,
             &mut config,
             "sampleRate",
-            "采样率",
+            lang.text("采样率", "Sample rate", "サンプルレート"),
             &[
                 (44100, "44100 Hz"),
                 (48000, "48000 Hz"),
                 (96000, "96000 Hz"),
             ],
+            lang,
         );
     });
     if config != app.editor.project.render_config || tracks != original_tracks {
-        app.editor.begin("渲染设置");
+        app.editor.begin(app.preferences.language.text("渲染设置", "Render settings", "レンダリング設定"));
         app.editor.project.render_config = config;
         for (id, _, enabled, _) in tracks {
             if let Some(track) = app.editor.project.tracks.iter_mut().find(|t| t.id == id) {
@@ -174,12 +192,13 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
     if export_clicked {
         start_export(app);
     }
-    section(ui, "合成状态", |ui| {
+    section(ui, lang.text("合成状态", "Synthesis status", "合成ステータス"), |ui| {
         super::super::synthesis::render_status(app, ui)
     });
 }
 
 fn start_export(app: &mut App) {
+    let lang = app.preferences.language;
     let request = match ExportRequest::from_project(&app.editor.project) {
         Ok(request) => request,
         Err(message) => {
@@ -195,9 +214,10 @@ fn start_export(app: &mut App) {
         .collect();
     if !existing.is_empty()
         && rfd::MessageDialog::new()
-            .set_title("覆盖音频文件")
+            .set_title(lang.text("覆盖音频文件", "Overwrite audio files", "音声ファイルを上書き"))
             .set_description(format!(
-                "以下文件已存在，是否覆盖？\n{}",
+                "{}\n{}",
+                lang.text("以下文件已存在，是否覆盖？", "The following files already exist. Overwrite?", "次のファイルは既に存在します。上書きしますか？"),
                 existing.join("\n")
             ))
             .set_buttons(rfd::MessageButtons::YesNo)
@@ -216,13 +236,13 @@ fn string(config: &Extra, key: &str) -> String {
         .unwrap_or("")
         .to_owned()
 }
-fn numeric(ui: &mut Ui, config: &mut Extra, key: &str, label: &str, values: &[(u64, &str)]) {
+fn numeric(ui: &mut Ui, config: &mut Extra, key: &str, label: &str, values: &[(u64, &str)], lang: crate::ui::settings::UiLanguage) {
     ui.weak(label);
     let mut value = config
         .get(key)
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(values[0].0);
-    combo(ui, key, &mut value, values);
+    combo(ui, key, &mut value, values, lang);
     config.insert(key.into(), value.into());
 }
 fn track_row(ui: &mut Ui, checked: &mut bool, name: &str, color: Color32) {
@@ -245,7 +265,7 @@ fn track_row(ui: &mut Ui, checked: &mut bool, name: &str, color: Color32) {
         color,
     );
 }
-fn folder_button(ui: &mut Ui) -> Response {
+fn folder_button(ui: &mut Ui, lang: crate::ui::settings::UiLanguage) -> Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
     ui.painter().rect(
         rect,
@@ -273,5 +293,5 @@ fn folder_button(ui: &mut Ui) -> Response {
         points.into_iter().map(|(x, y)| c + vec2(x, y)).collect(),
         Stroke::new(1.1, MUTED),
     ));
-    response.on_hover_text("选择目标文件夹")
+    response.on_hover_text(lang.text("选择目标文件夹", "Choose destination folder", "書き出し先フォルダーを選択"))
 }

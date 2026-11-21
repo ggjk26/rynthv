@@ -60,7 +60,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry, state:
                         },
                     ),
                 );
-                tags_row(ui, entry, tags);
+                tags_row(ui, entry, tags, app.preferences.language);
                 let current = app.voice_selection().as_ref() == Some(&catalog::selection(entry));
                 let badge_rect = if compact {
                     Rect::from_min_max(
@@ -98,6 +98,7 @@ fn version(
     state: &mut State,
     rect: Rect,
 ) -> bool {
+    let lang = app.preferences.language;
     let text_width = (rect.width() - 76.0).max(0.0);
     let galley =
         ui.painter()
@@ -121,7 +122,7 @@ fn version(
     controls.visuals_mut().widgets.inactive.weak_bg_fill = BUTTON;
     ComboBox::from_id_salt("version")
         .width(64.0)
-        .selected_text(format!("v{}", revision))
+        .selected_text(format!("v{}", entry.version_label.clone().unwrap_or_else(|| revision.to_string())))
         .show_ui(&mut controls, |ui| {
             if let Some(catalog) = app.synthesis.library.catalog() {
                 for version in catalog.entries.iter().filter(|v| {
@@ -133,12 +134,13 @@ fn version(
                         &mut revision,
                         version.revision,
                         format!(
-                            "版本 {}{}",
-                            version.revision,
+                            "{} {}{}",
+                            lang.text("版本", "Version", "バージョン"),
+                            version.version_label.as_deref().map(str::to_owned).unwrap_or_else(|| version.revision.to_string()),
                             if version.availability.is_loadable() {
                                 ""
                             } else {
-                                " · 不可用"
+                                lang.text(" · 不可用", " · unavailable", " · 利用不可")
                             }
                         ),
                     );
@@ -153,10 +155,10 @@ fn version(
     }
 }
 
-fn tags_row(ui: &Ui, entry: &VoiceCatalogEntry, rect: Rect) {
-    let mut values = vec![family_name(entry)];
+fn tags_row(ui: &Ui, entry: &VoiceCatalogEntry, rect: Rect, lang: crate::ui::settings::UiLanguage) {
+    let mut values = vec![family_name(entry, lang)];
     if entry.genres.is_empty() {
-        values.extend(entry.languages.iter().map(|s| language_name(s)));
+        values.extend(entry.languages.iter().map(|s| language_name(s, lang)));
     } else {
         values.extend(entry.genres.iter().map(String::as_str));
     }
@@ -180,22 +182,23 @@ fn tags_row(ui: &Ui, entry: &VoiceCatalogEntry, rect: Rect) {
 }
 
 fn badge(ui: &Ui, app: &App, entry: &VoiceCatalogEntry, current: bool, rect: Rect, left: bool) {
+    let lang = app.preferences.language;
     let key = entry.selection();
     let voice = app.synthesis.voice_state(&key);
     let (label, color, check) = if !matches!(voice, VoiceState::Unloaded) {
         match voice {
             VoiceState::Loaded(_) if app.synthesis.voice_error(&key).is_some() => {
-                ("待配置", Color32::from_rgb(219, 167, 101), false)
+                (lang.text("待配置", "Setup needed", "設定が必要"), Color32::from_rgb(219, 167, 101), false)
             }
-            VoiceState::Loaded(_) => (if current { "当前音轨" } else { "已加载" }, ACCENT, true),
-            VoiceState::Loading => ("正在加载", MUTED, false),
-            VoiceState::Failed(_) => ("加载失败", Color32::from_rgb(218, 142, 126), false),
-            VoiceState::Unloaded => ("未加载", MUTED, false),
+            VoiceState::Loaded(_) => (if current { lang.text("当前音轨", "Current track", "現在のトラック") } else { lang.text("已加载", "Loaded", "読み込み済み") }, ACCENT, true),
+            VoiceState::Loading => (lang.text("正在加载", "Loading", "読み込み中"), MUTED, false),
+            VoiceState::Failed(_) => (lang.text("加载失败", "Load failed", "読み込み失敗"), Color32::from_rgb(218, 142, 126), false),
+            VoiceState::Unloaded => (lang.text("未加载", "Not loaded", "未読み込み"), MUTED, false),
         }
     } else if entry.availability.is_loadable() {
-        ("可加载", MUTED, false)
+        (lang.text("可加载", "Available", "利用可能"), MUTED, false)
     } else {
-        ("不可用", MUTED, false)
+        (lang.text("不可用", "Unavailable", "利用不可"), MUTED, false)
     };
     let point = if left {
         rect.left_center() + vec2(if check { 19.0 } else { 0.0 }, 0.0)

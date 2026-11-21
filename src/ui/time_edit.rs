@@ -1,4 +1,4 @@
-use crate::{app::App, editor::Editor, model::TimeAxis, ui::theme::*};
+use crate::{app::App, editor::Editor, model::TimeAxis, ui::{settings::UiLanguage, theme::*}};
 use eframe::egui::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -32,14 +32,14 @@ impl TimeEdit {
         }
     }
 
-    fn commit(&self, editor: &mut Editor) -> Result<(), String> {
+    fn commit(&self, editor: &mut Editor, lang: UiLanguage) -> Result<(), String> {
         match self.target {
             Target::Tempo(position) => {
                 let bpm = self
                     .value
                     .trim()
                     .parse::<f64>()
-                    .map_err(|_| "请输入有效的 BPM 数值")?;
+                    .map_err(|_| lang.text("请输入有效的 BPM 数值", "Enter a valid BPM value", "有効な BPM 値を入力してください"))?;
                 editor.set_tempo(position, bpm)
             }
             Target::Meter(index) => {
@@ -47,7 +47,7 @@ impl TimeEdit {
                     .value
                     .trim()
                     .parse::<u32>()
-                    .map_err(|_| "拍号分子须为 1–64 的整数")?;
+                    .map_err(|_| lang.text("拍号分子须为 1–64 的整数", "Time-signature numerator must be an integer from 1 to 64", "拍子の分子は1～64の整数にしてください"))?;
                 editor.set_meter(index, numerator, self.denominator)
             }
         }
@@ -61,6 +61,7 @@ pub fn open(app: &mut App, target: Target) {
 }
 
 pub fn show(app: &mut App, ctx: &Context) {
+    let lang = app.preferences.language;
     let Some(mut edit) = app.time_edit.take() else {
         return;
     };
@@ -80,8 +81,8 @@ pub fn show(app: &mut App, ctx: &Context) {
             ui.set_width(WIDTH);
             ui.spacing_mut().item_spacing.y = 8.0;
             let (title, label) = match edit.target {
-                Target::Meter(_) => ("编辑拍号", "分子"),
-                Target::Tempo(_) => ("编辑曲速标记", "每分钟节拍数 (BPM)"),
+                Target::Meter(_) => (lang.text("编辑拍号", "Edit time signature", "拍子を編集"), lang.text("分子", "Numerator", "分子")),
+                Target::Tempo(_) => (lang.text("编辑曲速标记", "Edit tempo marker", "テンポマーカーを編集"), lang.text("每分钟节拍数 (BPM)", "Beats per minute (BPM)", "毎分の拍数（BPM）")),
             };
             ui.label(
                 RichText::new(title)
@@ -109,7 +110,7 @@ pub fn show(app: &mut App, ctx: &Context) {
             }
             if matches!(edit.target, Target::Meter(_)) {
                 ui.add_space(4.0);
-                ui.label(RichText::new("分母").color(MUTED));
+                ui.label(RichText::new(lang.text("分母", "Denominator", "分母")).color(MUTED));
                 ComboBox::from_id_salt("time-event-denominator")
                     .width(WIDTH)
                     .selected_text(edit.denominator.to_string())
@@ -127,12 +128,12 @@ pub fn show(app: &mut App, ctx: &Context) {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 let size = vec2((WIDTH - 8.0) / 2.0, 32.0);
                 cancel = ui
-                    .add_sized(size, Button::new("取消").fill(BUTTON_HOVER))
+                    .add_sized(size, Button::new(lang.text("取消", "Cancel", "キャンセル")).fill(BUTTON_HOVER))
                     .clicked();
                 submit |= ui
                     .add_sized(
                         size,
-                        Button::new(RichText::new("确定").color(CANVAS)).fill(GREEN),
+                        Button::new(RichText::new(lang.text("确定", "Apply", "適用")).color(CANVAS)).fill(GREEN),
                     )
                     .clicked();
             });
@@ -144,7 +145,7 @@ pub fn show(app: &mut App, ctx: &Context) {
         return;
     }
     if submit {
-        match edit.commit(&mut app.editor) {
+        match edit.commit(&mut app.editor, lang) {
             Ok(()) => return,
             Err(error) => {
                 edit.error = Some(error);

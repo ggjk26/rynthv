@@ -24,21 +24,155 @@ pub struct SynthesisSettings {
     pub flat_models: Option<PathBuf>,
     pub dictionaries: Option<PathBuf>,
     pub selected_voice: Option<VoiceSelection>,
+    /// Older and third-party RynthV builds stored voicebank locations under
+    /// "roots" rather than the dedicated database fields. Keep the original
+    /// JSON so updating another preference never discards those locations.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "read_legacy_roots")]
+    pub roots: Option<serde_json::Value>,
+}
+
+/// Collect paths from both the old single-root and multi-root configuration
+/// shapes. Objects can represent either a root descriptor with a path field or
+/// a map of named roots (for example {"sv2": "...", "flat": "..."}).
+/// Non-path metadata is ignored, never interpreted as a directory.
+fn collect_legacy_roots<'a>(
+    value: &'a serde_json::Value,
+    paths: &mut Vec<&'a Path>,
+) -> Result<(), String> {
+    use serde_json::Value;
+    if paths.len() > 128 {
+        return Err("声库 roots 目录数量不能超过 128".into());
+    }
+    match value {
+        Value::Null => Ok(()),
+        Value::String(path) => {
+            if path.trim().is_empty() {
+                return Err("声库 roots 中的目录不能为空".into());
+            }
+            paths.push(Path::new(path));
+            if paths.len() > 128 {
+                return Err("声库 roots 目录数量不能超过 128".into());
+            }
+            Ok(())
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_legacy_roots(item, paths)?;
+            }
+            Ok(())
+        }
+        Value::Object(fields) => {
+            // A list item may be {"kind":"sv2","path":"..."}; do not
+            // mistake "kind", "name" or "label" for a path.
+            if let Some(path) = ["path", "directory", "root", "location"]
+                .into_iter()
+                .find_map(|key| fields.get(key))
+            {
+                return collect_legacy_roots(path, paths);
+            }
+            let mut data_fields = 0;
+            for (key, field) in fields {
+                if matches!(
+                    key.as_str(),
+                    "kind" | "type" | "name" | "label" | "id"
+                        | "enabled" | "recursive" | "version"
+                        | "description" | "display_name"
+                ) {
+                    continue;
+                }
+                // Dictionary and model caches are not voicebank directories.
+                if matches!(key.as_str(), "dictionaries" | "flat_models" | "models") {
+                    continue;
+                }
+                data_fields += 1;
+                collect_legacy_roots(field, paths)?;
+            }
+            // Metadata-only legacy records should not prevent users from
+            // starting the app and selecting a new voicebank root.
+            let _ = data_fields;
+            Ok(())
+        }
+        _ => Err("声库 roots 必须是目录路径、路径数组或包含路径的对象".into()),
+    }
+}
+
+fn read_legacy_roots<'de, D>(deserializer: D) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    if value.is_null() {
+        return Ok(None);
+    }
+    let mut paths = Vec::new();
+    collect_legacy_roots(&value, &mut paths).map_err(serde::de::Error::custom)?;
+    // Empty legacy lists are valid: the user may not have configured any
+    // voicebank yet. The UI must still start and allow choosing folders.
+    Ok(Some(value))
 }
 
 impl SynthesisSettings {
     pub fn database_roots(&self) -> impl Iterator<Item = (&'static str, &Path)> {
-        [
+        let mut roots: Vec<(&'static str, &Path)> = Vec::new();
+        for (label, path) in [
             ("SV2", self.databases.as_deref()),
             ("SV1", self.sv1_databases.as_deref()),
             ("SV Flat", self.flat_databases.as_deref()),
-        ]
-        .into_iter()
-        .filter_map(|(label, path)| path.map(|path| (label, path)))
+        ] {
+            if let Some(path) = path
+                && !roots.iter().any(|(_, existing)| *existing == path)
+            {
+                roots.push((label, path));
+            }
+        }
+        if let Some(legacy) = self.roots.as_ref() {
+            let mut paths = Vec::new();
+            // The root shape was checked when the settings were deserialized.
+            if collect_legacy_roots(legacy, &mut paths).is_ok() {
+                for path in paths {
+                    if !roots.iter().any(|(_, existing)| *existing == path) {
+                        roots.push(("Legacy", path));
+                    }
+                }
+            }
+        }
+        roots.into_iter()
     }
 
     pub fn has_databases(&self) -> bool {
-        self.databases.is_some() || self.sv1_databases.is_some() || self.flat_databases.is_some()
+        self.database_roots().next().is_some()
+    }
+
+    /// Locate the three standard Windows database roots without reading or
+    /// modifying any installed voicebank contents. Missing roots are left unset.
+    /// The caller must explicitly choose whether to apply these values.
+    pub fn installed_windows_roots() -> Result<Self, String> {
+        let mut settings = Self::default();
+        #[cfg(windows)]
+        {
+            let home = std::env::var_os("USERPROFILE")
+                .filter(|home| !home.is_empty())
+                .map(PathBuf::from)
+                .ok_or_else(|| "USERPROFILE 未设置，无法定位 Documents。".to_owned())?;
+            let documents = home.join("Documents");
+            for (destination, candidate) in [
+                (&mut settings.databases, documents.join("Dreamtonics/Synthesizer V Studio 2/databases")),
+                (&mut settings.sv1_databases, documents.join("Dreamtonics/Synthesizer V Studio/databases")),
+                (&mut settings.flat_databases, documents.join("OPSV/Dreamtonics/Synthesizer V Studio/databases")),
+            ] {
+                if candidate.is_dir() {
+                    *destination = Some(candidate);
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            return Err("只支持在 Windows 上检测 Dreamtonics 标准安装目录。".to_owned());
+        }
+        if !settings.has_databases() {
+            return Err("未找到任何默认 Dreamtonics databases 目录，请手动指定声库根目录。".to_owned());
+        }
+        Ok(settings)
     }
 
     pub fn path() -> Result<PathBuf, String> {
@@ -52,6 +186,36 @@ impl SynthesisSettings {
                 .map_err(|error| format!("无法读取合成设置 {}：{error}", path.display())),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(format!("无法读取合成设置 {}：{error}", path.display())),
+        }
+    }
+
+    /// Explicit recovery for unreadable synthesis.json files. Do not silently
+    /// discard a user's configured voicebank paths on application startup.
+    /// Keep the original file intact under a unique backup name.
+    pub fn backup_and_reset_invalid() -> Result<PathBuf, String> {
+        let path = Self::path()?;
+        if Self::load().is_ok() {
+            return Err("当前合成设置可正常读取，无需重置。".to_owned());
+        }
+        let backup = path.with_file_name(format!(
+            "synthesis-{}.json.bak",
+            uuid::Uuid::new_v4()
+        ));
+        fs::rename(&path, &backup).map_err(|error| {
+            format!(
+                "无法备份原合成设置 {}：{error}",
+                path.display()
+            )
+        })?;
+        match Self::default().save() {
+            Ok(()) => Ok(backup),
+            Err(error) => match fs::rename(&backup, &path) {
+                Ok(()) => Err(format!("无法重置合成设置：{error}；原配置已恢复。")),
+                Err(restore_error) => Err(format!(
+                    "无法重置合成设置：{error}；恢复失败：{restore_error}。原配置备份位置：{}",
+                    backup.display()
+                )),
+            },
         }
     }
 
@@ -124,5 +288,77 @@ impl SynthesisSettings {
                 selected.database_id, selected.revision
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod legacy_root_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn legacy_single_root_and_array_are_loadable() {
+        for roots in [
+            json!("C:\\Dreamtonics\\databases"),
+            json!(["C:\\Dreamtonics\\databases", "D:\\OtherVoices"]),
+        ] {
+            let settings: SynthesisSettings =
+                serde_json::from_value(json!({ "roots": roots })).unwrap();
+            assert!(settings.has_databases());
+            assert!(!settings.database_roots().collect::<Vec<_>>().is_empty());
+            assert_eq!(
+                serde_json::to_value(&settings).unwrap()["roots"],
+                roots,
+                "must preserve the user's original root data"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_named_roots_and_descriptor_lists_are_loadable() {
+        for roots in [
+            json!({"sv2": "C:\\Dreamtonics", "sv1": "D:\\Studio1"}),
+            json!([
+                {"kind": "sv2", "path": "C:\\Dreamtonics"},
+                {"name": "Legacy", "directory": "D:\\Studio1"}
+            ]),
+        ] {
+            let settings: SynthesisSettings =
+                serde_json::from_value(json!({ "roots": roots })).unwrap();
+            assert_eq!(settings.database_roots().count(), 2);
+        }
+    }
+
+    #[test]
+    fn empty_roots_allow_choosing_library_later() {
+        let settings: SynthesisSettings =
+            serde_json::from_value(json!({ "roots": [] })).unwrap();
+        assert!(!settings.has_databases());
+        let settings: SynthesisSettings =
+            serde_json::from_value(json!({ "roots": {} })).unwrap();
+        assert!(!settings.has_databases());
+    }
+
+    #[test]
+    fn explicit_roots_take_precedence_without_double_scan() {
+        let settings: SynthesisSettings = serde_json::from_value(json!({
+            "databases": "C:\\Dreamtonics",
+            "roots": ["C:\\Dreamtonics", "D:\\Studio1"]
+        }))
+        .unwrap();
+        let roots: Vec<_> = settings.database_roots().collect();
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].0, "SV2");
+        assert_eq!(roots[1].0, "Legacy");
+    }
+
+    #[test]
+    fn reject_corrupt_legacy_roots_and_other_unknown_fields() {
+        assert!(serde_json::from_value::<SynthesisSettings>(
+            json!({"roots": [42]})
+        ).is_err());
+        assert!(serde_json::from_value::<SynthesisSettings>(
+            json!({"unrelated_unknown_field": true})
+        ).is_err());
     }
 }

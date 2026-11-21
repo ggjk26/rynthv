@@ -87,7 +87,31 @@ pub(super) fn configuration(directory: &Path, context: &FormatContext) -> Result
             configuration = Some(parse_configuration(&bytes)?);
         }
     }
-    let mut configuration = configuration.ok_or_else(|| VoiceError::new("声库缺少名称配置资源"))?;
+    let mut configuration = match configuration {
+        Some(embedded) => {
+            if let Some(sidecar) = super::super::sidecar::load(directory)?
+                && (embedded.name != sidecar.config.name
+                    || embedded.vendor != sidecar.config.vendor
+                    || embedded.version != sidecar.config.version
+                    || embedded.model_version != sidecar.config.model_version)
+            {
+                return Err(VoiceError::new("DNNI 内部配置与外部 configs.txt 不一致"));
+            }
+            embedded
+        }
+        None => {
+            let sidecar = super::super::sidecar::load(directory)?
+                .ok_or_else(|| VoiceError::new("声库缺少名称配置资源"))?;
+            Configuration {
+                model_version: sidecar.config.model_version,
+                name: sidecar.config.name,
+                vendor: sidecar.config.vendor,
+                version: sidecar.config.version,
+                languages: sidecar.config.supported_languages,
+                models: ModelPresence::default(),
+            }
+        }
+    };
     configuration.models = models;
     Ok(configuration)
 }
