@@ -141,6 +141,23 @@ impl Scale {
         }
     }
 
+    pub fn localized_label(self, lang: crate::ui::settings::UiLanguage) -> &'static str {
+        match self {
+            Self::Major => lang.text("大调音阶", "Major scale", "長音階"),
+            Self::NaturalMinor => lang.text("自然小调", "Natural minor", "自然短音階"),
+            Self::HarmonicMinor => lang.text("和声小调", "Harmonic minor", "和声短音階"),
+            Self::MelodicMinor => lang.text("旋律小调（上行）", "Melodic minor (ascending)", "旋律短音階（上行）"),
+            Self::Dorian => lang.text("多利亚调式", "Dorian", "ドリアン"),
+            Self::Phrygian => lang.text("弗里几亚调式", "Phrygian", "フリジアン"),
+            Self::Lydian => lang.text("利底亚调式", "Lydian", "リディアン"),
+            Self::Mixolydian => lang.text("混合利底亚调式", "Mixolydian", "ミクソリディアン"),
+            Self::Locrian => lang.text("洛克里亚调式", "Locrian", "ロクリアン"),
+            Self::MajorPentatonic => lang.text("大调五声音阶", "Major pentatonic", "メジャーペンタトニック"),
+            Self::MinorPentatonic => lang.text("小调五声音阶", "Minor pentatonic", "マイナーペンタトニック"),
+            Self::Blues => lang.text("布鲁斯音阶", "Blues scale", "ブルーススケール"),
+        }
+    }
+
     pub fn native_name(self) -> &'static str {
         match self {
             Self::Major => "Major",
