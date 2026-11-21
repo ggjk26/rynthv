@@ -7,6 +7,31 @@ use eframe::egui::*;
 pub fn settings(app: &mut App, ui: &mut Ui) {
     let lang = app.preferences.language;
     text(ui, RichText::new(lang.text("歌声资源", "Voice resources", "歌声リソース")).strong());
+    if app.synthesis.library.invalid_settings() {
+        if let Some(error) = app.synthesis.library.settings_error() {
+            error_label(ui, error);
+        }
+        weak(ui, lang.text(
+            "声库设置文件无法读取。为了避免覆盖原有路径，已暂停保存声库设置。可备份原文件并重新选择目录。",
+            "Voice resource settings could not be read. Saving is disabled to protect the original paths. Back up the file and select new folders to recover.",
+            "歌声設定ファイルを読み込めません。元のパスを保護するため設定保存を停止しました。バックアップ後にフォルダーを再選択できます。",
+        ));
+        if ui.button(lang.text(
+            "备份损坏配置并重置声库路径",
+            "Back up invalid settings and reset voice paths",
+            "破損した設定をバックアップして歌声パスを初期化",
+        )).clicked() {
+            match app.synthesis.recover_invalid_voice_settings() {
+                Ok(backup) => app.status = format!(
+                    "{} {}",
+                    lang.text("原配置已备份：", "Original settings backed up:", "元の設定をバックアップしました："),
+                    backup.display(),
+                ),
+                Err(error) => app.error = Some(error),
+            }
+        }
+        return;
+    }
     text(ui, lang.text("SV2 声库根目录（databases）", "SV2 voicebank root (databases)", "SV2 歌声ルート（databases）"));
     path_label(ui, app.synthesis.library.settings.databases.as_deref(), lang);
     ui.horizontal(|ui| {
