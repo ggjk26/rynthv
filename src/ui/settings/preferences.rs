@@ -1,4 +1,5 @@
 use eframe::egui::Context;
+use crate::model::Language;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -17,6 +18,17 @@ impl UiLanguage {
     /// Translate synthesized runtime status codes at the UI boundary without
     /// changing the language-neutral engine behavior or persisted project data.
     /// Translate UI diagnostics at presentation; preserve source errors for debugging.
+    pub fn language_label(self, language: Language) -> &'static str {
+        match language {
+            Language::English => self.text("英语", "English", "英語"),
+            Language::Mandarin => self.text("汉语普通话", "Mandarin Chinese", "中国語（普通話）"),
+            Language::Japanese => self.text("日语", "Japanese", "日本語"),
+            Language::Spanish => self.text("西班牙语", "Spanish", "スペイン語"),
+            Language::Cantonese => self.text("汉语广东话", "Cantonese Chinese", "広東語"),
+            Language::Korean => self.text("韩语", "Korean", "韓国語"),
+        }
+    }
+
     pub fn editor_message<'a>(self, message: &'a str) -> &'a str {
         match message {
             "无法编辑当前音素" => self.text("无法编辑当前音素", "Cannot edit the current phoneme", "現在の音素を編集できません"),
