@@ -12,7 +12,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
     let lang = app.preferences.language;
     ui.spacing_mut().item_spacing.y = 10.0;
     let selection = entry.selection();
-    text(ui, format!("{}: {}", lang.text("声库类型", "Voice type", "歌声タイプ"), family_name(entry)));
+    text(ui, format!("{}: {}", lang.text("声库类型", "Voice type", "歌声タイプ"), family_name(entry, lang)));
     if entry.database_id.starts_with("svflat:") {
         weak(
             ui,
@@ -39,7 +39,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
                 config
                     .supported_languages
                     .iter()
-                    .map(|s| language_name(s))
+                    .map(|s| language_name(s, lang))
                     .collect::<Vec<_>>()
                     .join("、")
             ),
