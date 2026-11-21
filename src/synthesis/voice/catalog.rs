@@ -33,6 +33,8 @@ impl VoiceAvailability {
 pub struct VoiceCatalogEntry {
     pub database_id: String,
     pub revision: u32,
+    /// Full release label (e.g. Flat 106b1) when revision is only numeric.
+    pub version_label: Option<String>,
     pub model_version: Option<u8>,
     pub family: Option<VoiceFamily>,
     pub directory: PathBuf,
