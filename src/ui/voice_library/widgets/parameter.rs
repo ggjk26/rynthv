@@ -52,6 +52,7 @@ fn slider_at(
     label: &str,
     value: &mut f64,
     spec: Spec<'_>,
+    lang: crate::ui::settings::UiLanguage,
 ) -> ControlResponse {
     let bounds = Rect::from_min_max(
         pos2(rect.left() + 9.5, rect.top() + 22.0),
