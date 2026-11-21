@@ -68,6 +68,7 @@ pub(crate) fn style(
             centered: true,
         },
         percentage(),
+        lang,
     );
     for ((value, enabled), radius) in values
         .iter()
