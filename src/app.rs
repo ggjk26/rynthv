@@ -356,7 +356,7 @@ impl App {
                         self.pending = None;
                         self.perform_file(action, ctx);
                     }
-                    if ui.button(lang.text("不保存", "Don\u0027t save", "保存しない")).clicked() {
+                    if ui.button(lang.text("不保存", "Don't save", "保存しない")).clicked() {
                         self.pending = None;
                         self.perform_file(action, ctx);
                     }
