@@ -56,7 +56,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
                 entry
                     .languages
                     .iter()
-                    .map(|s| language_name(s))
+                    .map(|s| language_name(s, lang))
                     .collect::<Vec<_>>()
                     .join("、")
             ),
