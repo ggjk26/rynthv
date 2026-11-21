@@ -30,6 +30,17 @@ impl Column {
             Self::Script => "脚本",
         }
     }
+    /// User-facing panel name; persisted enum labels stay language-neutral.
+    pub fn localized_label(self, language: super::settings::UiLanguage) -> &'static str {
+        match self {
+            Self::Editor => language.text("编辑器", "Editor", "エディター"),
+            Self::Voice => language.text("歌声", "Voice", "歌声"),
+            Self::Note => language.text("音符", "Note", "ノート"),
+            Self::Dictionary => language.text("词典", "Dictionary", "辞書"),
+            Self::Render => language.text("渲染", "Render", "レンダリング"),
+            Self::Script => language.text("脚本", "Scripts", "スクリプト"),
+        }
+    }
     pub fn icon(self) -> super::icons::Icon {
         use super::icons::Icon;
         match self {
