@@ -20,10 +20,11 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
 }
 
 fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
+    let lang = app.preferences.language;
     ui.spacing_mut().item_spacing.x = 3.0;
     let (rect, drag) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::drag());
     Icon::Curve.paint(ui, rect.shrink(5.0), MUTED);
-    drag.on_hover_text("拖动以调整参数区域顺序")
+    drag.on_hover_text(lang.text("拖动以调整参数区域顺序", "Drag to reorder parameter lanes", "ドラッグしてパラメーターレーンを並べ替え"))
         .dnd_set_drag_payload(DragPayload::Lane(lane.id));
     let mut styles = app
         .voice_inventory()
@@ -36,11 +37,11 @@ fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
             }
         }
     }
-    parameter_combo(ui, ("foreground", lane.id), &mut lane.foreground, &styles)
-        .on_hover_text("设置要在前景中编辑的参数");
+    parameter_combo(ui, ("foreground", lane.id), &mut lane.foreground, &styles, lang)
+        .on_hover_text(lang.text("设置要在前景中编辑的参数", "Choose foreground editing parameter", "前景で編集するパラメーターを選択"));
     if ui
         .add(
-            IconButton::new(Icon::Swap, "交换前景与背景参数")
+            IconButton::new(Icon::Swap, lang.text("交换前景与背景参数", "Swap foreground/background parameters", "前景と背景のパラメーターを交換"))
                 .size(vec2(24.0, 24.0))
                 .icon_size(14.0),
         )
@@ -48,24 +49,24 @@ fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
     {
         std::mem::swap(&mut lane.foreground, &mut lane.background);
     }
-    parameter_combo(ui, ("background", lane.id), &mut lane.background, &styles)
-        .on_hover_text("设置要在背景中显示的参数");
+    parameter_combo(ui, ("background", lane.id), &mut lane.background, &styles, lang)
+        .on_hover_text(lang.text("设置要在背景中显示的参数", "Choose background display parameter", "背景に表示するパラメーターを選択"));
     ui.add_space(7.0);
     for (tool, glyph, description) in [
         (
             ParameterTool::ControlPoints,
             Glyph::ControlPoints,
-            "控制点工具：添加、选择和移动控制点",
+            lang.text("控制点工具：添加、选择和移动控制点", "Control points: add, select and move", "制御点：追加・選択・移動"),
         ),
         (
             ParameterTool::Freehand,
             Glyph::Freehand,
-            "自由绘制工具：手绘参数曲线；右键拖动擦除",
+            lang.text("自由绘制工具：手绘参数曲线；右键拖动擦除", "Freehand: draw curves; right-drag to erase", "フリーハンド：曲線描画、右ドラッグで消去"),
         ),
         (
             ParameterTool::Line,
             Glyph::Line,
-            "直线工具：绘制直线，替换重叠范围内的控制点",
+            lang.text("直线工具：绘制直线，替换重叠范围内的控制点", "Line: draw straight segments replacing overlapping points", "直線：範囲内の制御点を置換し直線を描画"),
         ),
     ] {
         if icon_button(ui, glyph, lane.tool == tool, description).clicked() {
@@ -85,17 +86,17 @@ fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
                 (
                     Interpolation::Linear,
                     Glyph::Linear,
-                    "线性插值：用直线连接控制点",
+                    lang.text("线性插值：用直线连接控制点", "Linear interpolation", "線形補間"),
                 ),
                 (
                     Interpolation::Cosine,
                     Glyph::Cosine,
-                    "余弦插值：用余弦曲线连接控制点",
+                    lang.text("余弦插值：用余弦曲线连接控制点", "Cosine interpolation", "余弦補間"),
                 ),
                 (
                     Interpolation::Cubic,
                     Glyph::Cubic,
-                    "三次样条插值：平滑连接控制点",
+                    lang.text("三次样条插值：平滑连接控制点", "Cubic spline interpolation", "3次スプライン補間"),
                 ),
             ] {
                 if icon_button(ui, glyph, mode == interpolation.key(), description).clicked()
@@ -118,7 +119,7 @@ fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
         },
     );
     ui.add_space(9.0);
-    ui.label(RichText::new("缩放").color(MUTED));
+    ui.label(RichText::new(lang.text("缩放", "Zoom", "ズーム")).color(MUTED));
     let mut percent = lane.zoom * 100.0;
     let zoom = ui
         .add(
@@ -128,7 +129,7 @@ fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
                 .suffix("%")
                 .max_decimals(0),
         )
-        .on_hover_text("垂直显示缩放；双击输入，右键恢复 100%");
+        .on_hover_text(lang.text("垂直显示缩放；双击输入，右键恢复 100%", "Vertical zoom: double-click to edit, right-click to reset to 100%", "縦方向ズーム：ダブルクリックで入力、右クリックで100%に戻す"));
     if zoom.changed() {
         lane.zoom = (percent / 100.0).clamp(0.25, 16.0);
     }
@@ -142,21 +143,22 @@ fn parameter_combo(
     id: impl std::hash::Hash + std::fmt::Debug,
     target: &mut AutomationTarget,
     styles: &[String],
+    lang: crate::ui::settings::UiLanguage,
 ) -> Response {
     ComboBox::from_id_salt(id)
         .width(78.0)
-        .selected_text(target.label())
+        .selected_text(match target { AutomationTarget::Parameter(p) => parameter_name(*p, lang), _ => target.label() })
         .show_ui(ui, |ui| {
             for parameter in Parameter::ALL {
                 ui.selectable_value(
                     target,
                     AutomationTarget::Parameter(parameter),
-                    parameter.label(),
+                    parameter_name(parameter, lang),
                 );
             }
             if !styles.is_empty() {
                 ui.separator();
-                ui.label(RichText::new("唱法").color(MUTED));
+                ui.label(RichText::new(lang.text("唱法", "Vocal style", "歌唱スタイル")).color(MUTED));
                 for name in styles {
                     ui.selectable_value(target, AutomationTarget::VocalMode(name.clone()), name);
                 }
@@ -228,4 +230,21 @@ fn icon_button(ui: &mut Ui, glyph: Glyph, selected: bool, description: &'static 
         }
     }
     response.on_hover_text(description)
+}
+
+fn parameter_name(
+    parameter: Parameter,
+    lang: crate::ui::settings::UiLanguage,
+) -> &'static str {
+    match parameter {
+        Parameter::Pitch => lang.text("音高偏差", "Pitch deviation", "ピッチ偏差"),
+        Parameter::Vibrato => lang.text("颤音包络", "Vibrato envelope", "ビブラート包絡"),
+        Parameter::Loudness => lang.text("响度", "Loudness", "ラウドネス"),
+        Parameter::Tension => lang.text("张力", "Tension", "テンション"),
+        Parameter::Breathiness => lang.text("气声", "Breathiness", "ブレス成分"),
+        Parameter::Voicing => lang.text("发声", "Voicing", "有声音"),
+        Parameter::Gender => lang.text("性别", "Gender", "ジェンダー"),
+        Parameter::ToneShift => lang.text("声区转换", "Tone shift", "声域シフト"),
+        Parameter::Mouth => lang.text("口型", "Mouth opening", "口の開き"),
+    }
 }
