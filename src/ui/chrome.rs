@@ -89,7 +89,7 @@ pub fn menus(app: &mut App, ui: &mut Ui) {
         ui.menu_button(lang.text("查看", "View", "表示"), |ui| {
             ui.checkbox(&mut app.show_time_tracks, lang.text("显示曲速和拍号轨", "Show tempo and meter tracks", "テンポ・拍子トラックを表示"));
             if ui
-                .checkbox(&mut app.view.arrangement_collapsed, "折叠编排")
+                .checkbox(&mut app.view.arrangement_collapsed, lang.text("折叠编排", "Collapse arrangement", "アレンジを折りたたむ"))
                 .clicked()
             {
                 ui.close();
