@@ -32,6 +32,24 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
         }
         return;
     }
+    if ui.button(lang.text(
+        "检测并应用本机 SV1 / SV2 / Flat 声库目录",
+        "Detect and apply installed SV1 / SV2 / Flat folders",
+        "インストール済み SV1 / SV2 / Flat フォルダーを検出して適用",
+    )).clicked() {
+        match app.synthesis.use_installed_voice_roots() {
+            Ok(count) => app.status = format!(
+                "{} ({count})",
+                lang.text("已设置声库目录并重新扫描", "Voicebank roots applied and rescanned", "歌声フォルダーを設定して再スキャンしました"),
+            ),
+            Err(error) => app.error = Some(error),
+        }
+    }
+    weak(ui, lang.text(
+        "从 Documents 检查三个独立安装位置；仅应用存在的目录，并清除旧版 roots 遗留路径。",
+        "Checks the three separate installation locations under Documents, applies only existing folders, and clears stale legacy roots.",
+        "Documents 内の３つの独立したインストール先を調べ、存在するフォルダーだけを設定し旧 roots を消去します。",
+    ));
     text(ui, lang.text("SV2 声库根目录（databases）", "SV2 voicebank root (databases)", "SV2 歌声ルート（databases）"));
     path_label(ui, app.synthesis.library.settings.databases.as_deref(), lang);
     ui.horizontal(|ui| {
