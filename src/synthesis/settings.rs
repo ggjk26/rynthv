@@ -87,9 +87,9 @@ fn collect_legacy_roots<'a>(
                 data_fields += 1;
                 collect_legacy_roots(field, paths)?;
             }
-            if data_fields == 0 && !fields.is_empty() {
-                return Err("声库 roots 缺少有效的目录 path 或目录映射".into());
-            }
+            // Metadata-only legacy records should not prevent users from
+            // starting the app and selecting a new voicebank root.
+            let _ = data_fields;
             Ok(())
         }
         _ => Err("声库 roots 必须是目录路径、路径数组或包含路径的对象".into()),
