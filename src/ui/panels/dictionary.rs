@@ -86,7 +86,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, viewport_height: f32) {
                     field(ui, &mut state.new_name);
                     let options: Vec<_> =
                         Language::ALL.into_iter().map(|l| (l, l.label())).collect();
-                    combo(ui, "dictionary-language", &mut state.language, &options);
+                    combo(ui, "dictionary-language", &mut state.language, &options, lang);
                     if ui.button(lang.text("创建", "Create", "作成")).clicked() {
                         app.commit_lyric();
                         match app
