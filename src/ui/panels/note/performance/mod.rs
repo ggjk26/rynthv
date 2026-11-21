@@ -109,7 +109,7 @@ pub(super) fn expression(app: &mut App, ui: &mut Ui) {
     let native_voice = uses_native_voice(app);
     let response = ui
         .add_enabled_ui(enabled && !native_voice, |ui| {
-            widgets::expression(ui, &mut value, mixed)
+            widgets::expression(ui, &mut value, mixed, lang)
         })
         .inner;
     interaction::apply(
@@ -166,6 +166,7 @@ fn vibrato(app: &mut App, ui: &mut Ui, selection: Option<&PerformanceSelection>,
                 &mut value,
                 mixed,
                 (defaults.vibrato - minimum) / span,
+                lang,
             )
         })
         .inner;
