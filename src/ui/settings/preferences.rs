@@ -14,6 +14,26 @@ pub enum UiLanguage {
 impl UiLanguage {
     pub const ALL: [Self; 3] = [Self::ZhCn, Self::En, Self::Ja];
 
+    /// Translate synthesized runtime status codes at the UI boundary without
+    /// changing the language-neutral engine behavior or persisted project data.
+    pub fn runtime_status<'a>(self, status: &'a str) -> &'a str {
+        match status {
+            "伴奏混音失败 · 查看渲染面板" => self.text("伴奏混音失败 · 查看渲染面板", "Instrumental mix failed · See render panel", "伴奏ミックスに失敗 · レンダリングパネルを確認"),
+            "伴奏未就绪 · 查看伴奏轨" => self.text("伴奏未就绪 · 查看伴奏轨", "Instrumental audio not ready · See track", "伴奏の準備ができていません · トラックを確認"),
+            "正在扫描声库目录" => self.text("正在扫描声库目录", "Scanning voice folders", "歌声フォルダーをスキャン中"),
+            "正在加载声库" => self.text("正在加载声库", "Loading voicebank", "歌声を読み込み中"),
+            "歌声需要导入模型上下文" => self.text("歌声需要导入模型上下文", "Voice requires model context import", "モデルコンテキストのインポートが必要です"),
+            "正在准备播放位置的音频" => self.text("正在准备播放位置的音频", "Preparing audio at playhead", "再生位置の音声を準備中"),
+            "正在合成歌声" => self.text("正在合成歌声", "Synthesizing vocals", "歌声を合成中"),
+            "歌声合成失败 · 查看渲染面板" => self.text("歌声合成失败 · 查看渲染面板", "Vocal synthesis failed · See render panel", "歌声合成に失敗 · レンダリングパネルを確認"),
+            "音频已就绪" => self.text("音频已就绪", "Audio ready", "音声の準備完了"),
+            "等待音符" => self.text("等待音符", "Waiting for notes", "ノートを待機中"),
+            "正在准备合成环境" => self.text("正在准备合成环境", "Preparing synthesis backend", "合成環境を準備中"),
+            "音轨尚未指定歌声" => self.text("音轨尚未指定歌声", "No voice assigned to track", "トラックに歌声が設定されていません"),
+            _ => status,
+        }
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Self::ZhCn => "简体中文",
