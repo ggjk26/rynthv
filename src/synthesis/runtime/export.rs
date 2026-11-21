@@ -69,7 +69,7 @@ impl ExportRequest {
             .and_then(serde_json::Value::as_bool)
             == Some(true)
         {
-            outputs.push((directory.join(format!("{stem}.wav")), None));
+            outputs.push((directory.join(format!("{stem}_mixdown.wav")), None));
         }
         for (index, track) in project.tracks.iter().enumerate() {
             if track
