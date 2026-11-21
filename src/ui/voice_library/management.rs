@@ -27,12 +27,12 @@ enum Sort {
     Version,
 }
 impl Sort {
-    fn label(self) -> &'static str {
+    fn label(self, lang: crate::ui::settings::UiLanguage) -> &'static str {
         match self {
-            Self::Default => "默认",
-            Self::Name => "名称 A–Z",
-            Self::NameReverse => "名称 Z–A",
-            Self::Version => "版本最新",
+            Self::Default => lang.text("默认", "Default", "デフォルト"),
+            Self::Name => lang.text("名称 A–Z", "Name A–Z", "名前 A–Z"),
+            Self::NameReverse => lang.text("名称 Z–A", "Name Z–A", "名前 Z–A"),
+            Self::Version => lang.text("版本最新", "Newest version", "新しいバージョン順"),
         }
     }
 }
@@ -122,8 +122,8 @@ fn show(app: &mut App, ctx: &Context, state: &mut State) {
                     }
                     if let Some(error) = app.synthesis.library.settings_error() {
                         error_label(ui, app.preferences.language.text("无法读取声库列表", "Cannot read voicebank list", "歌声一覧を読み込めません"));
-                        ui.collapsing("查看原因", |ui| error_label(ui, error));
-                        ui.menu_button("选择声库目录…", |ui| {
+                        ui.collapsing(app.preferences.language.text("查看原因", "Show details", "詳細を表示"), |ui| error_label(ui, error));
+                        ui.menu_button(app.preferences.language.text("选择声库目录…", "Choose voice folder…", "歌声フォルダーを選択…"), |ui| {
                             paths::directory_menu(app, ui)
                         });
                         return;
@@ -137,13 +137,13 @@ fn show(app: &mut App, ctx: &Context, state: &mut State) {
                                 .catalog()
                                 .is_some_and(|catalog| !catalog.entries.is_empty())
                             {
-                                "部分声库目录无法读取"
+                                app.preferences.language.text("部分声库目录无法读取", "Some voice folders could not be read", "一部の歌声フォルダーを読み込めません")
                             } else {
-                                "无法读取声库目录"
+                                app.preferences.language.text("无法读取声库目录", "Unable to read voice folder", "歌声フォルダーを読み込めません")
                             },
                         );
-                        ui.collapsing("查看原因", |ui| error_label(ui, error));
-                        ui.menu_button("选择声库目录…", |ui| {
+                        ui.collapsing(app.preferences.language.text("查看原因", "Show details", "詳細を表示"), |ui| error_label(ui, error));
+                        ui.menu_button(app.preferences.language.text("选择声库目录…", "Choose voice folder…", "歌声フォルダーを選択…"), |ui| {
                             paths::directory_menu(app, ui)
                         });
                         ui.add_space(12.0);
@@ -178,8 +178,8 @@ fn empty(app: &mut App, ui: &mut Ui, state: &mut State) {
                         .font(section_title_font())
                         .size(16.0),
                 );
-                weak(ui, "换一个关键词，或清除筛选条件。");
-                if ui.button("清除搜索与筛选").clicked() {
+                weak(ui, app.preferences.language.text("换一个关键词，或清除筛选条件。", "Try a different search or clear your filters.", "検索語を変えるか、絞り込みを解除してください。"));
+                if ui.button(app.preferences.language.text("清除搜索与筛选", "Clear search and filters", "検索と絞り込みをクリア")).clicked() {
                     state.query.clear();
                     state.language.clear();
                     state.vendor.clear();
@@ -191,8 +191,8 @@ fn empty(app: &mut App, ui: &mut Ui, state: &mut State) {
                         .font(section_title_font())
                         .size(16.0),
                 );
-                weak(ui, "选择本机 databases 目录，扫描已安装的歌声。");
-                ui.menu_button("选择声库目录…", |ui| paths::directory_menu(app, ui));
+                weak(ui, app.preferences.language.text("选择本机 databases 目录，扫描已安装的歌声。", "Choose a local databases directory to scan installed voices.", "ローカルの databases フォルダーを指定してインストール済みの歌声を検索します。"));
+                ui.menu_button(app.preferences.language.text("选择声库目录…", "Choose voice folder…", "歌声フォルダーを選択…"), |ui| paths::directory_menu(app, ui));
             }
         });
 }
