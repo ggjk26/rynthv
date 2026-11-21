@@ -9,11 +9,12 @@ use crate::{
 use eframe::egui::*;
 
 pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
+    let lang = app.preferences.language;
     ui.spacing_mut().item_spacing.y = 10.0;
     let selection = entry.selection();
-    text(ui, format!("声库类型：{}", family_name(entry)));
+    text(ui, format!("{}: {}", lang.text("声库类型", "Voice type", "歌声タイプ"), family_name(entry)));
     if let Some(range) = &entry.pitch_range {
-        weak(ui, format!("推荐音域  {range}"));
+        weak(ui, format!("{}  {range}", lang.text("推荐音域", "Recommended range", "推奨音域")));
     }
     if let Some(config) = app
         .synthesis
@@ -23,7 +24,8 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
         text(
             ui,
             format!(
-                "支持语言：{}",
+                "{}: {}",
+                lang.text("支持语言", "Supported languages", "対応言語"),
                 config
                     .supported_languages
                     .iter()
@@ -33,13 +35,14 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             ),
         );
         if !config.styles.is_empty() {
-            text(ui, format!("唱法：{}", config.styles.join(" · ")));
+            text(ui, format!("{}: {}", config.styles.join(" · ")));
         }
     } else if !entry.languages.is_empty() {
         text(
             ui,
             format!(
-                "语言：{}",
+                "{}: {}",
+                lang.text("语言", "Languages", "言語"),
                 entry
                     .languages
                     .iter()
@@ -50,10 +53,10 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
         );
     }
     if !entry.styles.is_empty() {
-        text(ui, format!("可识别唱法：{}", entry.styles.join(" · ")));
+        text(ui, format!("{}: {}", lang.text("可识别唱法", "Recognized styles", "検出されたスタイル"), entry.styles.join(" · ")));
     }
     if !entry.model_dependencies.is_empty() {
-        text(ui, "模型依赖（仅文件识别，不代表能够合成）：");
+        text(ui, lang.text("模型依赖（仅文件识别，不代表能够合成）：", "Model dependencies (file detection only; synthesis is not guaranteed):", "モデル依存関係（ファイル検出のみで、合成可能とは限りません）："));
         for dependency in &entry.model_dependencies {
             weak(ui, dependency);
         }
