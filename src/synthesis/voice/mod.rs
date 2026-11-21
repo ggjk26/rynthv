@@ -17,6 +17,7 @@ mod nofs;
 mod phones;
 mod preparation;
 mod prepared;
+mod sidecar;
 pub mod session_identity;
 mod stream;
 mod tensor;
