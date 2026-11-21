@@ -121,7 +121,7 @@ fn version(
     controls.visuals_mut().widgets.inactive.weak_bg_fill = BUTTON;
     ComboBox::from_id_salt("version")
         .width(64.0)
-        .selected_text(format!("v{}", revision))
+        .selected_text(format!("v{}", entry.version_label.clone().unwrap_or_else(|| revision.to_string())))
         .show_ui(&mut controls, |ui| {
             if let Some(catalog) = app.synthesis.library.catalog() {
                 for version in catalog.entries.iter().filter(|v| {
@@ -134,7 +134,7 @@ fn version(
                         version.revision,
                         format!(
                             "版本 {}{}",
-                            version.revision,
+                            version.version_label.as_deref().map(str::to_owned).unwrap_or_else(|| version.revision.to_string()),
                             if version.availability.is_loadable() {
                                 ""
                             } else {
