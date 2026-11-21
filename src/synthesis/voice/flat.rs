@@ -170,6 +170,18 @@ impl FlatManifest {
         if model_ids.is_empty() {
             notes.push("config.json 未内嵌 Flat 模型清单".to_owned());
         }
+        for (index, id) in model_ids.iter().enumerate() {
+            if !valid_model_id(id) {
+                notes.push(format!(
+                    "models[{index}] 不是有效的本地模型标识，已跳过文件定位"
+                ));
+            }
+        }
+        for (index, role) in model_types.iter().enumerate() {
+            if !role.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+                notes.push(format!("model_types[{index}] 包含不支持的角色字符"));
+            }
+        }
         notes.push("info.nofs 是未解析的二进制资源；仅解析相邻 config.json".to_owned());
         Ok(Self {
             name: optional_text(object, "name")?.unwrap_or("SV Flat Package").to_owned(),
@@ -255,6 +267,14 @@ fn version(object: &Map<String, Value>) -> Result<String> {
         Some(Value::Number(number)) if number.is_u64() => Ok(number.to_string()),
         _ => Err(VoiceError::new("Flat version 必须是文本或非负整数")),
     }
+}
+
+/// Flat package manifests are descriptive; reject unsafe path components
+/// before attempting read-only model file discovery.
+pub(crate) fn valid_model_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 fn verify_model_id(text: &str, field: &str) -> Result<String> {
