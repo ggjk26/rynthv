@@ -103,7 +103,7 @@ fn contents(app: &mut App, ui: &mut Ui, lane: &mut Lane) {
                     && mode != interpolation.key()
                 {
                     app.commit_lyric();
-                    app.editor.begin("参数插值模式");
+                    app.editor.begin(app.preferences.language.text("参数插值模式", "Parameter interpolation mode", "パラメーター補間モード"));
                     match app
                         .editor
                         .set_automation_mode(&lane.foreground, interpolation)
