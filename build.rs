@@ -1,6 +1,24 @@
-use std::{env, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // Opt-in, local-only model bundling. No third-party weights are checked
+    // into the repository or downloaded by CI.
+    println!("cargo::rerun-if-env-changed=RYNTHV_DURATION_DNNI");
+    let out = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo build output directory"));
+    let destination = out.join("rynthv-duration.dnni");
+    if let Some(source) = env::var_os("RYNTHV_DURATION_DNNI") {
+        let source = PathBuf::from(source);
+        println!("cargo::rerun-if-changed={}", source.display());
+        let data = fs::read(&source).expect("cannot read RYNTHV_DURATION_DNNI");
+        assert!(
+            (0x149..=64 * 1024 * 1024).contains(&data.len())
+                && data.starts_with(&[0xff, 0, 0xca, 0x7f, 3, 0, 0, 0]),
+            "RYNTHV_DURATION_DNNI must point to a DNNI v3 file <= 64 MiB"
+        );
+        fs::write(&destination, data).expect("cannot stage local duration model");
+    } else {
+        fs::write(&destination, []).expect("cannot stage empty duration placeholder");
+    }
     println!("cargo::rerun-if-changed=assets/branding/app-icon.ico");
     println!("cargo::rerun-if-changed=assets/branding/app-icon.rc");
 
