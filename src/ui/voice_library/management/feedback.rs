@@ -1,4 +1,4 @@
-use super::super::{context, error_label, text, weak};
+use super::super::{context, error_label, localized_diagnostic, text, weak};
 use crate::{
     app::App,
     synthesis::{runtime::VoiceState, voice::VoiceCatalogEntry},
@@ -34,7 +34,7 @@ pub(super) fn status(
                 lang.text("合成环境准备失败", "Synthesis backend initialization failed", "合成環境の準備に失敗しました")
             },
         );
-        ui.collapsing(lang.text("查看错误详情", "Show error details", "エラーの詳細を表示"), |ui| error_label(ui, &error));
+        ui.collapsing(lang.text("查看错误详情", "Show error details", "エラーの詳細を表示"), |ui| error_label(ui, localized_diagnostic(&error, lang)));
         if app
             .synthesis
             .inventory(selection)
@@ -86,7 +86,7 @@ pub(super) fn diagnostics(app: &App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             format!("{} ({})", lang.text("扫描提示", "Scan warnings", "スキャンの警告"), catalog.warnings.len()),
             |ui| {
                 for warning in &catalog.warnings {
-                    weak(ui, warning);
+                    weak(ui, localized_diagnostic(warning, lang));
                 }
             },
         );
