@@ -32,6 +32,7 @@ pub fn open(app: &mut App) {
 }
 
 pub fn show(app: &mut App, ctx: &Context) {
+    let lang = app.preferences.language;
     let Some(mut edit) = app.fill_lyrics.take() else {
         return;
     };
@@ -53,11 +54,11 @@ pub fn show(app: &mut App, ctx: &Context) {
             ui.set_width(width);
             ui.spacing_mut().item_spacing.y = 12.0;
             ui.label(
-                RichText::new("填入歌词")
+                RichText::new(lang.text("填入歌词", "Fill lyrics", "歌詞を入力"))
                     .font(FontId::new(17.0, FontFamily::Name("SectionTitle".into()))),
             );
             ui.add_space(4.0);
-            ui.label(RichText::new("用空格隔开字词。\n每个音符对应一个字词。").color(MUTED));
+            ui.label(RichText::new(lang.text("用空格隔开字词。\n每个音符对应一个字词。", "Separate words with spaces.\nOne word per note.", "単語を空白で区切ってください。\n1ノートにつき1語です。")).color(MUTED));
             let input_id = Id::new("fill-lyrics-text");
             if edit.focus {
                 TextEdit::store_state(ctx, input_id, Default::default());
@@ -96,41 +97,38 @@ pub fn show(app: &mut App, ctx: &Context) {
                             }
                         });
                 });
-            ui.checkbox(&mut edit.repeat, "循环填入");
-            ui.checkbox(&mut edit.by_character, "逐字填入")
-                .on_hover_text("拆分汉字、假名和韩文音节；拼音、罗马字及英文按空格分词。");
+            ui.checkbox(&mut edit.repeat, lang.text("循环填入", "Repeat lyrics", "歌詞を繰り返す"));
+            ui.checkbox(&mut edit.by_character, lang.text("逐字填入", "Split into characters", "文字ごとに分ける"))
+                .on_hover_text(lang.text("拆分汉字、假名和韩文音节；拼音、罗马字及英文按空格分词。", "Split Hanzi, kana and Hangul syllables; split pinyin, romaji and English by spaces.", "漢字・かな・ハングルを文字単位に分け、ピンイン・ローマ字・英語は空白で区切ります。"));
             words = split_lyrics(&edit.text, edit.by_character);
             let notes = edit.selection.len();
             let hint = if words.is_empty() {
-                format!("已选择 {notes} 个音符，请输入歌词。")
+                format!("{} {notes} {}", lang.text("已选择", "Selected", "選択済み："), lang.text("个音符，请输入歌词。", "notes; enter lyrics.", "ノート。歌詞を入力してください。"))
             } else if edit.repeat {
-                format!("{} 个字词 · 循环填入 {notes} 个音符", words.len())
+                format!("{} {} · {} {notes} {}", words.len(), lang.text("个字词", "words", "語"), lang.text("循环填入", "repeat over", "繰り返し入力："), lang.text("个音符", "notes", "ノート"))
             } else if words.len() > notes {
-                format!(
-                    "填入 {notes} 个音符 · 多出的 {} 个字词不填入",
-                    words.len() - notes
-                )
+                format!("{} {notes} {} · {} {} {}", lang.text("填入", "Fill", "入力："), lang.text("个音符", "notes", "ノート"), lang.text("多出的", "Skip extra", "余った"), words.len() - notes, lang.text("个字词不填入", "words", "語を入力しない"))
             } else if words.len() < notes {
-                format!("填入 {} / {notes} 个音符 · 其余保留原歌词", words.len())
+                format!("{} {} / {notes} {} · {}", lang.text("填入", "Fill", "入力："), words.len(), lang.text("个音符", "notes", "ノート"), lang.text("其余保留原歌词", "keep remaining lyrics", "残りの歌詞は保持"))
             } else {
-                format!("{} 个字词 · 填入 {notes} 个音符", words.len())
+                format!("{} {} · {} {notes} {}", words.len(), lang.text("个字词", "words", "語"), lang.text("填入", "fill", "入力："), lang.text("个音符", "notes", "ノート"))
             };
             ui.label(RichText::new(hint).size(11.0).color(MUTED))
-                .on_hover_text("更改歌词时会清除对应音符的自定义音素，以便重新生成发音。");
+                .on_hover_text(lang.text("更改歌词时会清除对应音符的自定义音素，以便重新生成发音。", "Changing lyrics clears affected custom phonemes so pronunciation can be regenerated.", "歌詞を変更すると、発音再生成のため対象ノートのカスタム音素を消去します。"));
             ui.add_space(8.0);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let size = vec2(106.0, 34.0);
                 submit = ui
                     .add_enabled(
                         !words.is_empty(),
-                        Button::new(RichText::new("确定").color(CANVAS))
+                        Button::new(RichText::new(lang.text("确定", "Apply", "適用")).color(CANVAS))
                             .fill(GREEN)
                             .min_size(size),
                     )
-                    .on_hover_text("Ctrl+Enter 确定")
+                    .on_hover_text(lang.text("Ctrl+Enter 确定", "Ctrl+Enter to apply", "Ctrl+Enter で適用"))
                     .clicked();
                 cancel = ui
-                    .add_sized(size, Button::new("取消").fill(BUTTON_HOVER))
+                    .add_sized(size, Button::new(lang.text("取消", "Cancel", "キャンセル")).fill(BUTTON_HOVER))
                     .clicked();
             });
         });
@@ -144,7 +142,7 @@ pub fn show(app: &mut App, ctx: &Context) {
     }
     if submit && !words.is_empty() {
         let changed = app.editor.fill_lyrics(&edit.selection, &words, edit.repeat);
-        app.status = format!("已更新 {changed} 个音符的歌词");
+        app.status = format!("{} {changed} {}", lang.text("已更新", "Updated lyrics for", "歌詞を更新："), lang.text("个音符的歌词", "notes", "ノート"));
         ctx.memory_mut(|m| m.surrender_focus(Id::new("fill-lyrics-text")));
     } else {
         app.fill_lyrics = Some(edit);
