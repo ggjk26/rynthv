@@ -13,8 +13,8 @@ impl App {
     pub fn import_audio(&mut self, target: Option<EntityId>, ctx: &Context) {
         crate::ui::phonemes::phoneme_deactivate(self);
         let Some(path) = rfd::FileDialog::new()
-            .set_title("导入伴奏")
-            .add_filter("音频文件", &["wav", "mp3", "flac", "ogg", "aif", "aiff"])
+            .set_title(self.preferences.language.text("导入伴奏", "Import instrumental audio", "伴奏をインポート"))
+            .add_filter(self.preferences.language.text("音频文件", "Audio files", "オーディオファイル"), &["wav", "mp3", "flac", "ogg", "aif", "aiff"])
             .pick_file()
         else {
             return;
@@ -50,7 +50,7 @@ impl App {
             .map_or(0.0, |c| c.onset_seconds);
         self.synthesis.instrumentals.begin_import(path.clone(), ctx);
         self.audio_import = Some(AudioImport { track, path, onset });
-        self.status = "正在导入伴奏…".into();
+        self.status = self.preferences.language.text("正在导入伴奏…", "Importing instrumental audio…", "伴奏をインポート中…").into();
     }
 
     pub(super) fn poll_audio_import(&mut self) {
@@ -73,7 +73,7 @@ impl App {
             self.error = Some(error.to_owned());
             self.audio_import = None;
             self.synthesis.instrumentals.finish_import();
-            self.status = "伴奏导入失败".into();
+            self.status = self.preferences.language.text("伴奏导入失败", "Instrumental import failed", "伴奏のインポートに失敗しました").into();
             return;
         }
         let Some(asset) = self.synthesis.instrumentals.asset(&import.path) else {
@@ -94,6 +94,6 @@ impl App {
             }),
         );
         self.synthesis.instrumentals.finish_import();
-        self.status = "伴奏已导入，可拖动片段调整位置".into();
+        self.status = self.preferences.language.text("伴奏已导入，可拖动片段调整位置", "Instrumental imported; drag the clip to reposition it", "伴奏をインポートしました。クリップをドラッグして位置を調整できます").into();
     }
 }
