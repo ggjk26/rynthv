@@ -104,7 +104,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     }
     let enter = ui.input(|i| i.key_pressed(Key::Enter));
     if enter || input.lost_focus() {
-        match edit.commit(&mut app.editor) {
+        match edit.commit(&mut app.editor, app.preferences.language) {
             Ok(()) => {
                 input.surrender_focus();
                 ui.ctx().request_repaint();
