@@ -113,12 +113,12 @@ fn filters(app: &App, ui: &mut Ui, state: &mut State) {
                     .selected_text(if state.language.is_empty() {
                         lang.text("全部语言", "All languages", "すべての言語")
                     } else {
-                        language_name(&state.language)
+                        language_name(&state.language, lang)
                     })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut state.language, String::new(), lang.text("全部语言", "All languages", "すべての言語"));
                         for language in languages {
-                            let label = language_name(&language).to_owned();
+                            let label = language_name(&language, lang).to_owned();
                             ui.selectable_value(&mut state.language, language, label);
                         }
                     });
