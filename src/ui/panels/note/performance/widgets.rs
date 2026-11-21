@@ -1,8 +1,8 @@
-use crate::ui::theme::*;
+use crate::ui::{settings::UiLanguage, theme::*};
 use eframe::egui::*;
 
 /// Values are normalized so the controls share the same pointer and key handling.
-pub(super) fn expression(ui: &mut Ui, value: &mut [f64; 2], mixed: bool) -> Response {
+pub(super) fn expression(ui: &mut Ui, value: &mut [f64; 2], mixed: bool, lang: UiLanguage) -> Response {
     let (rect, mut response) =
         ui.allocate_exact_size(Vec2::splat(ui.available_width()), Sense::click_and_drag());
     let bounds = rect.shrink(9.0);
@@ -44,18 +44,18 @@ pub(super) fn expression(ui: &mut Ui, value: &mut [f64; 2], mixed: bool) -> Resp
     painter.hline(rect.x_range(), rect.center().y, Stroke::new(1.0, BUTTON));
     painter.vline(rect.center().x, rect.y_range(), Stroke::new(1.0, BUTTON));
     for (position, anchor, text) in [
-        (rect.min + vec2(8.0, 8.0), Align2::LEFT_TOP, "鲜活"),
+        (rect.min + vec2(8.0, 8.0), Align2::LEFT_TOP, lang.text("鲜活", "Expressive", "生き生き")),
         (
             rect.right_top() + vec2(-8.0, 8.0),
             Align2::RIGHT_TOP,
-            "精修",
+            lang.text("精修", "Refined", "精緻"),
         ),
         (
             rect.left_bottom() + vec2(8.0, -8.0),
             Align2::LEFT_BOTTOM,
-            "机械",
+            lang.text("机械", "Mechanical", "機械的"),
         ),
-        (rect.max - vec2(8.0, 8.0), Align2::RIGHT_BOTTOM, "原生"),
+        (rect.max - vec2(8.0, 8.0), Align2::RIGHT_BOTTOM, lang.text("原生", "Natural", "自然")),
     ] {
         painter.text(position, anchor, text, FontId::proportional(12.0), MUTED);
     }
@@ -73,13 +73,13 @@ pub(super) fn expression(ui: &mut Ui, value: &mut [f64; 2], mixed: bool) -> Resp
         painter.text(
             rect.center() + vec2(0.0, 18.0),
             Align2::CENTER_TOP,
-            "多个值",
+            lang.text("多个值", "Multiple values", "複数の値"),
             FontId::proportional(11.0),
             MUTED,
         );
     }
     response.on_hover_cursor(CursorIcon::Crosshair).on_hover_text(
-        "拖动调整所选音符的演绎；方向键微调，Shift 加方向键精细调整。双击或 Home 恢复默认，Esc 取消本次拖动。",
+        lang.text("拖动调整所选音符的演绎；方向键微调，Shift 加方向键精细调整。双击或 Home 恢复默认，Esc 取消本次拖动。", "Drag to adjust expression; arrows fine-tune, Shift+arrows adjust precisely. Double-click/Home resets, Esc cancels.", "ドラッグで表現を調整。矢印キーで微調整、Shift+矢印で精密調整。ダブルクリック／Home でリセット、Esc でキャンセル。"),
     )
 }
 
@@ -89,6 +89,7 @@ pub(super) fn slider(
     mixed: bool,
     default: f64,
     label: &str,
+    lang: UiLanguage,
 ) -> Response {
     let (rect, mut response) =
         ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::click_and_drag());
@@ -140,7 +141,9 @@ pub(super) fn slider(
     response
         .on_hover_cursor(CursorIcon::PointingHand)
         .on_hover_text(format!(
-            "拖动调整所选音符的{label}；方向键微调，Shift 加方向键精细调整。双击或 Home 恢复默认，Esc 取消本次拖动。"
+            "{} {label}. {}",
+            lang.text("调整所选音符的", "Adjust selected notes' ", "選択ノートの調整："),
+            lang.text("方向键微调，Shift 加方向键精细调整。双击或 Home 恢复默认，Esc 取消本次拖动。", "Arrow keys fine-tune, Shift+arrows adjust precisely. Double-click/Home resets, Esc cancels.", "矢印キーで微調整、Shift+矢印で精密調整。ダブルクリック／Home でリセット、Esc でキャンセル。")
         ))
 }
 
@@ -151,12 +154,13 @@ pub(super) fn labeled_slider(
     value: &mut f64,
     mixed: bool,
     default: f64,
+    lang: UiLanguage,
 ) -> Response {
     ui.horizontal(|ui| {
         ui.weak(label);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.weak(text));
     });
-    slider(ui, value, mixed, default, label)
+    slider(ui, value, mixed, default, label, lang)
 }
 
 fn key_delta(input: &InputState, negative: Key, positive: Key) -> f64 {
