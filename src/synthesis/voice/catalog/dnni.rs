@@ -28,6 +28,20 @@ pub(super) fn scan(
         let Ok(version) = revision.file_name().to_string_lossy().parse::<u32>() else {
             continue;
         };
+        // A numeric revision folder can belong to an SV Flat package.
+        // Only create an SV2 catalog entry if an actual DNNI model is present;
+        // the Flat info.nofs is discovered separately.
+        match has_dnni_models(&revision.path()) {
+            Ok(true) => {}
+            Ok(false) => continue,
+            Err(error) => {
+                catalog.warnings.push(format!(
+                    "无法检查声库版本目录 {}：{error}",
+                    revision.path().display()
+                ));
+                continue;
+            }
+        }
         let mut entry = VoiceCatalogEntry {
             database_id: database_id.to_string(),
             revision: version,
@@ -100,4 +114,18 @@ pub(super) fn scan(
     }
 
     Ok(())
+}
+
+fn has_dnni_models(directory: &Path) -> std::io::Result<bool> {
+    for item in fs::read_dir(directory)? {
+        let item = item?;
+        if item.file_type()?.is_file()
+            && item.path()
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("dnni"))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
