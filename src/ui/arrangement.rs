@@ -154,6 +154,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 && app.group_gesture.is_none()
                 && app.audio_drag.is_none(),
         },
+        app.preferences.language,
     );
     draw_ruler(
         ui,
