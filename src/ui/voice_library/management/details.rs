@@ -35,7 +35,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             ),
         );
         if !config.styles.is_empty() {
-            text(ui, format!("{}: {}", config.styles.join(" · ")));
+            text(ui, format!("{}: {}", lang.text("唱法", "Vocal styles", "歌唱スタイル"), config.styles.join(" · ")));
         }
     } else if !entry.languages.is_empty() {
         text(
