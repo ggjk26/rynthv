@@ -441,7 +441,7 @@ impl eframe::App for App {
                 .as_ref()
                 .and_then(|p| p.file_stem())
                 .and_then(|p| p.to_str())
-                .unwrap_or("未命名"),
+                .unwrap_or(lang.text("未命名", "Untitled", "無題")),
             if self.editor.dirty() { " *" } else { "" }
         );
         ctx.send_viewport_cmd(ViewportCommand::Title(title));
@@ -486,7 +486,7 @@ impl eframe::App for App {
                 ui.label(RichText::new(hint).size(11.0).color(ui::theme::MUTED));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.label(
-                        RichText::new(self.synthesis.status())
+                        RichText::new(lang.runtime_status(self.synthesis.status()))
                             .size(11.0)
                             .color(ui::theme::MUTED),
                     );
