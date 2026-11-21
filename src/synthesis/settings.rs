@@ -24,21 +24,126 @@ pub struct SynthesisSettings {
     pub flat_models: Option<PathBuf>,
     pub dictionaries: Option<PathBuf>,
     pub selected_voice: Option<VoiceSelection>,
+    /// Older and third-party RynthV builds stored voicebank locations under
+    /// "roots" rather than the dedicated database fields. Keep the original
+    /// JSON so updating another preference never discards those locations.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "read_legacy_roots")]
+    pub roots: Option<serde_json::Value>,
+}
+
+/// Collect paths from both the old single-root and multi-root configuration
+/// shapes. Objects can represent either a root descriptor with a path field or
+/// a map of named roots (for example {"sv2": "...", "flat": "..."}).
+/// Non-path metadata is ignored, never interpreted as a directory.
+fn collect_legacy_roots<'a>(
+    value: &'a serde_json::Value,
+    paths: &mut Vec<&'a Path>,
+) -> Result<(), String> {
+    use serde_json::Value;
+    if paths.len() > 128 {
+        return Err("声库 roots 目录数量不能超过 128".into());
+    }
+    match value {
+        Value::Null => Ok(()),
+        Value::String(path) => {
+            if path.trim().is_empty() {
+                return Err("声库 roots 中的目录不能为空".into());
+            }
+            paths.push(Path::new(path));
+            if paths.len() > 128 {
+                return Err("声库 roots 目录数量不能超过 128".into());
+            }
+            Ok(())
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_legacy_roots(item, paths)?;
+            }
+            Ok(())
+        }
+        Value::Object(fields) => {
+            // A list item may be {"kind":"sv2","path":"..."}; do not
+            // mistake "kind", "name" or "label" for a path.
+            if let Some(path) = ["path", "directory", "root", "location"]
+                .into_iter()
+                .find_map(|key| fields.get(key))
+            {
+                return collect_legacy_roots(path, paths);
+            }
+            let mut data_fields = 0;
+            for (key, field) in fields {
+                if matches!(
+                    key.as_str(),
+                    "kind" | "type" | "name" | "label" | "id"
+                        | "enabled" | "recursive" | "version"
+                        | "description" | "display_name"
+                ) {
+                    continue;
+                }
+                // Dictionary and model caches are not voicebank directories.
+                if matches!(key.as_str(), "dictionaries" | "flat_models" | "models") {
+                    continue;
+                }
+                data_fields += 1;
+                collect_legacy_roots(field, paths)?;
+            }
+            if data_fields == 0 && !fields.is_empty() {
+                return Err("声库 roots 缺少有效的目录 path 或目录映射".into());
+            }
+            Ok(())
+        }
+        _ => Err("声库 roots 必须是目录路径、路径数组或包含路径的对象".into()),
+    }
+}
+
+fn read_legacy_roots<'de, D>(deserializer: D) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    if value.is_null() {
+        return Ok(None);
+    }
+    let mut paths = Vec::new();
+    collect_legacy_roots(&value, &mut paths).map_err(serde::de::Error::custom)?;
+    if paths.is_empty() {
+        return Err(serde::de::Error::custom(
+            "声库 roots 没有可用的目录路径，请检查配置"
+        ));
+    }
+    Ok(Some(value))
 }
 
 impl SynthesisSettings {
     pub fn database_roots(&self) -> impl Iterator<Item = (&'static str, &Path)> {
-        [
+        let mut roots: Vec<(&'static str, &Path)> = Vec::new();
+        for (label, path) in [
             ("SV2", self.databases.as_deref()),
             ("SV1", self.sv1_databases.as_deref()),
             ("SV Flat", self.flat_databases.as_deref()),
-        ]
-        .into_iter()
-        .filter_map(|(label, path)| path.map(|path| (label, path)))
+        ] {
+            if let Some(path) = path
+                && !roots.iter().any(|(_, existing)| *existing == path)
+            {
+                roots.push((label, path));
+            }
+        }
+        if let Some(legacy) = self.roots.as_ref() {
+            let mut paths = Vec::new();
+            // The root shape was checked when the settings were deserialized.
+            if collect_legacy_roots(legacy, &mut paths).is_ok() {
+                for path in paths {
+                    if !roots.iter().any(|(_, existing)| *existing == path) {
+                        roots.push(("Legacy", path));
+                    }
+                }
+            }
+        }
+        roots.into_iter()
     }
 
     pub fn has_databases(&self) -> bool {
-        self.databases.is_some() || self.sv1_databases.is_some() || self.flat_databases.is_some()
+        self.database_roots().next().is_some()
     }
 
     pub fn path() -> Result<PathBuf, String> {
