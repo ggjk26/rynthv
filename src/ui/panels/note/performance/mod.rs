@@ -14,6 +14,7 @@ use crate::{
 use eframe::egui::*;
 
 pub(super) fn mode(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let selection = app.editor.performance_selection();
     let selected = selection.as_ref().ok().and_then(Option::as_ref);
     let enabled = editable(app, ui) && selected.is_some();
@@ -26,7 +27,7 @@ pub(super) fn mode(app: &mut App, ui: &mut Ui) {
             ui.painter().rect_filled(rect, 3, BACKGROUND);
             let mut clicked = None;
             for (index, value, label) in
-                [(0, NoteMode::Singing, "歌唱"), (1, NoteMode::Rap, "说唱")]
+                [(0, NoteMode::Singing, lang.text("歌唱", "Singing", "歌唱")), (1, NoteMode::Rap, lang.text("说唱", "Rap", "ラップ"))]
             {
                 let half = Rect::from_min_max(
                     pos2(rect.left() + rect.width() * index as f32 * 0.5, rect.top()),
@@ -71,7 +72,7 @@ pub(super) fn mode(app: &mut App, ui: &mut Ui) {
                     clicked = Some(value);
                 }
                 if !supported {
-                    response.on_disabled_hover_text("此声库暂不支持说唱模式");
+                    response.on_disabled_hover_text(lang.text("此声库暂不支持说唱模式", "This voice does not support rap mode yet", "この歌声はラップモードに未対応です"));
                 }
             }
             clicked
@@ -82,11 +83,12 @@ pub(super) fn mode(app: &mut App, ui: &mut Ui) {
         app.editor.set_note_mode(mode);
     }
     if selected.is_some_and(|selection| selection.mode.is_none()) {
-        ui.weak("多个模式");
+        ui.weak(lang.text("多个模式", "Multiple modes", "複数のモード"));
     }
 }
 
 pub(super) fn expression(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let selection = app.editor.performance_selection();
     let selected = selection.as_ref().ok().and_then(Option::as_ref);
     let enabled = editable(app, ui) && selected.is_some();
@@ -123,7 +125,7 @@ pub(super) fn expression(app: &mut App, ui: &mut Ui) {
         },
     );
     if native_voice {
-        ui.weak("此声库暂不支持演绎坐标");
+        ui.weak(lang.text("此声库暂不支持演绎坐标", "This voice does not support expression coordinates yet", "この歌声は表現座標に未対応です"));
     }
     ui.add_space(8.0);
     if selected.is_none_or(|selection| selection.mode != Some(NoteMode::Rap)) {
@@ -133,17 +135,18 @@ pub(super) fn expression(app: &mut App, ui: &mut Ui) {
     {
         rap::show(app, ui, selection, enabled && !native_voice);
         if native_voice {
-            ui.weak("此声库暂不支持说唱模式");
+            ui.weak(lang.text("此声库暂不支持说唱模式", "This voice does not support rap mode yet", "この歌声はラップモードに未対応です"));
         }
     }
     if let Err(error) = &selection {
         ui.weak(error);
     } else if selected.is_none() {
-        ui.weak("在钢琴卷帘中选择音符");
+        ui.weak(lang.text("在钢琴卷帘中选择音符", "Select notes in the piano roll", "ピアノロールでノートを選択してください"));
     }
 }
 
 fn vibrato(app: &mut App, ui: &mut Ui, selection: Option<&PerformanceSelection>, enabled: bool) {
+    let lang = app.preferences.language;
     let defaults = NotePerformance::default();
     let current = selection.and_then(|selection| selection.vibrato);
     let mixed = selection.is_some() && current.is_none();
@@ -154,9 +157,9 @@ fn vibrato(app: &mut App, ui: &mut Ui, selection: Option<&PerformanceSelection>,
         .add_enabled_ui(enabled, |ui| {
             widgets::labeled_slider(
                 ui,
-                "颤音调制",
+                lang.text("颤音调制", "Vibrato modulation", "ビブラート変調"),
                 if mixed {
-                    "多个值".into()
+                    lang.text("多个值", "Multiple values", "複数の値").into()
                 } else {
                     format!("{:.0}%", current.unwrap_or(defaults.vibrato) * 100.0)
                 },
