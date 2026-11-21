@@ -46,14 +46,14 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
     }
     let default = inherited.and_then(|inherited| database_language(&default_database, inherited));
     let default_label = match &default {
-        Ok(language) => format!("{} {}", language.label(), lang.text("（默认）", "(default)", "（既定）")),
+        Ok(language) => format!("{} {}", lang.language_label(language), lang.text("（默认）", "(default)", "（既定）")),
         Err(_) => lang.text("默认语言不可用", "Default language unavailable", "既定の言語は利用できません").into(),
     };
     let selected_label = if selected.is_empty() {
         default_label.clone()
     } else {
         Language::parse(&selected)
-            .map_or_else(|| selected.clone(), |language| language.label().to_owned())
+            .map_or_else(|| selected.clone(), |language| lang.language_label(language).to_owned())
     };
     ui.scope(|ui| {
         ui.spacing_mut().interact_size.y = 28.0;
@@ -72,7 +72,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                     ui.selectable_value(&mut selected, String::new(), &default_label);
                 });
                 for language in &languages {
-                    ui.selectable_value(&mut selected, language.id().to_owned(), language.label())
+                    ui.selectable_value(&mut selected, language.id().to_owned(), lang.language_label(language))
                         .on_hover_text(input_hint(*language, lang));
                 }
             })
