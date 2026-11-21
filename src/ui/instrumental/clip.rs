@@ -138,7 +138,7 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
         && let Some(pointer) = ui.input(|i| i.pointer.press_origin())
     {
         app.commit_lyric();
-        app.editor.begin("移动伴奏");
+        app.editor.begin(app.preferences.language.text("移动伴奏", "Move instrumental", "伴奏を移動"));
         app.audio_drag = Some(AudioDrag {
             track: track.id,
             pointer_x: pointer.x,
@@ -156,7 +156,7 @@ pub fn show(app: &mut App, ui: &mut Ui, body: Rect, track: &Track) {
             ui.close();
         }
         if ui.button(lang.text("移到工程开头", "Move to project start", "プロジェクトの先頭に移動")).clicked() {
-            app.editor.begin("移动伴奏");
+            app.editor.begin(app.preferences.language.text("移动伴奏", "Move instrumental", "伴奏を移動"));
             app.editor.move_audio_clip(track.id, 0.0);
             app.editor.finish();
             ui.close();
