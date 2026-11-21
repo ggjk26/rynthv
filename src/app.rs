@@ -375,7 +375,7 @@ impl App {
             Modal::new(Id::new("error")).show(ctx, |ui| {
                 ui.set_max_width(480.0);
                 ui.heading(lang.text("操作未完成", "Operation incomplete", "操作を完了できませんでした"));
-                ui.label(error);
+                ui.label(lang.editor_message(&error));
                 if ui.button(lang.text("确定", "OK", "確認")).clicked() {
                     self.error = None;
                 }
@@ -481,7 +481,7 @@ impl eframe::App for App {
                 } else if self.status.is_empty() {
                     lang.text("双击创建音符 · 拖动框选 · 中键拖动视野 · Shift+滚轮水平移动 · Ctrl+滚轮缩放", "Double-click to add notes · Drag to select · Middle-drag to pan · Shift+wheel horizontally · Ctrl+wheel zoom", "ダブルクリックでノート追加 · ドラッグで範囲選択 · 中ドラッグで移動 · Shift+ホイールで横移動 · Ctrl+ホイールでズーム")
                 } else {
-                    &self.status
+                    lang.editor_message(&self.status)
                 };
                 ui.label(RichText::new(hint).size(11.0).color(ui::theme::MUTED));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
