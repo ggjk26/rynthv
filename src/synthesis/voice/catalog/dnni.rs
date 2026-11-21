@@ -206,9 +206,22 @@ pub(super) fn scan_named(
             }
         }
         Err(error) if error.to_string() == "声库缺少名称配置资源" => {
-            // Shared runtime-model caches have DNNI payloads but no voice
-            // configuration. They are not standalone voicebanks.
-            return Ok(None);
+            // A manually extracted voicebank may keep its metadata in
+            // configs.txt/meta.json rather than embed it in the DNNI index.
+            // Show an honest unsupported entry for this recognizable layout,
+            // not an empty list or a false claim that synthesis can run.
+            let config = directory.join("configs.txt");
+            let meta = directory.join("meta.json");
+            if !config.is_file() || !meta.is_file() {
+                // Plain shared runtime-model caches are not voicebanks.
+                return Ok(None);
+            }
+            entry.model_dependencies.push(
+                "已找到 configs.txt 和 meta.json；尚未验证外部配置结构".to_owned()
+            );
+            entry.availability = VoiceAvailability::Unsupported(
+                "已识别独立 SV2 声库文件夹，但 DNNI 内缺少可读取的声库配置；需要解析 configs.txt/meta.json 并确定模型依赖后才能合成".to_owned()
+            );
         }
         Err(error) => {
             entry.availability = VoiceAvailability::Unsupported(
