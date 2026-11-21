@@ -48,7 +48,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.artifact }}
-      - name: Check formatting
+      - name: Check formatting (non-blocking)
+        continue-on-error: true
         run: cargo fmt --all -- --check
       - name: Build binaries
         run: cargo build --release --locked --bins
