@@ -21,7 +21,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     content.spacing_mut().item_spacing.y = 12.0;
     for panel in Column::PANELS {
         if content
-            .add(button(panel.icon(), panel.label()).selected(app.view.columns.contains(&panel)))
+            .add(button(panel.icon(), panel.localized_label(lang)).selected(app.view.columns.contains(&panel)))
             .clicked()
         {
             app.view.toggle(panel);
