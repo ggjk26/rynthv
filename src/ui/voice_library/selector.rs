@@ -14,6 +14,7 @@ use eframe::egui::*;
 const POPUP_FILL: Color32 = Color32::from_rgb(61, 59, 64);
 
 pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
+    let lang = app.preferences.language;
     let entry = selected_entry(app);
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 60.0), Sense::click());
     ui.painter().rect(
@@ -35,7 +36,7 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
             label_rect.left_center() - vec2(0.0, if entry.is_some() { 9.0 } else { 0.0 }),
             Align2::LEFT_CENTER,
             entry.map_or_else(
-                || app.voice_name().unwrap_or("选择歌声"),
+                || app.voice_name().unwrap_or(lang.text("选择歌声", "Select voice", "歌声を選択")),
                 |entry| entry.display_name.as_str(),
             ),
             FontId::proportional(13.0),
@@ -57,7 +58,7 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
         Rect::from_center_size(rect.right_center() - vec2(16.0, 0.0), Vec2::splat(12.0)),
         MUTED,
     );
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "选择歌声"));
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, lang.text("选择歌声", "Select voice", "歌声を選択")));
     popup(app, &response.on_hover_cursor(CursorIcon::Default));
 }
 
@@ -77,7 +78,7 @@ pub fn popup(app: &mut App, anchor: &Response) {
         .show(|ui| {
             ui.set_width(280.0);
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
-            header(ui);
+            header(ui, lang);
             separator(ui);
             if menu_row(ui, lang.text("管理歌声", "Manage voices", "歌声を管理"), Some(Icon::Cloud), true).clicked() {
                 app.voice_manager = true;
@@ -138,7 +139,7 @@ pub fn popup(app: &mut App, anchor: &Response) {
                                 database_id: entry.database_id.clone(),
                                 revision: entry.revision,
                             };
-                            if card(ui, entry, selected.as_ref() == Some(&selection)).clicked() {
+                            if card(ui, entry, selected.as_ref() == Some(&selection), lang).clicked() {
                                 choose = Some(selection);
                             }
                         }
@@ -190,12 +191,12 @@ fn category_of(entry: &VoiceCatalogEntry) -> u8 {
     }
 }
 
-fn header(ui: &mut Ui) {
+fn header(ui: &mut Ui, lang: crate::ui::settings::UiLanguage) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
     ui.painter().text(
         rect.left_center() + vec2(8.0, 0.0),
         Align2::LEFT_CENTER,
-        "歌声",
+        lang.text("歌声", "Voices", "歌声"),
         section_title_font(),
         TEXT,
     );
@@ -253,7 +254,7 @@ fn separator(ui: &mut Ui) {
     );
 }
 
-fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool) -> Response {
+fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool, lang: crate::ui::settings::UiLanguage) -> Response {
     let enabled = entry.availability.is_loadable();
     let (rect, response) = ui.allocate_exact_size(
         vec2(ui.available_width(), 76.0),
@@ -318,7 +319,8 @@ fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool) -> Response {
         .on_hover_cursor(CursorIcon::Default)
         .on_hover_text(match &entry.availability {
             VoiceAvailability::Loadable => format!(
-                "{} · {} · 版本 {}\n{}",
+                "{} · {} · {} {}\n{}",
+                lang.text("版本", "Version", "バージョン"),
                 entry.display_name,
                 family_name(entry),
                 entry.revision,
