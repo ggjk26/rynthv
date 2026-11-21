@@ -12,7 +12,7 @@ use serde_json::Value;
 pub(super) fn toggle(app: &mut App, ui: &mut Ui) {
     if ui
         .add(
-            IconButton::new(Icon::Scale, "显示调式音阶")
+            IconButton::new(Icon::Scale, app.preferences.language.text("显示调式音阶", "Show scale guide", "スケールガイドを表示"))
                 .framed()
                 .size(vec2(32.0, 24.0))
                 .selected(app.view.scale.enabled),
