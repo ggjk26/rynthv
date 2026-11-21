@@ -117,6 +117,22 @@ impl VoiceLibrary {
         self.settings_error.as_deref()
     }
 
+    pub fn invalid_settings(&self) -> bool {
+        self.invalid_settings
+    }
+
+    fn recover_invalid_settings(&mut self) -> Result<PathBuf, String> {
+        if !self.invalid_settings {
+            return Err("当前合成设置无需恢复。".into());
+        }
+        let backup = SynthesisSettings::backup_and_reset_invalid()?;
+        self.settings = SynthesisSettings::default();
+        self.invalid_settings = false;
+        self.settings_error = None;
+        self.catalog_error = None;
+        Ok(backup)
+    }
+
     fn update(&mut self, settings: SynthesisSettings) -> bool {
         if self.invalid_settings {
             return false;
@@ -186,6 +202,16 @@ impl VoiceLibrary {
 }
 
 impl Runtime {
+    /// Reset malformed resource settings only after explicit UI confirmation.
+    /// The original configuration remains available in a timestamp-independent
+    /// unique backup for manual path recovery.
+    pub fn recover_invalid_voice_settings(&mut self) -> Result<PathBuf, String> {
+        let backup = self.library.recover_invalid_settings()?;
+        self.clear_voices();
+        self.library.rescan(self.repaint.clone());
+        Ok(backup)
+    }
+
     pub fn dictionaries(&self) -> Option<&Path> {
         self.library.settings.dictionaries.as_deref()
     }
