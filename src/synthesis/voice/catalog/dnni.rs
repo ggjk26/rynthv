@@ -31,6 +31,7 @@ pub(super) fn scan(
         let mut entry = VoiceCatalogEntry {
             database_id: database_id.to_string(),
             revision: version,
+            version_label: None,
             model_version: None,
             family: None,
             directory: revision.path(),
