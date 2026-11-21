@@ -14,6 +14,14 @@ pub(super) fn resolve_note(
     dictionary: Option<&PronunciationDictionary>,
     tree: &PreparedTree,
 ) -> Result<Vec<Vec<String>>> {
+    // Synthesizer V uses "br" as a breath lyric. Resolve it against the
+    // actual voice phoneme inventory rather than through the word dictionary.
+    if note.lyrics.trim().eq_ignore_ascii_case("br")
+        && note.phonemes.trim().is_empty()
+        && tree.resolve_phone(language.id(), "br").is_ok()
+    {
+        return Ok(vec![vec!["br".to_owned()]]);
+    }
     let explicit = (!note.phonemes.trim().is_empty())
         .then_some(note.phonemes.as_str())
         .or_else(|| {
