@@ -180,7 +180,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
         );
     });
     if config != app.editor.project.render_config || tracks != original_tracks {
-        app.editor.begin("渲染设置");
+        app.editor.begin(app.preferences.language.text("渲染设置", "Render settings", "レンダリング設定"));
         app.editor.project.render_config = config;
         for (id, _, enabled, _) in tracks {
             if let Some(track) = app.editor.project.tracks.iter_mut().find(|t| t.id == id) {
