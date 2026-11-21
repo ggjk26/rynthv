@@ -1,5 +1,6 @@
 mod instrumental;
 mod midi;
+mod phoneme_freeze;
 mod voice;
 pub use midi::{MidiImport, MidiImportMode, MidiImportPhase};
 
@@ -171,7 +172,7 @@ impl App {
                 self.rename = None;
                 self.time_edit = None;
                 self.bpm_edit = None;
-                        self.lyric = None;
+                self.lyric = None;
                 self.phoneme_text = None;
                 self.fill_lyrics = None;
                 let reference = self.editor.active_ref();
@@ -264,6 +265,7 @@ impl App {
         self.rename = None;
         self.time_edit = None;
         self.lyric = None;
+        self.phoneme_text = None;
         self.fill_lyrics = None;
         self.bpm_edit = None;
         match action {
@@ -500,6 +502,7 @@ impl eframe::App for App {
         ui::panels::end_performance_frame(self, &ctx);
         ui::voice_library::end_parameter_frame(self, &ctx);
         if !self.editor.is_editing() {
+            self.freeze_rendered_phonemes();
             self.synthesis
                 .sync_project(&self.editor.project, self.editor.revision);
         }
