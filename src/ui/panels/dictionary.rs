@@ -68,7 +68,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, viewport_height: f32) {
                 ui.selectable_value(&mut selected, String::new(), lang.text("（继承音轨默认值）", "(Inherit track default)", "（トラックの既定値を継承）"));
                 for (name, dictionary) in &app.editor.project.dictionaries {
                     ui.selectable_value(&mut selected, name.clone(), name)
-                        .on_hover_text(dictionary.language.label());
+                        .on_hover_text(lang.language_label(dictionary.language));
                 }
             });
         if selected != original {
@@ -85,7 +85,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, viewport_height: f32) {
                     ui.label(lang.text("新建发音词典", "New pronunciation dictionary", "新しい発音辞書"));
                     field(ui, &mut state.new_name);
                     let options: Vec<_> =
-                        Language::ALL.into_iter().map(|l| (l, l.label())).collect();
+                        Language::ALL.into_iter().map(|l| (l, lang.language_label(l))).collect();
                     combo(ui, "dictionary-language", &mut state.language, &options, lang);
                     if ui.button(lang.text("创建", "Create", "作成")).clicked() {
                         app.commit_lyric();
@@ -117,7 +117,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, viewport_height: f32) {
             }
         });
         if let Some(dictionary) = app.editor.project.dictionaries.get(&name) {
-            ui.weak(format!("{} · {}", dictionary.language.label(), lang.text("保存在当前工程", "Saved in this project", "このプロジェクトに保存")));
+            ui.weak(format!("{} · {}", lang.language_label(dictionary.language), lang.text("保存在当前工程", "Saved in this project", "このプロジェクトに保存")));
         }
     });
     ui.painter().hline(
