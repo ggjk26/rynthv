@@ -122,6 +122,7 @@ fn components(
                 centered: true,
             },
             percentage(),
+            lang,
         );
         arc(ui.painter(), center, 16.0, 1.0, BUTTON);
         if enabled[index] && values[index] > 0.0 {
