@@ -58,7 +58,7 @@ pub(in crate::ui::piano) fn interaction(
         let (time, pitch) = geometry::sample(app, canvas, &reference, pointer);
         let point = PitchPoint::new(time, pitch);
         anchor_clear(app);
-        app.editor.begin("创建音高控制点");
+        app.editor.begin(app.preferences.language.text("创建音高控制点", "Create pitch anchor", "ピッチ制御点を作成"));
         if let Some(group) = app.editor.group_mut() {
             group.pitch_controls.push(PitchControl::Point(point));
         }
