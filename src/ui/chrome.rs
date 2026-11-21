@@ -83,7 +83,6 @@ fn localized_undo_label<'a>(lang: crate::ui::settings::UiLanguage, label: &'a st
         "编辑发音词典" | "Edit pronunciation dictionary" | "発音辞書を編集" => lang.text("编辑发音词典", "Edit pronunciation dictionary", "発音辞書を編集"),
         "导入 MIDI 音轨" | "Import MIDI tracks" | "MIDI トラックをインポート" => lang.text("导入 MIDI 音轨", "Import MIDI tracks", "MIDI トラックをインポート"),
         "导入 MIDI" | "Import MIDI" | "MIDI をインポート" => lang.text("导入 MIDI", "Import MIDI", "MIDI をインポート"),
-        "切换音符语言" | "Change note language" | "ノートの言語を変更" => lang.text("切换音符语言", "Change note language", "ノートの言語を変更"),
         "调整音节分配" | "Adjust syllable assignment" | "音節の割り当てを調整" => lang.text("调整音节分配", "Adjust syllable assignment", "音節の割り当てを調整"),
         "重录新的采样" | "Generate new retake" | "新しいリテイクを生成" => lang.text("重录新的采样", "Generate new retake", "新しいリテイクを生成"),
         "重录音高和音色采样" | "Retake pitch and timbre" | "ピッチと音色をリテイク" => lang.text("重录音高和音色采样", "Retake pitch and timbre", "ピッチと音色をリテイク"),
