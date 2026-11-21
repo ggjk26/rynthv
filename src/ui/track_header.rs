@@ -129,7 +129,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             ui.close();
         }
         ui.separator();
-        if let Some(color) = super::track_color::picker(ui, track.disp_color) {
+        if let Some(color) = super::track_color::picker(ui, track.disp_color, lang) {
             app.commit_lyric();
             app.editor.set_track_color(track.id, color);
             ui.close();
@@ -183,7 +183,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
         let (value, response) = knob(ui, (track.id, field), center, old, min, max, reset);
         let response = response.on_hover_text(format!("{label}  {old:.2}\n{}", lang.text("拖动调整，双击复位", "Drag to adjust; double-click to reset", "ドラッグで調整、ダブルクリックでリセット")));
         if response.drag_started() || response.double_clicked() {
-            app.editor.begin("调整混音");
+            app.editor.begin(lang.text("调整混音", "Adjust mixer", "ミキサー調整"));
         }
         if value != old {
             app.editor
@@ -249,7 +249,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             })
             .clicked()
         {
-            app.editor.begin("音轨混音");
+            app.editor.begin(lang.text("音轨混音", "Track mixing", "トラックミキシング"));
             app.editor
                 .project
                 .tracks
