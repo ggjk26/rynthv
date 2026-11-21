@@ -28,7 +28,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                     let (response, closed) = tab(
                         ui,
                         Icon::Curve,
-                        &format!("{}/{}", super::lanes::header::target_name(&lane.foreground, lang), super::lanes::header::target_name(&lane.background, lang)),
+                        &format!("{}/{}", super::lanes::target_name(&lane.foreground, lang), super::lanes::target_name(&lane.background, lang)),
                         lane.visible,
                         Some(lane.id),
                         lang,
