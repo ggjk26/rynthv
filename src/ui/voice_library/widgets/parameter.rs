@@ -73,6 +73,7 @@ fn slider_at(
             centered: false,
         },
         spec,
+        lang,
     );
     let amount = ((*value - range.0) / (range.1 - range.0)).clamp(0.0, 1.0) as f32;
     let center = pos2(lerp(bounds.x_range(), amount), rect.top() + 32.0);
