@@ -212,6 +212,25 @@ impl Runtime {
         Ok(backup)
     }
 
+    /// Explicitly apply the detected native Windows voicebank roots.
+    /// Do not retain stale legacy roots which would scan old folders too.
+    pub fn use_installed_voice_roots(&mut self) -> Result<usize, String> {
+        let found = SynthesisSettings::installed_windows_roots()?;
+        let count = [found.databases.as_ref(), found.sv1_databases.as_ref(), found.flat_databases.as_ref()]
+            .into_iter().flatten().count();
+        let mut settings = self.library.settings.clone();
+        settings.databases = found.databases;
+        settings.sv1_databases = found.sv1_databases;
+        settings.flat_databases = found.flat_databases;
+        settings.roots = None;
+        settings.selected_voice = None;
+        if !self.library.update(settings) {
+            return Err(self.library.settings_error().unwrap_or("无法保存声库根目录").to_owned());
+        }
+        self.rescan_voices();
+        Ok(count)
+    }
+
     pub fn dictionaries(&self) -> Option<&Path> {
         self.library.settings.dictionaries.as_deref()
     }
