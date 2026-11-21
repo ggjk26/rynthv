@@ -1,5 +1,5 @@
 use super::theme::{CANVAS, TEXT};
-use crate::model::{Track, TrackColor};
+use crate::{model::{Track, TrackColor}, ui::settings::UiLanguage};
 use eframe::egui::*;
 
 #[derive(Clone, Copy)]
@@ -46,10 +46,10 @@ pub fn foreground(color: Color32) -> Color32 {
     }
 }
 
-pub fn picker(ui: &mut Ui, current: TrackColor) -> Option<TrackColor> {
+pub fn picker(ui: &mut Ui, current: TrackColor, lang: UiLanguage) -> Option<TrackColor> {
     let mut picked = None;
     ui.scope(|ui| {
-        ui.label(RichText::new("音轨颜色").size(11.0).color(TEXT));
+        ui.label(RichText::new(lang.text("音轨颜色", "Track color", "トラックの色")).size(11.0).color(TEXT));
         ui.add_space(5.0);
         ui.spacing_mut().item_spacing = vec2(3.0, 3.0);
         for row in TrackColor::PALETTE.chunks(6) {
