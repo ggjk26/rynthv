@@ -86,7 +86,7 @@ pub fn parameter_cut(app: &mut App, ctx: &Context) {
     match clipboard_text(app) {
         Ok(Some((text, count))) => {
             ctx.copy_text(text);
-            if remove(app, &points, "剪切参数控制点") {
+            if remove(app, &points, app.preferences.language.text("剪切参数控制点", "Cut parameter points", "パラメーター制御点を切り取る")) {
                 parameter_clear(app);
                 app.status = format!("{} {count} {}", app.preferences.language.text("已剪切", "Cut", "切り取り完了："), app.preferences.language.text("个参数控制点", "parameter control points", "パラメーター制御点"));
             }
@@ -101,7 +101,7 @@ pub fn parameter_delete(app: &mut App) {
         return;
     }
     let points = selected(app);
-    if !points.is_empty() && remove(app, &points, "删除参数控制点") {
+    if !points.is_empty() && remove(app, &points, app.preferences.language.text("删除参数控制点", "Delete parameter points", "パラメーター制御点を削除")) {
         parameter_clear(app);
     }
 }
@@ -116,7 +116,7 @@ pub fn parameter_paste_text(app: &mut App, text: &str) {
     if !ready(app) || !parameter_can_paste(app) {
         return;
     }
-    let clipboard = match ParameterClipboard::from_text(text) {
+    let clipboard = match ParameterClipboard::from_text(text, app.preferences.language) {
         Ok(clipboard) => clipboard,
         Err(error) => {
             app.error = Some(error);
@@ -135,7 +135,7 @@ pub fn parameter_paste_text(app: &mut App, text: &str) {
         app.status = app.preferences.language.text("播放位置超出参数控制点的可用时间范围。", "Playhead is outside the available parameter control-point range.", "再生位置がパラメーター制御点の使用可能範囲外です。").into();
         return;
     };
-    insert(app, clipboard.points, clipboard.range, at, "粘贴参数控制点");
+    insert(app, clipboard.points, clipboard.range, at, app.preferences.language.text("粘贴参数控制点", "Paste parameter points", "パラメーター制御点を貼り付ける"));
 }
 
 pub fn parameter_duplicate(app: &mut App) {
@@ -151,7 +151,7 @@ pub fn parameter_duplicate(app: &mut App) {
         return;
     };
     let range = app.parameter_lane.owner.as_ref().unwrap().target.range();
-    insert(app, points, range, at, "重复参数控制点");
+    insert(app, points, range, at, app.preferences.language.text("重复参数控制点", "Duplicate parameter points", "パラメーター制御点を複製"));
 }
 
 pub(super) fn shift_selected(app: &mut App, delta_time: i64, delta_value: f64) {
@@ -211,7 +211,7 @@ pub(super) fn shift_selected(app: &mut App, delta_time: i64, delta_value: f64) {
         .filter(|point| !selected_times.contains(&point.0))
         .collect();
     replacement.extend(moved);
-    if replace(app, replacement.into_iter().collect(), "移动参数控制点") {
+    if replace(app, replacement.into_iter().collect(), app.preferences.language.text("移动参数控制点", "Move parameter points", "パラメーター制御点を移動")) {
         app.parameter_lane.selected = moved_times;
         app.parameter_lane.anchor = app.parameter_lane.selected.first().copied();
     }
@@ -231,11 +231,11 @@ fn editable(app: &App) -> bool {
 
 fn clipboard_text(app: &App) -> Result<Option<(String, usize)>, String> {
     let range = app.parameter_lane.owner.as_ref().unwrap().target.range();
-    let Some(clipboard) = ParameterClipboard::capture(selected(app), range)? else {
+    let Some(clipboard) = ParameterClipboard::capture(selected(app), range, app.preferences.language)? else {
         return Ok(None);
     };
     clipboard
-        .to_text()
+        .to_text(app.preferences.language)
         .map(|text| Some((text, clipboard.points.len())))
 }
 
