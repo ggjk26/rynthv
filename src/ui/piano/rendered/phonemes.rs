@@ -201,7 +201,7 @@ pub(super) fn text_editor(app: &mut App, ui: &mut Ui, canvas: Rect) {
             .background_color(CANVAS),
     );
     ui.painter().rect_stroke(
-        bounds, 2.0, Stroke::new(1.5, accent), StrokeKind::Inside
+        bounds, 2, Stroke::new(1.5, accent), StrokeKind::Inside
     );
     if edit.focus {
         response.request_focus();
