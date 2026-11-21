@@ -2,3 +2,5 @@
 /analysis/
 /docs/
 *.tmp
+# User-provided third-party model weights must not be committed.
+*.dnni
