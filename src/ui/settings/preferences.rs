@@ -2,9 +2,41 @@ use eframe::egui::Context;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiLanguage {
+    #[default]
+    ZhCn,
+    En,
+    Ja,
+}
+
+impl UiLanguage {
+    pub const ALL: [Self; 3] = [Self::ZhCn, Self::En, Self::Ja];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ZhCn => "简体中文",
+            Self::En => "English",
+            Self::Ja => "日本語",
+        }
+    }
+
+    pub fn text(self, zh: &'static str, en: &'static str, ja: &'static str) -> &'static str {
+        match self {
+            Self::ZhCn => zh,
+            Self::En => en,
+            Self::Ja => ja,
+        }
+    }
+}
+
+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Preferences {
+    #[serde(default)]
+    pub language: UiLanguage,
     pub zoom: f32,
     pub show_status_bar: bool,
     pub control_hints: bool,
@@ -13,6 +45,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            language: UiLanguage::default(),
             zoom: 1.0,
             show_status_bar: true,
             control_hints: false,
