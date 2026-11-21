@@ -76,7 +76,7 @@ impl ParameterClipboard {
         }
         let clipboard: Self = serde_json::from_str(text)
             .map_err(|error| format!("{}: {error}", lang.text("剪贴板中没有有效的 RynthV 参数控制点", "Clipboard does not contain valid RynthV parameter points", "クリップボードに有効な RynthV パラメーター制御点がありません")))?;
-        clipboard.validate()?;
+        clipboard.validate(lang)?;
         Ok(clipboard)
     }
 }
