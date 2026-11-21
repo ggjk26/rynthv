@@ -10,6 +10,7 @@ pub(crate) fn style(
     name: &str,
     values: &mut [f64; 3],
     enabled_components: [bool; 3],
+    lang: crate::ui::settings::UiLanguage,
 ) -> ControlResponse {
     let id = ui.make_persistent_id(("vocal-mode", name));
     let expanded_id = id.with("expanded");
@@ -47,12 +48,12 @@ pub(crate) fn style(
     toggle
         .on_hover_cursor(CursorIcon::PointingHand)
         .on_hover_text(if expanded {
-            "收起独立唱法参数"
+            lang.text("收起独立唱法参数", "Collapse style controls", "歌唱スタイルの設定を閉じる")
         } else {
-            "分别调整音高、音色与发音"
+            lang.text("分别调整音高、音色与发音", "Adjust pitch, timbre and pronunciation separately", "ピッチ・声色・発音を個別に調整")
         });
     if expanded {
-        return components(ui, id, rect, values, enabled_components);
+        return components(ui, id, rect, values, enabled_components, lang);
     }
     let center = pos2(rect.center().x, rect.top() + 57.0);
     let result = numeric::control(
@@ -94,10 +95,11 @@ fn components(
     rect: Rect,
     values: &mut [f64; 3],
     enabled: [bool; 3],
+    lang: crate::ui::settings::UiLanguage,
 ) -> ControlResponse {
     let mut result = ControlResponse::default();
     let width = (rect.width() - 12.0) / 3.0;
-    for (index, label) in ["音高", "音色", "发音"].iter().enumerate() {
+    for (index, label) in [lang.text("音高", "Pitch", "ピッチ"), lang.text("音色", "Timbre", "声色"), lang.text("发音", "Pronunciation", "発音")].iter().enumerate() {
         let center = pos2(
             rect.left() + 6.0 + width * (index as f32 + 0.5),
             rect.top() + 48.0,
@@ -150,7 +152,7 @@ fn components(
                 id.with(("disabled", index)),
                 Sense::hover(),
             )
-            .on_hover_text("此声库引擎暂不支持独立调整该参数");
+            .on_hover_text(lang.text("此声库引擎暂不支持独立调整该参数", "This voice engine does not support separate adjustment of this parameter", "この歌声エンジンでは個別の調整に対応していません"));
         }
         result.merge(response);
     }
