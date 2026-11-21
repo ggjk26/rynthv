@@ -98,7 +98,7 @@ pub fn menus(app: &mut App, ui: &mut Ui) {
             ui.separator();
             for column in Column::PANELS {
                 let mut active = app.view.columns.contains(&column);
-                if ui.checkbox(&mut active, column.label()).clicked() {
+                if ui.checkbox(&mut active, column.localized_label(lang)).clicked() {
                     app.view.toggle(column);
                 }
             }
@@ -145,7 +145,7 @@ pub fn menus(app: &mut App, ui: &mut Ui) {
             }
             if item(
                 ui,
-                "在走带处插入新组",
+                lang.text("在走带处插入新组", "Insert group at playhead", "再生位置にグループを挿入"),
                 "",
                 !app.editor.current_track().is_instrumental(),
             ) {
