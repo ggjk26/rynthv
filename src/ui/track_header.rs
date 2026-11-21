@@ -5,24 +5,95 @@ use crate::{app::App, model::Track};
 use eframe::egui::*;
 
 pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
+    let lang = app.preferences.language;
     let response = ui.interact(rect, Id::new(("track", track.id)), Sense::click());
     if response.clicked() && !track.is_instrumental() {
         app.commit_lyric();
-        app.editor.select_track(track.id);
+        app.commit_phoneme_text();
+        let modifiers = ui.input(|input| input.modifiers);
+        if modifiers.shift {
+            let tracks = &app.editor.project.tracks;
+            let anchor = tracks.iter().position(|candidate| candidate.id == app.editor.track);
+            let target = tracks.iter().position(|candidate| candidate.id == track.id);
+            if let (Some(anchor), Some(target)) = (anchor, target) {
+                for candidate in &tracks[anchor.min(target)..=anchor.max(target)] {
+                    if !candidate.is_instrumental() {
+                        app.selected_tracks.insert(candidate.id);
+                    }
+                }
+            }
+        } else if modifiers.ctrl || modifiers.command {
+            if !app.selected_tracks.remove(&track.id) {
+                app.selected_tracks.insert(track.id);
+            }
+        } else {
+            app.selected_tracks.clear();
+            app.selected_tracks.insert(track.id);
+        }
+        if app.selected_tracks.contains(&track.id) {
+            app.editor.select_track(track.id);
+        }
     }
     if response.double_clicked() {
         app.rename = Some(super::rename::Rename::track(track.id, &track.name));
     }
+    // Snapshot the catalog before the menu mutably edits the project.
+    let available_voices = app.synthesis.library.catalog().map(|catalog| {
+        catalog.entries.iter()
+            .filter(|entry| entry.availability.is_loadable())
+            .map(|entry| (entry.database_id.clone(), entry.display_name.clone(), entry.revision))
+            .collect::<Vec<_>>()
+    }).unwrap_or_default();
     response.context_menu(|ui| {
-        if ui.button("重命名音轨…").clicked() {
+        let mut targets = app.selected_tracks.clone();
+        if !targets.contains(&track.id) {
+            targets.clear();
+            targets.insert(track.id);
+        }
+        // Instrumental rows have no singer and are never added to the bulk set.
+        targets.retain(|id| app.editor.project.tracks.iter()
+            .any(|candidate| candidate.id == *id && !candidate.is_instrumental()));
+        let bulk = targets.len() > 1;
+        if !track.is_instrumental() {
+            ui.menu_button(if bulk {
+                lang.text("设置所选音轨歌声", "Set selected tracks' voices", "選択したトラックの歌声を設定")
+            } else {
+                lang.text("设置音轨歌声", "Set track voice", "トラックの歌声を設定")
+            }, |ui| {
+                if ui.button(lang.text("取消音轨歌声", "Remove track voice", "トラックの歌声を解除")).clicked() {
+                    app.commit_lyric();
+                    app.commit_phoneme_text();
+                    if let Err(error) = app.editor.set_tracks_voice(&targets, None) {
+                        app.error = Some(error);
+                    }
+                    ui.close();
+                }
+                ui.separator();
+                if available_voices.is_empty() {
+                    ui.label(lang.text("没有可用声库", "No usable voices", "利用できる歌声がありません"));
+                }
+                for (id, name, revision) in &available_voices {
+                    if ui.button(format!("{name} · {revision}")).clicked() {
+                        app.commit_lyric();
+                        app.commit_phoneme_text();
+                        if let Err(error) = app.editor.set_tracks_voice(&targets, Some((id, name, *revision))) {
+                            app.error = Some(error);
+                        }
+                        ui.close();
+                    }
+                }
+            });
+            ui.separator();
+        }
+        if ui.button(lang.text("重命名音轨…", "Rename track…", "トラック名を変更…")).clicked() {
             app.rename = Some(super::rename::Rename::track(track.id, &track.name));
             ui.close();
         }
-        if ui.button("新增音轨").clicked() {
+        if ui.button(lang.text("新增音轨", "Add track", "トラックを追加")).clicked() {
             app.editor.add_track();
             ui.close();
         }
-        if ui.button("新增伴奏轨…").clicked() {
+        if ui.button(lang.text("新增伴奏轨…", "Add instrumental track…", "伴奏トラックを追加…")).clicked() {
             let id = app.editor.add_instrumental_track();
             ui.close();
             app.import_audio(Some(id), ui.ctx());
@@ -34,14 +105,14 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             .iter()
             .position(|t| t.id == track.id)
             .unwrap();
-        if ui.add_enabled(index > 0, Button::new("上移音轨")).clicked() {
+        if ui.add_enabled(index > 0, Button::new(lang.text("上移音轨", "Move track up", "トラックを上へ移動"))).clicked() {
             app.editor.reorder_track(track.id, -1);
             ui.close();
         }
         if ui
             .add_enabled(
                 index + 1 < app.editor.project.tracks.len(),
-                Button::new("下移音轨"),
+                Button::new(lang.text("下移音轨", "Move track down", "トラックを下へ移動")),
             )
             .clicked()
         {
@@ -50,7 +121,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
         }
         ui.separator();
         if ui
-            .add_enabled(app.editor.project.tracks.len() > 1, Button::new("删除音轨"))
+            .add_enabled(app.editor.project.tracks.len() > 1, Button::new(lang.text("删除音轨", "Delete track", "トラックを削除")))
             .clicked()
         {
             app.commit_lyric();
@@ -64,6 +135,10 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             ui.close();
         }
     });
+    if app.selected_tracks.contains(&track.id) && !track.is_instrumental() {
+        ui.painter().rect_stroke(rect.shrink(1.0), 3,
+            Stroke::new(1.2, super::track_color::TrackColors::new(track).accent), StrokeKind::Inside);
+    }
     let text_rect = Rect::from_min_max(
         rect.min + vec2(16.0, 0.0),
         pos2(rect.right() - 95.0, rect.bottom()),
@@ -85,7 +160,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
     for (field, label, center, min, max, reset) in [
         (
             "gainDecibel",
-            "音量",
+            lang.text("音量", "Volume", "音量"),
             pos2(rect.right() - 79.0, rect.top() + 23.0),
             -48.0,
             12.0,
@@ -93,7 +168,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
         ),
         (
             "pan",
-            "声像",
+            lang.text("声像", "Pan", "パン"),
             pos2(rect.right() - 49.0, rect.top() + 23.0),
             -1.0,
             1.0,
@@ -106,7 +181,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             .and_then(serde_json::Value::as_f64)
             .unwrap_or(reset);
         let (value, response) = knob(ui, (track.id, field), center, old, min, max, reset);
-        let response = response.on_hover_text(format!("{label}  {old:.2}\n拖动调整，双击复位"));
+        let response = response.on_hover_text(format!("{label}  {old:.2}\n{}", lang.text("拖动调整，双击复位", "Drag to adjust; double-click to reset", "ドラッグで調整、ダブルクリックでリセット")));
         if response.drag_started() || response.double_clicked() {
             app.editor.begin("调整混音");
         }
@@ -168,9 +243,9 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
         );
         if response
             .on_hover_text(if field == "mute" {
-                "音轨静音"
+                lang.text("音轨静音", "Mute track", "トラックをミュート")
             } else {
-                "音轨独奏"
+                lang.text("音轨独奏", "Solo track", "トラックをソロ")
             })
             .clicked()
         {

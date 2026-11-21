@@ -62,6 +62,26 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         scroll(ui, &response, canvas, &mut app.view.piano)
     };
     app.view.top_pitch = (app.view.top_pitch + vertical / app.view.row_height).clamp(12.0, 127.0);
+    // Explicit wheel/pan activity takes priority over playback following.
+    let center_pause = Id::new("piano-auto-pitch-pause");
+    let now = ui.input(|input| input.time);
+    if vertical.abs() > f32::EPSILON || app.view_pan.is_active() {
+        ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 2.0));
+    }
+    let pause_until = ui.ctx().data_mut(|data| data.get_temp::<f64>(center_pause)).unwrap_or(0.0);
+    if app.view.auto_pitch_center
+        && app.editor.transport.playing
+        && now >= pause_until
+        && app.gesture.is_none()
+        && app.group_gesture.is_none()
+        && app.audio_drag.is_none()
+        && !phoneme_dragging
+        && !app.view_pan.is_active()
+        && let Some(median) = median_playback_pitch(app)
+    {
+        let centered = median as f32 + canvas.height() / (2.0 * app.view.row_height);
+        app.view.top_pitch = centered.clamp(12.0, 127.0);
+    }
     follow_playhead(
         ui,
         Rect::from_min_max(ruler.min, canvas.max),
@@ -126,6 +146,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     super::rendered::waveforms(app, ui, canvas, &groups);
     scene::draw_notes(app, ui, canvas, &groups);
     super::rendered::phonemes(app, ui, canvas, &groups);
+    super::rendered::text_editor(app, ui, canvas);
     super::rendered::pitch(app, ui, canvas, &groups);
     super::pitch_edit::draw(app, ui, canvas, &groups);
     super::pitch_anchor::draw(app, ui, canvas);
@@ -161,12 +182,46 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         &mut app.view.piano,
         beats(app.editor.project.end()) + 32.0,
     );
+    let before_scrollbar = app.view.top_pitch;
     crate::ui::scrollbars::vertical(
         ui,
         Rect::from_min_max(pos2(canvas.right() - 6.0, canvas.top()), canvas.max),
         &mut app.view.top_pitch,
         app.view.row_height,
     );
+    if (app.view.top_pitch - before_scrollbar).abs() > f32::EPSILON {
+        let now = ui.input(|input| input.time);
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(Id::new("piano-auto-pitch-pause"), now + 2.0)
+        });
+    }
+}
+
+/// Prefer notes near the playback cursor; fall back to the current visible
+/// group when the cursor is between phrases. Using a median ignores outliers.
+fn median_playback_pitch(app: &App) -> Option<i32> {
+    let reference = app.editor.active_ref()?;
+    let cursor = app.editor.transport.position;
+    let window = crate::model::QUARTER.saturating_mul(2);
+    let mut pitches: Vec<i32> = app.editor.notes().iter()
+        .filter_map(|note| {
+            let (start, end) = reference.note_range(note)?;
+            (start <= cursor.saturating_add(window)
+                && end >= cursor.saturating_sub(window))
+                .then_some(note.pitch + reference.pitch_offset)
+        })
+        .collect();
+    if pitches.is_empty() {
+        pitches = app.editor.notes().iter()
+            .filter(|note| reference.note_range(note).is_some())
+            .map(|note| note.pitch + reference.pitch_offset)
+            .collect();
+    }
+    if pitches.is_empty() {
+        return None;
+    }
+    pitches.sort_unstable();
+    Some(pitches[pitches.len() / 2])
 }
 fn interaction(
     app: &mut App,
@@ -175,6 +230,7 @@ fn interaction(
     canvas: Rect,
     groups: &[scene::SceneGroup],
 ) {
+    let lang = app.preferences.language;
     let hit = response
         .interact_pointer_pos()
         .and_then(|p| scene::hit_note(app, groups, canvas, p));
@@ -192,7 +248,10 @@ fn interaction(
         && let Some(p) = response.interact_pointer_pos()
     {
         app.commit_lyric();
-        if let Some((reference, note)) = hit {
+        if super::rendered::begin_text_edit(app, canvas, groups, p) {
+            // Editing a rendered phoneme label takes precedence over creating
+            // a note at the same double-click location.
+        } else if let Some((reference, note)) = hit {
             app.editor.select_reference(app.editor.track, reference.id);
             app.editor.selected = BTreeSet::from([note.id]);
             app.edit_lyric();
@@ -204,7 +263,7 @@ fn interaction(
                 .add_note(at, QUARTER, pitch_at(app, canvas, p.y))
                 .is_none()
             {
-                app.status = "请在音符组范围内创建音符，或在编排中插入新的音符组".into();
+                app.status = lang.text("请在音符组范围内创建音符，或在编排中插入新的音符组", "Create notes inside a group, or insert a new group in the arrangement", "グループ内にノートを作成するか、アレンジに新しいグループを追加してください").into();
             }
             app.editor.finish();
         }
@@ -244,13 +303,13 @@ fn interaction(
     response.context_menu(|ui| {
         let selected = !app.editor.selected.is_empty();
         if ui
-            .add_enabled(selected, Button::new("填入歌词…").shortcut_text("Ctrl+L"))
+            .add_enabled(selected, Button::new(lang.text("填入歌词…", "Fill lyrics…", "歌詞を入力…")).shortcut_text("Ctrl+L"))
             .clicked()
         {
             crate::ui::fill_lyrics::open(app);
             ui.close();
         }
-        if ui.add_enabled(selected, Button::new("静音音符")).clicked() {
+        if ui.add_enabled(selected, Button::new(lang.text("静音音符", "Mute notes", "ノートをミュート"))).clicked() {
             app.editor.mute_selected();
             ui.close();
         }
@@ -258,14 +317,14 @@ fn interaction(
         crate::ui::retakes::commands(app, ui);
         ui.separator();
         if ui
-            .add_enabled(selected, Button::new("复制").shortcut_text("Ctrl+C"))
+            .add_enabled(selected, Button::new(lang.text("复制", "Copy", "コピー")).shortcut_text("Ctrl+C"))
             .clicked()
         {
             crate::ui::chrome::edit::copy(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(selected, Button::new("剪切").shortcut_text("Ctrl+X"))
+            .add_enabled(selected, Button::new(lang.text("剪切", "Cut", "切り取り")).shortcut_text("Ctrl+X"))
             .clicked()
         {
             crate::ui::chrome::edit::cut(app, ui.ctx());
@@ -274,16 +333,16 @@ fn interaction(
         if ui
             .add_enabled(
                 crate::ui::chrome::edit::can_paste(app),
-                Button::new("粘贴").shortcut_text("Ctrl+V"),
+                Button::new(lang.text("粘贴", "Paste", "貼り付け")).shortcut_text("Ctrl+V"),
             )
-            .on_hover_text("在播放游标处粘贴音符")
+            .on_hover_text(lang.text("在播放游标处粘贴音符", "Paste notes at the playhead", "再生位置にノートを貼り付け"))
             .clicked()
         {
             crate::ui::chrome::edit::paste(app, ui.ctx());
             ui.close();
         }
         if ui
-            .add_enabled(selected, Button::new("删除所选音符"))
+            .add_enabled(selected, Button::new(lang.text("删除所选音符", "Delete selected notes", "選択したノートを削除")))
             .clicked()
         {
             app.editor.delete_selected();

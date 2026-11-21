@@ -141,10 +141,28 @@ fn group(app: &mut App, ui: &mut Ui, body: Rect, track: &Track, reference: &Grou
         FontId::proportional(11.0),
         Color32::WHITE,
     );
+    // Scale each clip preview to its own audible pitch range rather than
+    // clipping everything around an arbitrary MIDI 60 reference.
+    let pitch_range = group.notes.iter()
+        .filter(|note| reference.note_range(note).is_some())
+        .map(|note| note.pitch + reference.pitch_offset)
+        .fold(None::<(i32, i32)>, |range, pitch| {
+            Some(range.map_or((pitch, pitch), |(low, high)| (low.min(pitch), high.max(pitch))))
+        });
     for note in &group.notes {
         if let Some((start, end)) = reference.note_range(note) {
-            let y = (body.top() + 40.0 - (note.pitch + reference.pitch_offset - 60) as f32 * 0.6)
-                .clamp(body.top() + 22.0, body.bottom() - 5.0);
+            let y = if let Some((low, high)) = pitch_range {
+                if high == low {
+                    body.center().y + 5.0
+                } else {
+                    let fraction = (high - note.pitch - reference.pitch_offset) as f32
+                        / (high - low) as f32;
+                    // Leave space for the clip title above the note preview.
+                    body.top() + 22.0 + fraction * (body.height() - 27.0)
+                }
+            } else {
+                body.center().y
+            };
             content.line_segment(
                 [
                     pos2(x_at(body, &app.view.arrangement, beats(start)), y),

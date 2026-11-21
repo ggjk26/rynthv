@@ -34,6 +34,7 @@ impl Meter {
 pub struct TimeAxis {
     pub meter: Vec<Meter>,
     pub tempo: Vec<Tempo>,
+    #[serde(default)]
     pub start_time_seconds: f64,
     #[serde(flatten)]
     pub extra: Extra,

@@ -63,6 +63,7 @@ pub(super) fn selected_card(app: &mut App, ui: &mut Ui) {
 
 /// Shared by the track header and the voice panel; choices apply to this track.
 pub fn popup(app: &mut App, anchor: &Response) {
+    let lang = app.preferences.language;
     Popup::menu(anchor)
         .width(288.0)
         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
@@ -78,12 +79,12 @@ pub fn popup(app: &mut App, anchor: &Response) {
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
             header(ui);
             separator(ui);
-            if menu_row(ui, "管理歌声", Some(Icon::Cloud), true).clicked() {
+            if menu_row(ui, lang.text("管理歌声", "Manage voices", "歌声を管理"), Some(Icon::Cloud), true).clicked() {
                 app.voice_manager = true;
                 ui.close();
             }
             separator(ui);
-            if menu_row(ui, "取消当前音轨歌声", None, app.has_voice()).clicked() {
+            if menu_row(ui, lang.text("取消当前音轨歌声", "Remove track voice", "トラックの歌声を解除"), None, app.has_voice()).clicked() {
                 app.unload_voice();
                 ui.close();
             }
@@ -91,7 +92,7 @@ pub fn popup(app: &mut App, anchor: &Response) {
             if app.synthesis.library.is_scanning() {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    weak(ui, "正在扫描歌声…");
+                    weak(ui, lang.text("正在扫描歌声…", "Scanning voices…", "歌声をスキャン中…"));
                 });
             }
             let entries = representative_entries(app);
@@ -99,14 +100,14 @@ pub fn popup(app: &mut App, anchor: &Response) {
                 error_label(
                     ui,
                     if entries.is_empty() {
-                        "无法读取声库目录，请在“管理歌声”中查看原因。"
+                        lang.text("无法读取声库目录，请在“管理歌声”中查看原因。", "Cannot read voice directories; check Manage voices for details.", "歌声フォルダーを読み込めません。歌声管理で詳細を確認してください。")
                     } else {
-                        "部分声库目录无法读取，已列出可读取的歌声。"
+                        lang.text("部分声库目录无法读取，已列出可读取的歌声。", "Some voice directories could not be read; available voices are listed.", "一部の歌声フォルダーを読み込めませんでした。利用可能な歌声のみ表示しています。")
                     },
                 );
             }
             if entries.is_empty() && !app.synthesis.library.is_scanning() {
-                weak(ui, "没有可选歌声，请在“管理歌声”中设置 databases 目录。");
+                weak(ui, lang.text("没有可选歌声，请在“管理歌声”中设置 databases 目录。", "No available voices. Set the databases directory in Manage voices.", "利用できる歌声がありません。歌声管理で databases フォルダーを設定してください。"));
             }
             let selected = app.voice_selection();
             let mut choose = None;
@@ -126,9 +127,9 @@ pub fn popup(app: &mut App, anchor: &Response) {
                         if category > 0 {
                             separator(ui);
                             let title = match category {
-                                1 => "SV2 · 版本 1 兼容歌声",
-                                2 => "SV1 原生歌声",
-                                _ => "其他歌声 · 暂不可用",
+                                1 => lang.text("SV2 · 版本 1 兼容歌声", "SV2 · Version 1 compatible voices", "SV2 · バージョン1互換歌声"),
+                                2 => lang.text("SV1 原生歌声", "Native SV1 voices", "SV1 ネイティブ歌声"),
+                                _ => lang.text("其他歌声 · 暂不可用", "Other voices · unavailable", "その他の歌声 · 利用不可"),
                             };
                             menu_row(ui, title, None, false);
                         }

@@ -86,6 +86,8 @@ pub struct ViewState {
     pub piano: Viewport,
     pub arrangement: Viewport,
     pub top_pitch: f32,
+    #[serde(default)]
+    pub auto_pitch_center: bool,
     pub row_height: f32,
     pub grid: i32,
     pub triplet: bool,
@@ -112,6 +114,7 @@ impl Default for ViewState {
                 beat_width: 20.0,
             },
             top_pitch: 74.0,
+            auto_pitch_center: false,
             row_height: 24.0,
             grid: 16,
             triplet: false,

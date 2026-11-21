@@ -6,6 +6,20 @@
 
 使用 Rust + egui 开发的歌声合成引擎。
 
+## 旧工程兼容性（开发分支）
+
+导入时不再因为 SVP 的数字版本（例如 113）与本项目默认保存版本不一致就拒绝打开；仍会校验时间轴、音符、引用和工程结构，无法安全解析的字段不会被悄悄忽略。旧工程可缺省部分音符、音轨和导出配置字段。导入时会去除旧 SV1 的 `dF0Vbr` / `dF0VbrEnv`，保留当前支持的 `dF0VbrMod`。
+
+支持将 `br` 歌词映射至当前声库明确支持的同名呼吸音素；若声库没有该音素，仍走原有词典流程并报告不支持，避免伪造音素。混音导出文件名改为 `_mixdown.wav`。
+
+这些改动不等于已完成 SVP 全字段兼容，也不等于已实现气声分离导出；后者仍需要真实的音频分离渲染后端。
+
+## GitHub Actions 预构建
+
+[Prebuild RynthV](https://github.com/ggjk26/rynthv/actions/workflows/prebuild.yml) 在 `master` 提交、Pull Request 和手动触发时构建 **Windows x64** 与 **Linux x64**。通过检查后，到对应工作流运行页面的 **Artifacts** 下载 `RynthV-Windows-x64` 或 `RynthV-Linux-x64`。压缩包包含图形编辑器、`rynthv-synth` 和 `rynthv-flat-inspect` 命令行工具及 README / LICENSE；不含商业声库或运行时模型。
+
+推送 `v*` Git 标签时，工作流在双平台构建成功后发布 GitHub Release，并附上 ZIP / TAR.GZ 预构建包。PR 分支的构建产物不是正式发布版。工作流基于托管 Windows / Ubuntu runner，执行可能产生 GitHub Actions 配额或账单消耗；如果仓库禁用付费 runner，Windows 构建会无法启动。注意 Linux 构建仍依赖系统图形和音频运行库，并非完全静态可移植包。
+
 ## 构建与运行
 
 需要 Rust 1.99.0，版本由 `rust-toolchain.toml` 指定。

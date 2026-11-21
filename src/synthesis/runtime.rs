@@ -161,6 +161,11 @@ impl Runtime {
     pub fn reset_project(&mut self) {
         self.audition_key(None);
         self.clear_voices();
+        // Opening another project must never reuse export feedback or the
+        // previous project's audio-generation identity.
+        self.export_result = None;
+        self.export = None;
+        self.last_audio_generation = 0;
         self.instrumentals = super::instrumental::AudioLibrary::default();
         self.recordings = mixer::RecordingMix::default();
         self.recording_error = None;

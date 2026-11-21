@@ -1,0 +1,113 @@
+name: Prebuild RynthV
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prebuild-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            label: Windows x64
+            artifact: RynthV-Windows-x64
+          - os: ubuntu-24.04
+            label: Linux x64
+            artifact: RynthV-Linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libasound2-dev libwayland-dev \
+            libxkbcommon-dev libfontconfig1-dev libvulkan-dev libegl1-mesa-dev \
+            libgl1-mesa-dev libgtk-3-dev
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99.0'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.artifact }}
+      - name: Check formatting (non-blocking)
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+      - name: Build binaries
+        run: cargo build --release --locked --bins
+      - name: Run tests
+        run: cargo test --locked
+      - name: Package Windows binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $files = @('rynthv.exe', 'rynthv-synth.exe', 'rynthv-flat-inspect.exe')
+          foreach ($name in $files) {
+            $source = Join-Path 'target/release' $name
+            if (-not (Test-Path $source)) { throw "Missing build output: $source" }
+            Copy-Item $source dist/
+          }
+          Copy-Item README.md, LICENSE dist/
+          Compress-Archive -Path dist/* -DestinationPath RynthV-Windows-x64.zip -Force
+      - name: Package Linux binaries
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for name in rynthv rynthv-synth rynthv-flat-inspect; do
+            test -f "target/release/$name"
+            cp "target/release/$name" dist/
+          done
+          cp README.md LICENSE dist/
+          tar -C dist -czf RynthV-Linux-x64.tar.gz .
+      - name: Upload prebuild artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: RynthV-*.*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish tagged release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: RynthV-*
+          path: packages
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" packages/RynthV-Windows-x64.zip packages/RynthV-Linux-x64.tar.gz \
+            --verify-tag --generate-notes --title "$TAG"

@@ -44,6 +44,12 @@ pub struct LyricEdit {
     pub text: String,
     pub focus: bool,
 }
+pub struct PhonemeTextEdit {
+    pub id: EntityId,
+    pub reference: EntityId,
+    pub text: String,
+    pub focus: bool,
+}
 #[derive(Clone, Copy)]
 pub enum NoteDrag {
     Move,
@@ -56,6 +62,7 @@ pub enum Gesture {
     Notes {
         origin: Pos2,
         notes: Vec<Note>,
+        adjacent: Option<Note>,
         kind: NoteDrag,
         anchor: i64,
     },
