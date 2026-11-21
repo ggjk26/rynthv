@@ -9,7 +9,30 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
     let response = ui.interact(rect, Id::new(("track", track.id)), Sense::click());
     if response.clicked() && !track.is_instrumental() {
         app.commit_lyric();
-        app.editor.select_track(track.id);
+        app.commit_phoneme_text();
+        let modifiers = ui.input(|input| input.modifiers);
+        if modifiers.shift {
+            let tracks = &app.editor.project.tracks;
+            let anchor = tracks.iter().position(|candidate| candidate.id == app.editor.track);
+            let target = tracks.iter().position(|candidate| candidate.id == track.id);
+            if let (Some(anchor), Some(target)) = (anchor, target) {
+                for candidate in &tracks[anchor.min(target)..=anchor.max(target)] {
+                    if !candidate.is_instrumental() {
+                        app.selected_tracks.insert(candidate.id);
+                    }
+                }
+            }
+        } else if modifiers.ctrl || modifiers.command {
+            if !app.selected_tracks.remove(&track.id) {
+                app.selected_tracks.insert(track.id);
+            }
+        } else {
+            app.selected_tracks.clear();
+            app.selected_tracks.insert(track.id);
+        }
+        if app.selected_tracks.contains(&track.id) {
+            app.editor.select_track(track.id);
+        }
     }
     if response.double_clicked() {
         app.rename = Some(super::rename::Rename::track(track.id, &track.name));
@@ -22,13 +45,27 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             .collect::<Vec<_>>()
     }).unwrap_or_default();
     response.context_menu(|ui| {
+        let mut targets = app.selected_tracks.clone();
+        if !targets.contains(&track.id) {
+            targets.clear();
+            targets.insert(track.id);
+        }
+        // Instrumental rows have no singer and are never added to the bulk set.
+        targets.retain(|id| app.editor.project.tracks.iter()
+            .any(|candidate| candidate.id == *id && !candidate.is_instrumental()));
+        let bulk = targets.len() > 1;
         if !track.is_instrumental() {
-            ui.menu_button(lang.text("设置音轨歌声", "Set track voice", "トラックの歌声を設定"), |ui| {
+            ui.menu_button(if bulk {
+                lang.text("设置所选音轨歌声", "Set selected tracks' voices", "選択したトラックの歌声を設定")
+            } else {
+                lang.text("设置音轨歌声", "Set track voice", "トラックの歌声を設定")
+            }, |ui| {
                 if ui.button(lang.text("取消音轨歌声", "Remove track voice", "トラックの歌声を解除")).clicked() {
                     app.commit_lyric();
                     app.commit_phoneme_text();
-                    app.editor.select_track(track.id);
-                    app.unload_voice();
+                    if let Err(error) = app.editor.set_tracks_voice(&targets, None) {
+                        app.error = Some(error);
+                    }
                     ui.close();
                 }
                 ui.separator();
@@ -39,8 +76,7 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
                     if ui.button(format!("{name} · {revision}")).clicked() {
                         app.commit_lyric();
                         app.commit_phoneme_text();
-                        app.editor.select_track(track.id);
-                        if let Err(error) = app.editor.set_track_voice(Some((id, name, *revision))) {
+                        if let Err(error) = app.editor.set_tracks_voice(&targets, Some((id, name, *revision))) {
                             app.error = Some(error);
                         }
                         ui.close();
@@ -99,6 +135,10 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
             ui.close();
         }
     });
+    if app.selected_tracks.contains(&track.id) && !track.is_instrumental() {
+        ui.painter().rect_stroke(rect.shrink(1.0), 3,
+            Stroke::new(1.2, super::track_color::TrackColors::new(track).accent), StrokeKind::Inside);
+    }
     let text_rect = Rect::from_min_max(
         rect.min + vec2(16.0, 0.0),
         pos2(rect.right() - 95.0, rect.bottom()),
