@@ -72,7 +72,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                     ui.selectable_value(&mut selected, String::new(), &default_label);
                 });
                 for language in &languages {
-                    ui.selectable_value(&mut selected, language.id().to_owned(), lang.language_label(language))
+                    ui.selectable_value(&mut selected, language.id().to_owned(), lang.language_label(*language))
                         .on_hover_text(input_hint(*language, lang));
                 }
             })
