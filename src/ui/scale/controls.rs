@@ -133,7 +133,7 @@ fn update(app: &mut App, field: &str, value: &str) {
         return;
     }
     app.commit_lyric();
-    app.editor.begin("修改调式音阶");
+    app.editor.begin(app.preferences.language.text("修改调式音阶", "Change musical scale", "スケールを変更"));
     if let Some(group) = app.editor.group_mut() {
         let raw = group
             .extra
