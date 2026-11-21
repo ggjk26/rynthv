@@ -13,12 +13,19 @@ pub struct Note {
     pub duration: i64,
     pub pitch: i32,
     pub lyrics: String,
+    #[serde(default)]
     pub phonemes: String,
+    #[serde(default = "default_musical_type")]
     pub musical_type: String,
+    #[serde(default)]
     pub attributes: Extra,
     #[serde(flatten)]
     pub extra: Extra,
 }
+fn default_musical_type() -> String {
+    "singing".to_owned()
+}
+
 impl Note {
     pub fn new(onset: i64, duration: i64, pitch: i32) -> Self {
         Self {
@@ -63,8 +70,11 @@ pub struct Group {
     pub name: String,
     pub uuid: String,
     pub notes: Vec<Note>,
+    #[serde(default)]
     pub parameters: BTreeMap<String, Automation>,
+    #[serde(default)]
     pub vocal_modes: BTreeMap<String, Automation>,
+    #[serde(default)]
     pub pitch_controls: Vec<PitchControl>,
     #[serde(flatten)]
     pub extra: Extra,
@@ -156,7 +166,9 @@ pub struct Track {
     pub disp_order: i32,
     pub main_group: Group,
     pub main_ref: GroupRef,
+    #[serde(default)]
     pub groups: Vec<GroupRef>,
+    #[serde(default)]
     pub mixer: Extra,
     #[serde(
         default,
@@ -210,8 +222,10 @@ pub struct Project {
     pub version: i32,
     pub uuid: String,
     pub time: TimeAxis,
+    #[serde(default)]
     pub library: Vec<Group>,
     pub tracks: Vec<Track>,
+    #[serde(default)]
     pub render_config: Extra,
     #[serde(
         default,
