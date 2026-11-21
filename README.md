@@ -16,7 +16,7 @@
 
 ## GitHub Actions 预构建
 
-[Prebuild RynthV](https://github.com/ggjk26/rynthv/actions/workflows/prebuild.yml) 在功能分支与 `master` 的提交、Pull Request 和手动触发时构建 **Windows x64** 与 **Linux x64**。通过检查后，到对应工作流运行页面的 **Artifacts** 下载 `RynthV-Windows-x64` 或 `RynthV-Linux-x64`。压缩包包含图形编辑器、`rynthv-synth` 和 `rynthv-flat-inspect` 命令行工具及 README / LICENSE；不含商业声库或运行时模型。
+[Prebuild RynthV](https://github.com/ggjk26/rynthv/actions/workflows/prebuild.yml) 在 `master` 提交、Pull Request 和手动触发时构建 **Windows x64** 与 **Linux x64**。通过检查后，到对应工作流运行页面的 **Artifacts** 下载 `RynthV-Windows-x64` 或 `RynthV-Linux-x64`。压缩包包含图形编辑器、`rynthv-synth` 和 `rynthv-flat-inspect` 命令行工具及 README / LICENSE；不含商业声库或运行时模型。
 
 推送 `v*` Git 标签时，工作流在双平台构建成功后发布 GitHub Release，并附上 ZIP / TAR.GZ 预构建包。PR 分支的构建产物不是正式发布版。工作流基于托管 Windows / Ubuntu runner，执行可能产生 GitHub Actions 配额或账单消耗；如果仓库禁用付费 runner，Windows 构建会无法启动。注意 Linux 构建仍依赖系统图形和音频运行库，并非完全静态可移植包。
 
