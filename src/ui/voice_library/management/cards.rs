@@ -60,7 +60,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry, state:
                         },
                     ),
                 );
-                tags_row(ui, entry, tags);
+                tags_row(ui, entry, tags, app.preferences.language);
                 let current = app.voice_selection().as_ref() == Some(&catalog::selection(entry));
                 let badge_rect = if compact {
                     Rect::from_min_max(
@@ -155,10 +155,10 @@ fn version(
     }
 }
 
-fn tags_row(ui: &Ui, entry: &VoiceCatalogEntry, rect: Rect) {
-    let mut values = vec![family_name(entry)];
+fn tags_row(ui: &Ui, entry: &VoiceCatalogEntry, rect: Rect, lang: crate::ui::settings::UiLanguage) {
+    let mut values = vec![family_name(entry, lang)];
     if entry.genres.is_empty() {
-        values.extend(entry.languages.iter().map(|s| language_name(s)));
+        values.extend(entry.languages.iter().map(|s| language_name(s, lang)));
     } else {
         values.extend(entry.genres.iter().map(String::as_str));
     }
