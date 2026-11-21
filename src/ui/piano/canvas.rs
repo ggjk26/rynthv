@@ -62,6 +62,26 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         scroll(ui, &response, canvas, &mut app.view.piano)
     };
     app.view.top_pitch = (app.view.top_pitch + vertical / app.view.row_height).clamp(12.0, 127.0);
+    // Explicit wheel/pan activity takes priority over playback following.
+    let center_pause = Id::new("piano-auto-pitch-pause");
+    let now = ui.input(|input| input.time);
+    if vertical.abs() > f32::EPSILON || app.view_pan.is_active() {
+        ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 2.0));
+    }
+    let pause_until = ui.ctx().data_mut(|data| data.get_temp::<f64>(center_pause)).unwrap_or(0.0);
+    if app.view.auto_pitch_center
+        && app.editor.transport.playing
+        && now >= pause_until
+        && app.gesture.is_none()
+        && app.group_gesture.is_none()
+        && app.audio_drag.is_none()
+        && !phoneme_dragging
+        && !app.view_pan.is_active()
+        && let Some(median) = median_playback_pitch(app)
+    {
+        let centered = median as f32 + canvas.height() / (2.0 * app.view.row_height);
+        app.view.top_pitch = centered.clamp(12.0, 127.0);
+    }
     follow_playhead(
         ui,
         Rect::from_min_max(ruler.min, canvas.max),
@@ -161,12 +181,46 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         &mut app.view.piano,
         beats(app.editor.project.end()) + 32.0,
     );
+    let before_scrollbar = app.view.top_pitch;
     crate::ui::scrollbars::vertical(
         ui,
         Rect::from_min_max(pos2(canvas.right() - 6.0, canvas.top()), canvas.max),
         &mut app.view.top_pitch,
         app.view.row_height,
     );
+    if (app.view.top_pitch - before_scrollbar).abs() > f32::EPSILON {
+        let now = ui.input(|input| input.time);
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(Id::new("piano-auto-pitch-pause"), now + 2.0)
+        });
+    }
+}
+
+/// Prefer notes near the playback cursor; fall back to the current visible
+/// group when the cursor is between phrases. Using a median ignores outliers.
+fn median_playback_pitch(app: &App) -> Option<i32> {
+    let reference = app.editor.active_ref()?;
+    let cursor = app.editor.transport.position;
+    let window = crate::model::QUARTER.saturating_mul(2);
+    let mut pitches: Vec<i32> = app.editor.notes().iter()
+        .filter_map(|note| {
+            let (start, end) = reference.note_range(note)?;
+            (start <= cursor.saturating_add(window)
+                && end >= cursor.saturating_sub(window))
+                .then_some(note.pitch + reference.pitch_offset)
+        })
+        .collect();
+    if pitches.is_empty() {
+        pitches = app.editor.notes().iter()
+            .filter(|note| reference.note_range(note).is_some())
+            .map(|note| note.pitch + reference.pitch_offset)
+            .collect();
+    }
+    if pitches.is_empty() {
+        return None;
+    }
+    pitches.sort_unstable();
+    Some(pitches[pitches.len() / 2])
 }
 fn interaction(
     app: &mut App,
