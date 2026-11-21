@@ -2,7 +2,7 @@
 //! This is deliberately metadata-only until the native model stages support
 //! Base Model conditioning and all Flat embedding spaces.
 use super::{VoiceAvailability, VoiceCatalogEntry};
-use crate::synthesis::voice::{flat::{FlatManifest, FlatVoice, valid_model_id}, Result, VoiceError};
+use crate::synthesis::voice::{flat::{FlatManifest, FlatVoice, locate_model, valid_model_id}, Result, VoiceError};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
@@ -162,22 +162,15 @@ fn manifest_model_exists(root: &Path, role: &str, id: &str) -> bool {
     {
         return false;
     }
-    let primary = match role.to_ascii_lowercase().as_str() {
-        "acoustic" | "base_model" | "timbre" => Some("acoustic"),
-        "pitch" | "sing_model" => Some("pitch"),
-        "f0" | "f0_model" => Some("f0"),
-        "duration" | "timing_model" => Some("duration"),
-        "vocoder" => Some("vocoder"),
-        _ => None,
+    let preferred = match role.to_ascii_lowercase().as_str() {
+        "acoustic" | "base_model" | "timbre" => "acoustic",
+        "pitch" | "sing_model" => "pitch",
+        "f0" | "f0_model" => "f0",
+        "duration" | "timing_model" => "duration",
+        "vocoder" => "vocoder",
+        _ => "models",
     };
-    // Different Flat installers categorize their shared models differently.
-    // A matching model ID is evidence of a local file, NOT a runnable stage.
-    let folders = ["acoustic", "pitch", "f0", "duration", "vocoder", "sing",
-        "timing", "base_model", "models"];
-    let names = [format!("{id}.dnni"), id.to_owned()];
-    names.iter().any(|name| root.join(name).is_file())
-        || primary.is_some_and(|folder| names.iter().any(|name| root.join(folder).join(name).is_file()))
-        || folders.iter().any(|folder| names.iter().any(|name| root.join(folder).join(name).is_file()))
+    locate_model(root, id, preferred).is_some()
 }
 
 #[cfg(test)]
