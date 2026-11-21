@@ -54,7 +54,21 @@ pub(super) fn scan(
                     VoiceFamily::Sv2
                 };
                 entry.family = Some(family);
-                let missing = configuration.models.missing(configuration.model_version);
+                let mut missing = configuration.models.missing(configuration.model_version);
+                if missing.contains(&"时长") {
+                    match super::super::bundled::duration() {
+                        Ok(Some(_)) => {
+                            missing.retain(|role| *role != "时长");
+                            entry.model_dependencies.push(
+                                "Duration：本地编译嵌入（容器及资源标识已校验）".to_owned(),
+                            );
+                        }
+                        Err(error) => entry.model_dependencies.push(format!(
+                            "内嵌 Duration 不兼容：{error}"
+                        )),
+                        Ok(None) => {}
+                    }
+                }
                 if configuration.version != version.to_string() {
                     entry.availability =
                         VoiceAvailability::Unsupported("声库配置版本与目录版本不一致".to_owned());
