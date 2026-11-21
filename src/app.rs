@@ -52,6 +52,7 @@ pub struct App {
     pub time_edit: Option<ui::time_edit::TimeEdit>,
     pub bpm_edit: Option<ui::tempo_input::BpmEdit>,
     pub lyric: Option<ui::piano::LyricEdit>,
+    pub phoneme_text: Option<ui::piano::PhonemeTextEdit>,
     pub fill_lyrics: Option<ui::fill_lyrics::FillLyrics>,
     pub pending: Option<FileAction>,
     pub allow_close: bool,
@@ -135,6 +136,7 @@ impl App {
             time_edit: None,
             bpm_edit: None,
             lyric: None,
+            phoneme_text: None,
             fill_lyrics: None,
             pending: None,
             allow_close: false,
@@ -169,7 +171,8 @@ impl App {
                 self.rename = None;
                 self.time_edit = None;
                 self.bpm_edit = None;
-                self.lyric = None;
+                        self.lyric = None;
+                self.phoneme_text = None;
                 self.fill_lyrics = None;
                 let reference = self.editor.active_ref();
                 let first = reference.and_then(|r| {
@@ -196,6 +199,7 @@ impl App {
         ui::piano::cancel_audition(self);
         ui::tempo_input::finish(self);
         self.commit_lyric();
+        self.commit_phoneme_text();
         self.editor.finish();
         let path = if save_as || self.path.is_none() {
             let name = self
@@ -236,6 +240,7 @@ impl App {
         ui::tempo_input::finish(self);
         self.time_edit = None;
         self.commit_lyric();
+        self.commit_phoneme_text();
         self.fill_lyrics = None;
         self.editor.finish();
         if self.editor.dirty() {
@@ -300,6 +305,13 @@ impl App {
     pub fn commit_lyric(&mut self) {
         if let Some(lyric) = self.lyric.take() {
             self.editor.set_lyric(lyric.id, lyric.text);
+        }
+    }
+    pub fn commit_phoneme_text(&mut self) {
+        if let Some(edit) = self.phoneme_text.take()
+            && self.editor.reference == Some(edit.reference)
+        {
+            self.editor.set_note_phonemes(edit.id, edit.text);
         }
     }
     fn persist_layout(&mut self) {
