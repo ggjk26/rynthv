@@ -157,6 +157,36 @@ impl SynthesisSettings {
         }
     }
 
+    /// Explicit recovery for unreadable synthesis.json files. Do not silently
+    /// discard a user's configured voicebank paths on application startup.
+    /// Keep the original file intact under a unique backup name.
+    pub fn backup_and_reset_invalid() -> Result<PathBuf, String> {
+        let path = Self::path()?;
+        if Self::load().is_ok() {
+            return Err("当前合成设置可正常读取，无需重置。".to_owned());
+        }
+        let backup = path.with_file_name(format!(
+            "synthesis-{}.json.bak",
+            uuid::Uuid::new_v4()
+        ));
+        fs::rename(&path, &backup).map_err(|error| {
+            format!(
+                "无法备份原合成设置 {}：{error}",
+                path.display()
+            )
+        })?;
+        match Self::default().save() {
+            Ok(()) => Ok(backup),
+            Err(error) => match fs::rename(&backup, &path) {
+                Ok(()) => Err(format!("无法重置合成设置：{error}；原配置已恢复。")),
+                Err(restore_error) => Err(format!(
+                    "无法重置合成设置：{error}；恢复失败：{restore_error}。原配置备份位置：{}",
+                    backup.display()
+                )),
+            },
+        }
+    }
+
     pub fn save(&self) -> Result<(), String> {
         let path = Self::path()?;
         // A malformed existing file needs explicit repair, not replacement by
