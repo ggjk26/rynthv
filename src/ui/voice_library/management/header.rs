@@ -32,18 +32,18 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, rect: Rect) -> bool {
                 .color(INK),
         );
         if wide {
-            ui.label(RichText::new("歌声").size(13.0).color(MUTED));
+            ui.label(RichText::new(app.preferences.language.text("歌声", "Voices", "歌声")).size(13.0).color(MUTED));
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             close = ui
                 .add(
-                    IconButton::new(Icon::Close, "关闭歌声管理")
+                    IconButton::new(Icon::Close, app.preferences.language.text("关闭歌声管理", "Close voice manager", "歌声管理を閉じる"))
                         .size(Vec2::splat(28.0))
                         .icon_size(15.0),
                 )
                 .clicked();
             let resources = ui.add(
-                IconButton::new(Icon::Settings, "资源目录设置")
+                IconButton::new(Icon::Settings, app.preferences.language.text("资源目录设置", "Resource directories", "リソースフォルダー"))
                     .size(Vec2::splat(28.0))
                     .icon_size(18.0),
             );

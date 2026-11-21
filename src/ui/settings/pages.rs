@@ -3,8 +3,18 @@ use crate::{app::App, ui::state::Column};
 use eframe::egui::*;
 
 pub(super) fn general(app: &mut App, ui: &mut Ui) {
-    fixed(ui, "界面语言", "简体中文", "当前界面仅支持简体中文");
-    row(ui, "界面缩放", |ui| {
+    let lang = app.preferences.language;
+    row(ui, lang.text("界面语言", "Interface language", "表示言語"), |ui| {
+        ComboBox::from_id_salt("interface-language")
+            .width(ui.available_width())
+            .selected_text(app.preferences.language.name())
+            .show_ui(ui, |ui| {
+                for candidate in super::UiLanguage::ALL {
+                    ui.selectable_value(&mut app.preferences.language, candidate, candidate.name());
+                }
+            });
+    });
+    row(ui, lang.text("界面缩放", "Interface scale", "画面の拡大率"), |ui| {
         let id = ui.make_persistent_id("zoom-draft");
         let mut percent = ui
             .ctx()
@@ -28,20 +38,20 @@ pub(super) fn general(app: &mut App, ui: &mut Ui) {
     });
     fixed(
         ui,
-        "图形渲染",
+        lang.text("图形渲染", "Graphics backend", "描画バックエンド"),
         "Direct3D 12",
-        "当前使用 GPU 渲染，暂不支持切换渲染后端",
+        lang.text("当前使用 GPU 渲染，暂不支持切换渲染后端", "The graphics backend cannot currently be changed", "現在、描画バックエンドは変更できません"),
     );
-    section(ui, "帮助和指导");
-    toggle(ui, "显示状态栏", &mut app.preferences.show_status_bar);
-    toggle(ui, "显示控件操作提示", &mut app.preferences.control_hints);
-    section(ui, "工作区");
-    row(ui, "工具列宽度", |ui| {
+    section(ui, lang.text("帮助和指导", "Help & guidance", "ヘルプとガイド"));
+    toggle(ui, lang.text("显示状态栏", "Show status bar", "ステータスバーを表示"), &mut app.preferences.show_status_bar);
+    toggle(ui, lang.text("显示控件操作提示", "Show control hints", "操作ヒントを表示"), &mut app.preferences.control_hints);
+    section(ui, lang.text("工作区", "Workspace", "ワークスペース"));
+    row(ui, lang.text("工具列宽度", "Tool panel width", "ツールパネルの幅"), |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 55.0).max(40.0);
         ui.add(Slider::new(&mut app.view.panel_width, 140.0..=420.0).suffix(" px"));
     });
-    row(ui, "布局", |ui| {
-        if ui.button("重置工作区布局").clicked() {
+    row(ui, lang.text("布局", "Layout", "レイアウト"), |ui| {
+        if ui.button(lang.text("重置工作区布局", "Reset workspace layout", "レイアウトをリセット")).clicked() {
             app.view = Default::default();
         }
     });
