@@ -134,7 +134,8 @@ fn version(
                         &mut revision,
                         version.revision,
                         format!(
-                            lang.text("版本 {}{}", "Version {}{}", "バージョン {}{}"),
+                            "{} {}{}",
+                            lang.text("版本", "Version", "バージョン"),
                             version.version_label.as_deref().map(str::to_owned).unwrap_or_else(|| version.revision.to_string()),
                             if version.availability.is_loadable() {
                                 ""
