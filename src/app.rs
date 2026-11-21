@@ -313,7 +313,7 @@ impl App {
         if let Some(edit) = self.phoneme_text.take()
             && self.editor.reference == Some(edit.reference)
         {
-            self.editor.set_note_phonemes(edit.id, edit.text);
+            self.editor.set_single_note_phonemes(edit.id, edit.text);
         }
     }
     fn persist_layout(&mut self) {
