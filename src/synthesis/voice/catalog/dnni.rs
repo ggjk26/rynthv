@@ -135,6 +135,7 @@ pub(super) fn scan_named(
     {
         return Ok(None);
     }
+    let sidecar = super::super::sidecar::load(directory)?;
     let canonical = fs::canonicalize(directory)?;
     let digest = sha2::Sha256::digest(canonical.to_string_lossy().as_bytes());
     let id = format!("sv2-local:{}", super::super::hex(&digest[..12]));
@@ -194,7 +195,17 @@ pub(super) fn scan_named(
                     missing.join("、")
                 ));
             }
-            if let Some(display) = metadata.lookup(&entry.display_name, &entry.vendor) {
+            if let Some(sidecar) = sidecar.as_ref() {
+                entry.genres.clone_from(&sidecar.metadata.genres);
+                entry.pitch_range.clone_from(&sidecar.metadata.pitch_range);
+                if !sidecar.metadata.languages.is_empty() {
+                    entry.languages.clone_from(&sidecar.metadata.languages);
+                }
+                entry.model_dependencies.push(format!(
+                    "独立声库资源：{}（内部版本号 {}）",
+                    sidecar.metadata.dnni_file, sidecar.metadata.version_number
+                ));
+            } else if let Some(display) = metadata.lookup(&entry.display_name, &entry.vendor) {
                 entry.genres.clone_from(&display.genres);
                 entry.pitch_range.clone_from(&display.pitch_range);
                 if !display.languages.is_empty() {
