@@ -212,9 +212,9 @@ impl App {
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
-                .unwrap_or("未命名.svp");
+                .unwrap_or(self.preferences.language.text("未命名.svp", "Untitled.svp", "無題.svp"));
             rfd::FileDialog::new()
-                .add_filter("Synthesizer V 工程", &["svp"])
+                .add_filter(self.preferences.language.text("Synthesizer V 工程", "Synthesizer V project", "Synthesizer V プロジェクト"), &["svp"])
                 .set_file_name(name)
                 .save_file()
         } else {
@@ -281,7 +281,7 @@ impl App {
             }
             FileAction::Open => {
                 if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Synthesizer V 工程", &["svp"])
+                    .add_filter(self.preferences.language.text("Synthesizer V 工程", "Synthesizer V project", "Synthesizer V プロジェクト"), &["svp"])
                     .pick_file()
                 {
                     self.open_path(path);
