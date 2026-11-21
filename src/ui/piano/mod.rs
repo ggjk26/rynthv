@@ -44,6 +44,12 @@ pub struct LyricEdit {
     pub text: String,
     pub focus: bool,
 }
+pub struct PhonemeTextEdit {
+    pub id: EntityId,
+    pub reference: EntityId,
+    pub text: String,
+    pub focus: bool,
+}
 #[derive(Clone, Copy)]
 pub enum NoteDrag {
     Move,
