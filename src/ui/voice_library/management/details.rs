@@ -1,5 +1,5 @@
 use super::{
-    super::{context, family_name, language_name, text, weak},
+    super::{context, family_name, language_name, localized_diagnostic, text, weak},
     feedback,
 };
 use crate::{
@@ -68,11 +68,11 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
     if !entry.model_dependencies.is_empty() {
         text(ui, lang.text("模型依赖（仅文件识别，不代表能够合成）：", "Model dependencies (file detection only; synthesis is not guaranteed):", "モデル依存関係（ファイル検出のみで、合成可能とは限りません）："));
         for dependency in &entry.model_dependencies {
-            weak(ui, dependency);
+            weak(ui, localized_diagnostic(dependency, lang));
         }
     }
     if let VoiceAvailability::Unsupported(reason) = &entry.availability {
-        super::super::error_label(ui, reason);
+        super::super::error_label(ui, localized_diagnostic(reason, lang));
     }
     if entry.database_id.starts_with("svflat:") {
         // A concise, copyable report makes mismatched Flat model installs
