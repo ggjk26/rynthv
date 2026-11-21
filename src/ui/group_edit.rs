@@ -79,7 +79,14 @@ pub fn context_menu(app: &mut App, ui: &mut Ui, reference: &GroupRef) {
             ))
             .collect::<Vec<_>>()
     }).unwrap_or_default();
-    let track_id = app.editor.track;
+    // The context menu may outlive the selection that opened it.
+    // Resolve the owner from the reference itself, not the current editor track.
+    let Some(track_id) = app.editor.project.tracks.iter()
+        .find(|track| track.references().any(|item| item.id == reference.id))
+        .map(|track| track.id)
+    else {
+        return;
+    };
     let reference_id = reference.id;
     ui.menu_button(lang.text("设置此音符组声库", "Set group voice", "グループの歌声を設定"), |ui| {
         if ui.button(lang.text("继承音轨声库", "Inherit track voice", "トラックの歌声を継承")).clicked() {
@@ -113,17 +120,15 @@ pub fn context_menu(app: &mut App, ui: &mut Ui, reference: &GroupRef) {
         }
         ui.close();
     }
-    let ordinary = app
-        .editor
-        .current_track()
-        .groups
-        .iter()
-        .any(|r| r.id == reference.id);
+    let ordinary = app.editor.project.tracks.iter()
+        .find(|track| track.id == track_id)
+        .is_some_and(|track| track.groups.iter().any(|item| item.id == reference_id));
     if ui
         .add_enabled(ordinary, Button::new(lang.text("删除音符组", "Delete group", "グループを削除")))
         .clicked()
     {
-        app.editor.delete_group(reference.id);
+        app.editor.select_reference(track_id, reference_id);
+        app.editor.delete_group(reference_id);
         ui.close();
     }
 }
