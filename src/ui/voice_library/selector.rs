@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::{artwork, error_label, family_name, selected_entry, weak};
+use super::{artwork, error_label, family_name, localized_diagnostic, selected_entry, weak};
 use crate::{
     app::App,
     synthesis::{
@@ -289,7 +289,7 @@ fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool, lang: crate::ui:
         Align2::LEFT_TOP,
         match &entry.availability {
             VoiceAvailability::Loadable => entry.genres.join(", "),
-            VoiceAvailability::Unsupported(reason) => reason.clone(),
+            VoiceAvailability::Unsupported(reason) => localized_diagnostic(reason, lang),
         },
         FontId::proportional(12.0),
         MUTED,
@@ -326,7 +326,7 @@ fn card(ui: &mut Ui, entry: &VoiceCatalogEntry, selected: bool, lang: crate::ui:
                 entry.revision,
                 entry.vendor
             ),
-            VoiceAvailability::Unsupported(reason) => format!("{}\n{reason}", entry.display_name),
+            VoiceAvailability::Unsupported(reason) => format!("{}\n{}", entry.display_name, localized_diagnostic(reason, lang)),
         })
 }
 
