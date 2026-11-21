@@ -73,6 +73,12 @@ impl VoiceCatalog {
             catalog.entries.push(entry_nofs(&path, flat_models)?);
         }
         let metadata = MetadataIndex::load(root);
+        // Also accept a standalone, human-named folder containing DNNI
+        // models (common in manually extracted voicebank collections).
+        // Official UUID/revision installations remain handled below.
+        if let Some(entry) = dnni::scan_named(root, &metadata)? {
+            catalog.entries.push(entry);
+        }
         for database in fs::read_dir(root)? {
             let database = match database {
                 Ok(database) => database,
@@ -93,12 +99,20 @@ impl VoiceCatalog {
                     continue;
                 }
             }
-            if let Ok(database_id) = uuid::Uuid::parse_str(&database.file_name().to_string_lossy())
-                && let Err(error) = dnni::scan(&database.path(), database_id, &mut catalog, &metadata)
-            {
-                catalog.warnings.push(format!(
-                    "声库 {} 的模型版本扫描失败：{error}", database.path().display()
-                ));
+            if let Ok(database_id) = uuid::Uuid::parse_str(&database.file_name().to_string_lossy()) {
+                if let Err(error) = dnni::scan(&database.path(), database_id, &mut catalog, &metadata) {
+                    catalog.warnings.push(format!(
+                        "声库 {} 的模型版本扫描失败：{error}", database.path().display()
+                    ));
+                }
+            } else {
+                match dnni::scan_named(&database.path(), &metadata) {
+                    Ok(Some(entry)) => catalog.entries.push(entry),
+                    Ok(None) => {}
+                    Err(error) => catalog.warnings.push(format!(
+                        "无法检查独立声库目录 {}：{error}", database.path().display()
+                    )),
+                }
             }
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
