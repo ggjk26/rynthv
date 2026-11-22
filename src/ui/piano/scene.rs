@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use eframe::egui::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{cmp::Reverse, collections::{BTreeSet, BinaryHeap}};
 
 pub struct SceneGroup {
     pub reference: GroupRef,
@@ -59,23 +59,36 @@ pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
     let colors = TrackColors::new(app.editor.current_track());
     let drawing_pitch = app.piano_tool.is_pitch();
     for g in groups {
-        // A sorted sweep detects overlapping notes in O(n log n) rather
-        // than checking every note against every other note in large groups.
+        // Detect overlap at *any* pitch, not only equal-pitch collisions.
+        // An expiration heap maintains active note intervals. Previously
+        // unmarked active notes are drained only once when an overlap starts,
+        // keeping the total sweep O(n log n) even for huge clusters.
         let mut sorted: Vec<_> = g.notes.iter().collect();
         sorted.sort_unstable_by_key(|note| note.onset);
-        let mut latest: BTreeMap<i32, (i64, EntityId)> = BTreeMap::new();
+        let mut active_ends = BinaryHeap::<Reverse<(i64, EntityId)>>::new();
+        let mut unmarked_active = BTreeSet::new();
         let mut overlaps = BTreeSet::new();
         for note in sorted {
-            if let Some((end, previous)) = latest.get(&note.pitch).copied()
-                && note.onset < end
-            {
-                overlaps.insert(previous);
-                overlaps.insert(note.id);
+            while let Some(Reverse((end, id))) = active_ends.peek().copied() {
+                if end > note.onset {
+                    break;
+                }
+                active_ends.pop();
+                unmarked_active.remove(&id);
             }
             let end = note.onset.saturating_add(note.duration);
-            if latest.get(&note.pitch).is_none_or(|(last_end, _)| end > *last_end) {
-                latest.insert(note.pitch, (end, note.id));
+            if end <= note.onset {
+                continue;
             }
+            if !active_ends.is_empty() {
+                overlaps.insert(note.id);
+                while let Some(id) = unmarked_active.pop_first() {
+                    overlaps.insert(id);
+                }
+            } else {
+                unmarked_active.insert(note.id);
+            }
+            active_ends.push(Reverse((end, note.id)));
         }
         let active = app.editor.reference == Some(g.reference.id);
         let painter = ui.painter().with_clip_rect(
