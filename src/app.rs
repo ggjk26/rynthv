@@ -46,6 +46,7 @@ pub struct App {
     pub piano_audition: ui::piano::KeyboardAudition,
     pub view_pan: ui::view_pan::ViewPan,
     pub selected_tracks: BTreeSet<EntityId>,
+    pub selected_groups: BTreeSet<EntityId>,
     pub gesture: Option<ui::piano::Gesture>,
     pub group_gesture: Option<ui::group_edit::GroupGesture>,
     pub audio_drag: Option<ui::instrumental::AudioDrag>,
@@ -131,6 +132,7 @@ impl App {
             piano_audition: ui::piano::KeyboardAudition::default(),
             view_pan: ui::view_pan::ViewPan::default(),
             selected_tracks: BTreeSet::new(),
+            selected_groups: BTreeSet::new(),
             gesture: None,
             group_gesture: None,
             audio_drag: None,
@@ -166,6 +168,7 @@ impl App {
                 self.path = Some(path);
                 self.gesture = None;
                 self.selected_tracks.clear();
+        self.selected_groups.clear();
                 self.piano_anchor = ui::piano::AnchorSelection::default();
                 self.parameter_lane = ui::lanes::ParameterSelection::default();
                 self.phoneme_editing = ui::phonemes::PhonemeEditing::default();
@@ -259,6 +262,7 @@ impl App {
         self.midi_import = None;
         self.gesture = None;
         self.selected_tracks.clear();
+        self.selected_groups.clear();
         self.piano_anchor = ui::piano::AnchorSelection::default();
         self.parameter_lane = ui::lanes::ParameterSelection::default();
         self.phoneme_editing = ui::phonemes::PhonemeEditing::default();
