@@ -47,6 +47,9 @@ pub struct App {
     pub view_pan: ui::view_pan::ViewPan,
     pub selected_tracks: BTreeSet<EntityId>,
     pub selected_groups: BTreeSet<EntityId>,
+    /// UI gesture flag: while dragging the playing ruler the editor retains
+    /// its playing state, but the audio device is stopped until release.
+    pub scrubbing_playhead: bool,
     pub gesture: Option<ui::piano::Gesture>,
     pub group_gesture: Option<ui::group_edit::GroupGesture>,
     pub audio_drag: Option<ui::instrumental::AudioDrag>,
@@ -133,6 +136,7 @@ impl App {
             view_pan: ui::view_pan::ViewPan::default(),
             selected_tracks: BTreeSet::new(),
             selected_groups: BTreeSet::new(),
+            scrubbing_playhead: false,
             gesture: None,
             group_gesture: None,
             audio_drag: None,
@@ -418,11 +422,19 @@ impl eframe::App for App {
             self.request_file(FileAction::Close, &ctx);
         }
         let audio_seconds = self.synthesis.playback_clock(self.editor.transport.playing);
-        let looped = self.editor.transport.update(
-            &self.editor.project.time,
-            self.editor.project.end().max(32 * QUARTER),
-            audio_seconds,
-        );
+        let was_scrubbing = self.scrubbing_playhead;
+        let looped = if was_scrubbing {
+            // The device has been silenced for an interactive seek. Do not
+            // overwrite the user's cursor with a stale playback clock.
+            false
+        } else {
+            self.editor.transport.update(
+                &self.editor.project.time,
+                self.editor.project.end().max(32 * QUARTER),
+                audio_seconds,
+            )
+        };
+        self.scrubbing_playhead = false;
         let transport_position = self.editor.transport.position;
         if self.editor.transport.playing {
             ctx.request_repaint_after(Duration::from_millis(16));
@@ -533,13 +545,14 @@ impl eframe::App for App {
                 .loop_seconds(&self.editor.project.time),
         );
         self.synthesis.sync_transport(
-            self.editor.transport.playing,
+            self.editor.transport.playing && !self.scrubbing_playhead,
             self.editor
                 .project
                 .time
                 .seconds_at(self.editor.transport.position)
                 .max(0.0),
-            looped || self.editor.transport.position != transport_position,
+            looped || self.editor.transport.position != transport_position
+                || was_scrubbing || self.scrubbing_playhead,
         );
         if self.last_persist.elapsed() > Duration::from_secs(3) {
             self.persist_layout();
