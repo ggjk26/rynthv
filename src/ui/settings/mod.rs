@@ -1,5 +1,6 @@
 mod pages;
 mod preferences;
+mod graphics;
 mod shortcuts;
 mod widgets;
 
@@ -13,6 +14,7 @@ use crate::{
 };
 use eframe::egui::*;
 pub use preferences::{Preferences, UiLanguage};
+pub use graphics::{GraphicsBackend, GraphicsInfo};
 
 const FILL: Color32 = Color32::from_rgb(61, 59, 63);
 const DIVIDER: Color32 = Color32::from_rgb(76, 74, 78);
