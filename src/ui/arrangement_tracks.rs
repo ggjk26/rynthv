@@ -126,14 +126,23 @@ fn group(app: &mut App, ui: &mut Ui, body: Rect, track: &Track, reference: &Grou
     if !clip.is_positive() {
         return;
     }
-    let selected = app.editor.reference == Some(reference.id);
+    let selected = app.editor.reference == Some(reference.id)
+        || app.selected_groups.contains(&reference.id);
     let painter = ui.painter().with_clip_rect(body.intersect(ui.clip_rect()));
     let fill = if selected {
-        colors.accent.lerp_to_gamma(CANVAS, 0.15)
+        CANVAS.lerp_to_gamma(colors.accent, 0.23)
     } else {
-        colors.note
+        CANVAS.lerp_to_gamma(colors.note, 0.12)
     };
     painter.rect_filled(region, 3, fill);
+    painter.rect_filled(
+        Rect::from_min_size(region.min, vec2(region.width(), 4.0)),
+        1, colors.accent,
+    );
+    if selected {
+        painter.rect_stroke(region, 3,
+            Stroke::new(1.5, colors.highlight), StrokeKind::Inside);
+    }
     let content = painter.with_clip_rect(clip);
     content.text(
         pos2(region.left() + 6.0, region.top() + 5.0),
@@ -183,8 +192,36 @@ fn group(app: &mut App, ui: &mut Ui, body: Rect, track: &Track, reference: &Grou
             Sense::click()
         },
     );
-    if response.clicked() || response.secondary_clicked() {
+    if response.clicked() {
         app.commit_lyric();
+        let modifiers = ui.input(|input| input.modifiers);
+        if modifiers.shift {
+            let all: Vec<_> = track.visible_references().map(|r| r.id).collect();
+            let anchor = app.editor.reference.unwrap_or(reference.id);
+            let first = all.iter().position(|id| *id == anchor);
+            let last = all.iter().position(|id| *id == reference.id);
+            if let (Some(first), Some(last)) = (first, last) {
+                for id in &all[first.min(last)..=first.max(last)] {
+                    app.selected_groups.insert(*id);
+                }
+            } else {
+                app.selected_groups.insert(reference.id);
+            }
+        } else if modifiers.ctrl || modifiers.command {
+            if !app.selected_groups.remove(&reference.id) {
+                app.selected_groups.insert(reference.id);
+            }
+        } else {
+            app.selected_groups.clear();
+            app.selected_groups.insert(reference.id);
+        }
+        app.editor.select_reference(track.id, reference.id);
+    } else if response.secondary_clicked() {
+        app.commit_lyric();
+        if !app.selected_groups.contains(&reference.id) {
+            app.selected_groups.clear();
+            app.selected_groups.insert(reference.id);
+        }
         app.editor.select_reference(track.id, reference.id);
     }
     let kind_at = |p: Pos2| {
