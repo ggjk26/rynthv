@@ -30,23 +30,36 @@ fn main() {
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"));
     let resource = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo build output directory"))
         .join("app-icon.res");
-    let mut compiler = find_msvc_tools::find(&target, "rc.exe")
-        .expect("building the Windows app icon requires the Windows SDK resource compiler");
+    // App icons are optional packaging metadata. ARM64 and GNU/CI targets
+    // can lack rc.exe even when the Rust target itself is supported. The
+    // absence of a Windows SDK must not stop synthesis/editor compilation.
+    if env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
+        println!("cargo::warning=Windows resource compiler is MSVC-only; build without embedded executable icon");
+        return;
+    }
+    let Some(mut compiler) = find_msvc_tools::find(&target, "rc.exe") else {
+        println!("cargo::warning=Windows SDK rc.exe not found for {target}; skipping embedded icon");
+        return;
+    };
     let output = compiler
         .current_dir(root)
         .arg("/nologo")
         .arg("/fo")
         .arg(&resource)
         .arg("assets/branding/app-icon.rc")
-        .output()
-        .expect("could not run the Windows SDK resource compiler");
-    assert!(
-        output.status.success(),
-        "app icon resource compilation failed:\n{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-
-    // Link the resource only into the editor, not the synthesis command-line tool.
-    println!("cargo::rustc-link-arg-bin=rynthv={}", resource.display());
+        .output();
+    match output {
+        Ok(result) if result.status.success() => {
+            // Only the GUI executable needs the Windows icon.
+            println!("cargo::rustc-link-arg-bin=rynthv={}", resource.display());
+        }
+        Ok(result) => println!(
+            "cargo::warning=Windows icon resource compilation failed ({}): {}; building without embedded icon",
+            result.status,
+            String::from_utf8_lossy(&result.stderr).trim(),
+        ),
+        Err(error) => println!(
+            "cargo::warning=Windows icon resource compiler unavailable ({error}); building without embedded icon"
+        ),
+    }
 }
