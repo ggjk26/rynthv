@@ -28,6 +28,7 @@ pub use catalog::{VoiceAvailability, VoiceCatalog, VoiceCatalogEntry};
 pub use duration_frontend::{DURATION_ROOT_TYPE_ID, DurationConfiguration};
 pub use family::VoiceFamily;
 pub use inventory::VoiceInventory;
+pub(crate) use phones::verify_flat_mapping;
 pub use phones::{PHONE_SET_TYPE_ID, PhoneLookup, PhoneSet, ResolvedPhone, resolve_explicit};
 pub use preparation::{PreparationSummary, PreparedVoice};
 pub use prepared::{PreparedModule, PreparedNode, PreparedTree, PreparedTreeSummary};

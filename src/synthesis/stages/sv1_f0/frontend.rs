@@ -72,18 +72,13 @@ impl<'a> Frontend<'a> {
         token: &str,
         mapped: &str,
     ) -> Result<()> {
-        let resolved = resolve_explicit(&self.languages, self.unified, language, token)?;
-        if !resolved.selected_phone_set.starts_with(language)
-            || resolved.local_stored_index.is_none()
-            || resolved.used_silence_fallback
-            || resolved.unified_symbol != mapped
-        {
-            return Err(VoiceError::new(format!(
-                "Flat and DDS phoneme tables disagree for {language}:{token} (Flat: {mapped}, DDS: {})",
-                resolved.unified_symbol,
-            )));
-        }
-        Ok(())
+        crate::synthesis::voice::verify_flat_mapping(
+            &self.languages,
+            self.unified,
+            language,
+            token,
+            mapped,
+        )
     }
 
     pub fn encode(

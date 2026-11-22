@@ -132,6 +132,21 @@ impl<'a> Frontend<'a> {
         })
     }
 
+    pub(super) fn verify_phone_mapping(
+        &self,
+        language: &str,
+        token: &str,
+        mapped: &str,
+    ) -> Result<()> {
+        crate::synthesis::voice::verify_flat_mapping(
+            &self.languages,
+            self.unified,
+            language,
+            token,
+            mapped,
+        )
+    }
+
     pub fn normalize_pitch(&self, log_hz: &[f32]) -> Result<Vec<f32>> {
         if log_hz.iter().any(|value| !value.is_finite()) {
             return Err(VoiceError::new(

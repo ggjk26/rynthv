@@ -1,7 +1,7 @@
-//! Inspect Flat package metadata and run the supported experimental F0 adapter.
+//! Inspect Flat metadata and run experimental inline DDS inference.
 use rynthv::synthesis::voice::{
     VoiceCatalog,
-    flat::{FlatManifest, FlatVoice},
+    flat::{FlatManifest, FlatTimedScore, FlatVoice},
 };
 use serde_json::json;
 use std::{
@@ -20,12 +20,19 @@ fn main() -> ExitCode {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ScoreMode {
+    Pitch,
+    Acoustic,
+}
+
 fn inspect() -> Result<(), String> {
     let mut path = None;
     let mut models = None;
     let mut timing = None;
     let mut phonesets = None;
-    let mut pitch_score = None;
+    let mut score_request = None;
+    let mut style = None;
     let mut probe_models = false;
     let mut args = env::args_os().skip(1);
     while let Some(argument) = args.next() {
@@ -35,12 +42,15 @@ fn inspect() -> Result<(), String> {
                 "用法：rynthv-flat-inspect <NOFS-JSON|info.nofs|config.json|目录> [--models 模型目录] [--timing 时长模型.dnni] [--probe-models]"
             );
             println!(
-                "默认只读取元数据。--probe-models 会校验本地 DNNI v3 容器索引及资源完整性，并检查可读的内联 F0 图，可能需要较长时间和较多内存；不执行歌声合成。"
+                "默认只读取元数据。--probe-models 会校验本地 DNNI v3 容器索引及资源完整性，并检查可读的内联 F0 和声学图，可能需要较长时间和较多内存；不执行歌声合成。"
             );
             println!(
                 "实验性 F0：rynthv-flat-inspect <NOFS-JSON> --models <目录> --phonesets <目录> --pitch-score <已标注时长的乐谱.json>"
             );
-            println!("F0 实验需要可读的 DNNI v1/v2 DDS 模型，输出 MIDI 音高曲线 JSON。");
+            println!(
+                "实验性 F0 + 声学：使用 --acoustic-score <乐谱.json> [--style <NOFS 唱法名>] 代替 --pitch-score。"
+            );
+            println!("实验需要可读的 DNNI v1/v2 DDS 模型，输出音高或声学帧 JSON。");
             return Ok(());
         }
         if argument_text == "--models" {
@@ -55,10 +65,26 @@ fn inspect() -> Result<(), String> {
             phonesets = Some(PathBuf::from(
                 args.next().ok_or("--phonesets 需要一个目录参数")?,
             ));
-        } else if argument_text == "--pitch-score" {
-            pitch_score = Some(PathBuf::from(
-                args.next().ok_or("--pitch-score 需要一个 JSON 文件路径")?,
-            ));
+        } else if matches!(argument_text.as_ref(), "--pitch-score" | "--acoustic-score") {
+            if score_request.is_some() {
+                return Err("只可指定一种乐谱推理模式".into());
+            }
+            let mode = if argument_text == "--pitch-score" {
+                ScoreMode::Pitch
+            } else {
+                ScoreMode::Acoustic
+            };
+            let score = PathBuf::from(
+                args.next()
+                    .ok_or_else(|| format!("{argument_text} 需要一个 JSON 文件路径"))?,
+            );
+            score_request = Some((mode, score));
+        } else if argument_text == "--style" {
+            style = Some(
+                args.next()
+                    .and_then(|arg| arg.into_string().ok())
+                    .ok_or("--style 需要一个唱法名")?,
+            );
         } else if argument_text == "--probe-models" {
             probe_models = true;
         } else if argument_text.starts_with('-') {
@@ -70,14 +96,17 @@ fn inspect() -> Result<(), String> {
         }
     }
     let path: PathBuf = path.ok_or("请提供 Flat NOFS-JSON、info.nofs、config.json 或声库目录")?;
-    if pitch_score.is_some() != phonesets.is_some() {
-        return Err("--pitch-score 和 --phonesets 需要一起指定".into());
+    if score_request.is_some() != phonesets.is_some() {
+        return Err("乐谱推理模式需要同时指定 --phonesets".into());
     }
-    if pitch_score.is_some() && (probe_models || timing.is_some()) {
-        return Err("--pitch-score 与 --probe-models / --timing 分开运行".into());
+    if style.is_some() && !matches!(score_request, Some((ScoreMode::Acoustic, _))) {
+        return Err("--style 仅用于 --acoustic-score".into());
     }
-    if pitch_score.is_some() && (file_name_is(&path, "config.json") || !is_json(&path)) {
-        return Err("F0 实验需要包含 f0_style 的文本 Flat NOFS".into());
+    if score_request.is_some() && (probe_models || timing.is_some()) {
+        return Err("请将乐谱推理模式与 --probe-models / --timing 分开运行".into());
+    }
+    if score_request.is_some() && (file_name_is(&path, "config.json") || !is_json(&path)) {
+        return Err("乐谱推理需要包含 f0_style 的文本 Flat NOFS".into());
     }
     if (probe_models || timing.is_some()) && (path.is_dir() || file_name_is(&path, "config.json")) {
         return Err(
@@ -109,20 +138,35 @@ fn inspect() -> Result<(), String> {
         })
     } else if is_json(&path) {
         let voice = FlatVoice::open(&path, models.as_deref()).map_err(|error| error.to_string())?;
-        if let Some((score, phonesets)) = pitch_score.zip(phonesets) {
+        if let Some(((mode, score), phonesets)) = score_request.zip(phonesets) {
             let input = std::fs::File::open(&score)
                 .map_err(|error| format!("{}: {error}", score.display()))?;
-            let input = serde_json::from_reader(std::io::BufReader::new(input))
+            let input: FlatTimedScore = serde_json::from_reader(std::io::BufReader::new(input))
                 .map_err(|error| format!("{}: {error}", score.display()))?;
-            let pitch = voice
-                .predict_inline_f0(&input, &phonesets)
-                .map_err(|error| error.to_string())?;
-            json!({
-                "kind": "flat-experimental-inline-dds-f0",
-                "voice": voice.name,
-                "version": voice.version,
-                "pitch": pitch,
-            })
+            match mode {
+                ScoreMode::Pitch => {
+                    let pitch = voice
+                        .predict_inline_f0(&input, &phonesets)
+                        .map_err(|error| error.to_string())?;
+                    json!({
+                        "kind": "flat-experimental-inline-dds-f0",
+                        "voice": voice.name,
+                        "version": voice.version,
+                        "pitch": pitch,
+                    })
+                }
+                ScoreMode::Acoustic => {
+                    let acoustic = voice
+                        .predict_inline_acoustics(&input, &phonesets, style.as_deref())
+                        .map_err(|error| error.to_string())?;
+                    json!({
+                        "kind": "flat-experimental-inline-dds-acoustics",
+                        "voice": voice.name,
+                        "version": voice.version,
+                        "acoustic": acoustic,
+                    })
+                }
+            }
         } else if probe_models {
             let preflight = voice.preflight(timing.as_deref());
             let conditioning = match voice.conditioning(None) {

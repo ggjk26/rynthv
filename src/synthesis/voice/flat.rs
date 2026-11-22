@@ -2,9 +2,15 @@
 //!
 //! A Flat voicebank stores metadata and references to separately installed
 //! models. Individual adapters validate the model graphs before inference.
+mod acoustic;
+mod inline;
 mod phones;
 pub mod pitch;
 pub mod probe;
+mod score;
+
+pub use acoustic::FlatAcoustics;
+pub use score::FlatTimedScore;
 
 use super::{Result, VoiceError};
 use serde::Serialize;

@@ -1,7 +1,7 @@
 //! Read-only Flat model preflight with container checks and optional
-//! preparation of a readable inline DDS F0 graph.
-use super::{FlatVoice, MAX_STAGE_BYTES, pitch::inline_f0_tree};
-use crate::synthesis::stages::sv1_f0::Sv1F0Stage;
+//! preparation of readable inline DDS F0 and timbre graphs.
+use super::{FlatVoice, MAX_STAGE_BYTES, acoustic::inline_acoustic_tree, pitch::inline_f0_tree};
+use crate::synthesis::stages::{sv1_f0::Sv1F0Stage, sv1_timbre::Sv1TimbreNetwork};
 use crate::synthesis::voice::{
     archive::{Archive, ResourceId},
     format::FormatContext,
@@ -23,7 +23,8 @@ pub enum StageState {
     UnsupportedFormat,
     InvalidNativeContainer,
     InlineF0GraphReady,
-    InvalidInlineF0Graph,
+    InlineAcousticGraphReady,
+    InvalidInlineGraph,
     StageResourceNotFound,
     NativeResourceFound,
 }
@@ -46,8 +47,7 @@ pub struct FlatPreflight {
     pub stages: Vec<FlatStageCheck>,
     pub located: usize,
     pub native_resource_identified: usize,
-    /// Flat-specific parameter conditioning and graph execution have not
-    /// been implemented: never claim readiness based on file presence.
+    /// Experimental graphs do not establish end-to-end Flat synthesis.
     pub synthesis_supported: bool,
     pub next_step: String,
 }
@@ -84,7 +84,7 @@ impl FlatVoice {
             located,
             native_resource_identified,
             synthesis_supported: false,
-            next_step: "Flat 原生合成仍需确认模型计算图、声学/音高/时长风格向量的输入布局，以及 Flat 声码器协议；可读的 DNNI 不能直接替代 SV2 模型。".to_owned(),
+            next_step: "Flat 的 F0 和声学实验可使用可读的内联图。整曲输出仍需接通 Flat 时长模型与声码器，并支持所用 DNNI 容器。".to_owned(),
         }
     }
 }
@@ -128,23 +128,29 @@ fn probe_file(role: &str, id: &str, path: Option<PathBuf>) -> FlatStageCheck {
         check.details = format!("无法读取 DNNI 文件头：{error}");
         return check;
     }
-    if role == "f0"
+    if matches!(role, "f0" | "acoustic")
         && magic[..4] == DNNI_V3_MAGIC[..4]
         && matches!(u32::from_le_bytes(magic[4..].try_into().unwrap()), 1 | 2)
     {
         check.container = format!("Inline DNNI v{}", magic[4]);
-        match inline_f0_tree(&path)
-            .and_then(|tree| Sv1F0Stage::prepare_native(&tree, 0.0).map(|_| ()))
-        {
-            Ok(()) => {
-                check.state = StageState::InlineF0GraphReady;
+        let prepared = if role == "f0" {
+            inline_f0_tree(&path)
+                .and_then(|tree| Sv1F0Stage::prepare_native(&tree, 0.0).map(|_| ()))
+                .map(|()| (StageState::InlineF0GraphReady, "--pitch-score"))
+        } else {
+            inline_acoustic_tree(&path)
+                .and_then(|tree| Sv1TimbreNetwork::prepare_native(&tree).map(|_| ()))
+                .map(|()| (StageState::InlineAcousticGraphReady, "--acoustic-score"))
+        };
+        match prepared {
+            Ok((state, argument)) => {
+                check.state = state;
                 check.details =
-                    "DDS F0 计算图已通过准备，可使用 --pitch-score 和显式音素时长运行单阶段实验"
-                        .into();
+                    format!("DDS {role} 计算图已装配，使用 {argument} 可验证显式时长乐谱");
             }
             Err(error) => {
-                check.state = StageState::InvalidInlineF0Graph;
-                check.details = format!("内联 DDS F0 计算图准备失败：{error}");
+                check.state = StageState::InvalidInlineGraph;
+                check.details = format!("内联 DDS {role} 计算图装配失败：{error}");
             }
         }
         return check;

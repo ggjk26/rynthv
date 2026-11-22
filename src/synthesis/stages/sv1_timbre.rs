@@ -56,6 +56,28 @@ impl<'a> Sv1TimbreNetwork<'a> {
         Self::prepare_contract(tree, Contract::Native)
     }
 
+    pub(crate) fn prepare_native_style(tree: &'a PreparedTree, style: &[f32]) -> Result<Self> {
+        let mut network = Self::prepare_native(tree)?;
+        if style.len() != network.styles.neutral.len()
+            || style.iter().any(|value| !value.is_finite())
+        {
+            return Err(VoiceError::new(
+                "Flat acoustic style does not match the DDS timbre style vector",
+            ));
+        }
+        network.styles.neutral = Arc::from(style);
+        Ok(network)
+    }
+
+    pub(crate) fn verify_phone_mapping(
+        &self,
+        language: &str,
+        token: &str,
+        mapped: &str,
+    ) -> Result<()> {
+        self.frontend.verify_phone_mapping(language, token, mapped)
+    }
+
     fn prepare_contract(tree: &'a PreparedTree, contract: Contract) -> Result<Self> {
         let root = tree.node(tree.root_index())?;
         if root.type_id != types::TIMBRE_TYPE_ID

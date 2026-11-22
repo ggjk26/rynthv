@@ -121,11 +121,19 @@ fn stage_status(state: &StageState, lang: UiLanguage) -> (&'static str, Color32)
             ),
             GREEN,
         ),
-        StageState::InvalidInlineF0Graph => (
+        StageState::InlineAcousticGraphReady => (
             lang.text(
-                "内联 F0 图装配失败",
-                "Inline F0 graph preparation failed",
-                "インライン F0 グラフの構築に失敗",
+                "内联声学图已装配",
+                "Inline acoustic graph prepared",
+                "インライン音響グラフ構築済み",
+            ),
+            GREEN,
+        ),
+        StageState::InvalidInlineGraph => (
+            lang.text(
+                "内联计算图装配失败",
+                "Inline graph preparation failed",
+                "インライングラフの構築に失敗",
             ),
             amber,
         ),

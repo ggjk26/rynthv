@@ -96,9 +96,9 @@ Linux 可使用 `./target/release/rynthv --graphics=vulkan`。如需同时打开
 --timing "C:\path\to\7b0ea690ada94b4484b50d9d64a21cae.dnni"
 ```
 
-工具仅在加上 `--probe-models` 时读取并验证大型模型文件。为了保护 UI 响应速度，声库列表的快速扫描依旧只检查是否能定位文件。预检同时输出未经合成使用的 Flat 条件输入：32 维歌声唱法向量、32 维 F0 风格向量、128 维 Duration 风格向量，维度互不混用。
+工具在指定 `--probe-models`、`--pitch-score` 或 `--acoustic-score` 时读取模型文件。为了保护 UI 响应速度，声库列表的快速扫描依旧只检查是否能定位文件。预检同时输出未经合成使用的 Flat 条件输入：32 维歌声唱法向量、32 维 F0 风格向量、128 维 Duration 风格向量，维度互不混用。
 
-如果 `UnsupportedFormat` 或 `InvalidNativeContainer` 出现，只能说明**当前 RynthV 读取器**不兼容该模型容器或校验参数，不能据此断言用户的模型文件损坏。下一阶段仍需要针对这些模型实现专用图计算、音素字典映射、声学条件、Pitch/F0、Duration 和 Vocoder 协议，验证成功后才会开放 Flat 原生播放和 WAV 导出。
+如果 `UnsupportedFormat` 或 `InvalidNativeContainer` 出现，只能说明**当前 RynthV 读取器**不兼容该模型容器或校验参数，不能据此断言用户的模型文件损坏。Flat 原生播放和 WAV 导出仍需实现对应的 DNNI 容器支持、时长推理和声码器。
 
 ### Flat v200 NOFS 与外部时长模型
 
@@ -165,7 +165,17 @@ cargo run --release --locked --bin rynthv-flat-inspect -- "D:\FlatDatabases"
 
 `score.json` 包含 `score`（采用 `examples/synthesis/mandarin-phrase.json` 的显式音素乐谱格式）和 `phone_seconds`（每条乐谱记录对应一个时长数组，每个音素对应一个秒数）。每条数组的总时长必须等于该记录的时长，分音节记录按 `parts` 均分。例如，时长为 0.5 秒的两个音素可填写 `[0.05, 0.45]`。
 
-此实验使用 DDS 图的基础风格向量输入槽，尚未和 Flat 的运行结果逐帧比对。该命令要求已知音素时长，输出全句音高估计，包含静音时段。安装包中的 DNNI v3、Flat Duration、声学图和声码器仍待适配。
+此实验使用 DDS 图的基础风格向量输入槽，尚未和 Flat 的运行结果逐帧比对。该命令要求已知音素时长，输出全句音高估计，包含静音时段。安装包中的 DNNI v3、Flat Duration 和声码器仍待适配。
+
+### Flat 声学阶段实验
+
+`--acoustic-score` 读取和 `--pitch-score` 相同的乐谱，先预测 F0，再执行可读的内联 DDS 声学图。模型目录应同时包含 NOFS 声明的 F0 和声学模型。可用 `--style` 指定一个 NOFS 唱法，默认使用 `(base)`（若无此项则使用首个唱法）。
+
+```powershell
+.\rynthv-flat-inspect.exe "D:\FlatVoice\info.200.nofs" --models "D:\ReadableModels" --phonesets "D:\FlatVoice\phonesets" --acoustic-score "D:\score.json" --style "Mellow"
+```
+
+输出包括声学模型和 F0 模型的标识、唱法、帧长与逐帧排列的 72 通道声学参数。音素时长仍来自输入乐谱。实验将唱法向量接入声学图的风格槽，保留该图的固定条件向量。唱法的 `extra` 字段尚未接入，声学结果尚未与 SV Flat 逐帧比对。
 
 程序仍不自动探测模型目录，不附带商业声库或用户模型上下文。
 
@@ -173,7 +183,7 @@ cargo run --release --locked --bin rynthv-flat-inspect -- "D:\FlatDatabases"
 | --- | --- | --- |
 | 一代声库 | 支持 | 支持 |
 | 二代声库 | 需要导入模型上下文 | 需要导入模型上下文 |
-| SV Flat（NOFS-JSON / 清单） | 只读诊断和 F0 单阶段实验 | 只读诊断和 F0 单阶段实验 |
+| SV Flat（NOFS-JSON / 清单） | 诊断与 F0 / 声学实验 | 诊断与 F0 / 声学实验 |
 
 配置目录：Windows 为 `%LOCALAPPDATA%/RynthV`，Linux 为 `$XDG_CONFIG_HOME/RynthV`（未设置时为 `$HOME/.config/RynthV`）。模型上下文在 Windows 保存在 `%APPDATA%/RynthV/context.json`，Linux 保存在上述配置目录的 `context.json`。
 

@@ -75,23 +75,49 @@ pub(super) fn execute(
         ));
     }
     if let Some(first) = records.first() {
-        let reciprocal_step = frontend::timing(first)?.0.recip();
-        let mut accumulated = 0.0;
-        let mut previous = 0_usize;
+        let mut clock = AcousticClock::new(frontend::timing(first)?.0);
         for phone in &mut result {
-            accumulated += phone.duration_seconds;
-            let boundary = (accumulated * reciprocal_step).trunc();
-            if !boundary.is_finite() || boundary < 0.0 || boundary >= f64::from(i32::MAX) {
-                return Err(VoiceError::new(
-                    "SV1 acoustic phone boundary exceeds its frame range",
-                ));
-            }
-            let end = (boundary as usize).max(previous + 1);
-            phone.frames = end - previous;
-            previous = end;
+            phone.frames = clock.advance(phone.duration_seconds)?;
         }
     }
     Ok((result, record_seconds))
+}
+
+/// The native DDS acoustic clock truncates cumulative boundaries and
+/// reserves at least one frame for each input phone.
+pub(crate) struct AcousticClock {
+    reciprocal_step: f64,
+    accumulated: f64,
+    previous: usize,
+}
+
+impl AcousticClock {
+    pub(crate) fn new(hop_seconds: f64) -> Self {
+        Self {
+            reciprocal_step: hop_seconds.recip(),
+            accumulated: 0.0,
+            previous: 0,
+        }
+    }
+
+    pub(crate) fn advance(&mut self, seconds: f64) -> Result<usize> {
+        self.accumulated += seconds;
+        let boundary = (self.accumulated * self.reciprocal_step).trunc();
+        if !boundary.is_finite() || boundary < 0.0 || boundary >= f64::from(i32::MAX) {
+            return Err(VoiceError::new(
+                "SV1 acoustic phone boundary exceeds its frame range",
+            ));
+        }
+        let end = (boundary as usize).max(self.previous + 1);
+        if end >= i32::MAX as usize {
+            return Err(VoiceError::new(
+                "SV1 acoustic phone boundary exceeds its frame range",
+            ));
+        }
+        let frames = end - self.previous;
+        self.previous = end;
+        Ok(frames)
+    }
 }
 
 fn borrow_onset(seconds: f64, phones: &[f64], classes: &[Option<&str>], carry: &mut f64) -> f64 {

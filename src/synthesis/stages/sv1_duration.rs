@@ -7,6 +7,7 @@ mod configuration;
 mod encoding;
 mod frontend;
 mod postprocess;
+pub(crate) use postprocess::AcousticClock;
 
 use crate::synthesis::voice::{PreparedTree, Result, VoiceError};
 
