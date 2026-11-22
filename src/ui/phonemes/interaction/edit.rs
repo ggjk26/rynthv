@@ -29,7 +29,7 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
             if lower > upper {
                 return Err(app.preferences.language.text("音素边界的顺序无效", "Invalid phoneme boundary order", "音素境界の順序が無効です").into());
             }
-            let begin = capture.mapping.seconds(pointer.x).clamp(lower, upper);
+            let mut begin = capture.mapping.seconds(pointer.x).clamp(lower, upper);
             let note = capture
                 .mapping
                 .input
@@ -47,6 +47,15 @@ pub(super) fn apply(app: &mut App, capture: &mut Capture, pointer: Pos2) -> Resu
                 .input
                 .tempo
                 .seconds_at(crate::synthesis::plan::GlobalBlick(onset));
+            // The very first source phoneme may lead by one current editing
+            // grid, but not farther into unrelated silence/context.
+            if previous.is_none() {
+                let preparatory_onset =
+                    onset.saturating_sub(crate::model::ticks(capture.mapping.preparation_step));
+                let preparatory_seconds = capture.mapping.input.tempo
+                    .seconds_at(crate::synthesis::plan::GlobalBlick(preparatory_onset));
+                begin = begin.max(preparatory_seconds).min(upper);
+            }
             attributes.left_offset = Some(begin - note_seconds);
             capture.preview[target].begin_seconds = begin;
             if shared {
