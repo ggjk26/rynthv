@@ -36,7 +36,7 @@ zeroize = { version = "=1.9.1", features = ["alloc"] }
 midly = { version = "=0.5.3", default-features = false, features = ["std", "strict"] }
 
 [target.'cfg(windows)'.dependencies]
-wgpu = { version = "=30.0.1", default-features = false, features = ["dx12"] }
+wgpu = { version = "=30.0.1", default-features = false, features = ["dx12", "vulkan"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 eframe = { version = "=0.36.2", default-features = false, features = ["x11", "wayland"] }
