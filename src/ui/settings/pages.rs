@@ -149,7 +149,12 @@ pub(super) fn recording(ui: &mut Ui, lang: super::UiLanguage) {
 
 pub(super) fn rendering(app: &mut App, ui: &mut Ui) {
     let lang = app.preferences.language;
-    crate::ui::voice_library::settings(app, ui);
+    section(ui, lang.text("声库与模型", "Voices & models", "歌声とモデル"));
+    row(ui, lang.text("SV1 / SV2 / Flat 路径", "SV1 / SV2 / Flat folders", "SV1 / SV2 / Flat のパス"), |ui| {
+        if ui.button(lang.text("配置声库目录…", "Configure voice folders…", "歌声フォルダーを設定…")).clicked() {
+            super::open_voice_paths(app, ui.ctx());
+        }
+    });
     row(ui, lang.text("歌声数据库", "Voice database", "歌声データベース"), |ui| {
         if ui.button(lang.text("管理歌声…", "Manage voices…", "歌声を管理…")).clicked() {
             app.settings = false;
