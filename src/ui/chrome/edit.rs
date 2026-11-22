@@ -17,7 +17,8 @@ pub(super) fn selected(app: &App) -> bool {
     } else if anchors(app) {
         piano::anchor_has_selection(app)
     } else {
-        !app.editor.selected.is_empty()
+        app.piano_tool != piano::Tool::PitchDraw
+            && !app.editor.selected.is_empty()
     }
 }
 
@@ -42,7 +43,10 @@ pub(super) fn select_all(app: &mut App) {
     } else if anchors(app) {
         piano::anchor_select_all(app);
     } else {
-        app.editor.select_all_notes();
+        app.selected_tracks = app.editor.project.tracks.iter()
+            .filter(|track| !track.is_instrumental())
+            .map(|track| track.id)
+            .collect();
     }
 }
 
@@ -66,7 +70,7 @@ pub(super) fn delete(app: &mut App) {
         lanes::parameter_delete(app);
     } else if anchors(app) {
         piano::anchor_delete(app);
-    } else {
+    } else if app.piano_tool != piano::Tool::PitchDraw {
         app.editor.delete_selected();
     }
 }
