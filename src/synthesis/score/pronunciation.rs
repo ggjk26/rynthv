@@ -50,6 +50,14 @@ pub(super) fn resolve_note(
         frontend.resolve(language, &note.lyrics)
             .unwrap_or_else(|_| vec![vec!["sil".to_owned()]])
     };
+    // A dictionary may be valid in its source phoneme alphabet but still
+    // yield a phone missing from this particular voicebank. Replace the
+    // entire note with silence before entering the strict neural frontend,
+    // rather than failing the complete owner at score preparation.
+    let mut syllables = syllables;
+    if !supported_syllables(&syllables, language, tree)? {
+        syllables = vec![vec!["sil".to_owned()]];
+    }
     if note
         .attributes
         .get("evenSyllableDuration")
@@ -60,6 +68,28 @@ pub(super) fn resolve_note(
     } else {
         Ok(syllables)
     }
+}
+
+fn supported_syllables(
+    syllables: &[Vec<String>],
+    language: Language,
+    tree: &PreparedTree,
+) -> Result<bool> {
+    if syllables.is_empty() {
+        return Ok(false);
+    }
+    for syllable in syllables {
+        if syllable.is_empty() {
+            return Ok(false);
+        }
+        for token in syllable {
+            let phone = tree.resolve_phone(language.id(), token)?;
+            if phone.used_silence_fallback {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
 }
 
 fn split_syllables(
