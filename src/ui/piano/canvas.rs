@@ -43,6 +43,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     if canvas.height() < 8.0 {
         return;
     }
+    ui.ctx().data_mut(|data| data.insert_temp(Id::new("piano-canvas-width"), canvas.width()));
     let pan = app.view_pan.drag(
         ui,
         crate::ui::view_pan::Target::Piano,
@@ -66,7 +67,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let center_pause = Id::new("piano-auto-pitch-pause");
     let now = ui.input(|input| input.time);
     if vertical.abs() > f32::EPSILON || app.view_pan.is_active() {
-        ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 2.0));
+        ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 1.2));
     }
     let pause_until = ui.ctx().data_mut(|data| data.get_temp::<f64>(center_pause)).unwrap_or(0.0);
     if app.view.auto_pitch_center
@@ -80,7 +81,14 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         && let Some(median) = median_playback_pitch(app)
     {
         let centered = median as f32 + canvas.height() / (2.0 * app.view.row_height);
-        app.view.top_pitch = centered.clamp(12.0, 127.0);
+        let target = centered.clamp(12.0, 127.0);
+        // Keep the current view while the median pitch stays inside a
+        // three-semitone dead zone. Follow larger movement smoothly.
+        let delta = target - app.view.top_pitch;
+        if delta.abs() > 3.0 {
+            app.view.top_pitch = (app.view.top_pitch + delta * 0.18).clamp(12.0, 127.0);
+            ui.ctx().request_repaint();
+        }
     }
     follow_playhead(
         ui,
@@ -193,7 +201,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     if (app.view.top_pitch - before_scrollbar).abs() > f32::EPSILON {
         let now = ui.input(|input| input.time);
         ui.ctx().data_mut(|data| {
-            data.insert_temp(Id::new("piano-auto-pitch-pause"), now + 2.0)
+            data.insert_temp(Id::new("piano-auto-pitch-pause"), now + 1.2)
         });
     }
 }
@@ -203,21 +211,16 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 fn median_playback_pitch(app: &App) -> Option<i32> {
     let reference = app.editor.active_ref()?;
     let cursor = app.editor.transport.position;
-    let window = crate::model::QUARTER.saturating_mul(2);
+    // Follow only notes that are actually sounding at the transport cursor.
     let mut pitches: Vec<i32> = app.editor.notes().iter()
         .filter_map(|note| {
             let (start, end) = reference.note_range(note)?;
-            (start <= cursor.saturating_add(window)
-                && end >= cursor.saturating_sub(window))
+            (start <= cursor && cursor < end)
                 .then_some(note.pitch + reference.pitch_offset)
         })
         .collect();
-    if pitches.is_empty() {
-        pitches = app.editor.notes().iter()
-            .filter(|note| reference.note_range(note).is_some())
-            .map(|note| note.pitch + reference.pitch_offset)
-            .collect();
-    }
+    // In a rest, keep the current vertical viewport rather than jumping to
+    // unrelated notes in the group.
     if pitches.is_empty() {
         return None;
     }
