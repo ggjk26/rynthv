@@ -59,7 +59,7 @@ pub(super) fn general(app: &mut App, ui: &mut Ui) {
         ui.weak("·");
         ui.weak(&app.graphics.gpu_name);
     });
-    if app.preferences.graphics_backend != app.graphics.configured {
+    if app.preferences.graphics_backend != app.graphics.preference_at_start {
         ui.colored_label(
             Color32::from_rgb(240, 188, 116),
             lang.text(
