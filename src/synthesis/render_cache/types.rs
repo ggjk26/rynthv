@@ -54,6 +54,9 @@ pub struct PublishedOwner {
     pub coverage: Coverage,
     pub controls: OwnerOutputControls,
     pub audio: Arc<RenderedAudio>,
+    /// The original two vocoder components, retained without downmixing
+    /// for optional aspiration/main-channel exports.
+    pub components: super::super::engine::PcmComponents,
     pub visuals: Arc<RenderVisuals>,
 }
 
