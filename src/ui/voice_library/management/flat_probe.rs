@@ -66,7 +66,9 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
         ui.collapsing(
             RichText::new(format!("{} · {label}", stage.role)).color(color),
             |ui| {
-                ui.monospace(&stage.id);
+                if let Some(id) = &stage.id {
+                    ui.monospace(id);
+                }
                 if let Some(path) = &stage.path {
                     ui.small(path.display().to_string());
                 }
@@ -105,11 +107,35 @@ fn stage_status(state: &StageState, lang: UiLanguage) -> (&'static str, Color32)
             ),
             amber,
         ),
-        StageState::InvalidNativeContainer => (
+        StageState::InvalidNativeHeader => (
             lang.text(
-                "完整性校验未通过",
-                "Integrity check did not pass",
-                "整合性チェック未通過",
+                "DNNI v3 文件头无效",
+                "Invalid DNNI v3 header",
+                "無効な DNNI v3 ヘッダー",
+            ),
+            amber,
+        ),
+        StageState::HeaderSignatureRejected => (
+            lang.text(
+                "文件头签名未通过",
+                "Header signature rejected",
+                "ヘッダー署名の検証に失敗",
+            ),
+            amber,
+        ),
+        StageState::InvalidNativeIndex => (
+            lang.text(
+                "容器索引校验未通过",
+                "Container index rejected",
+                "コンテナー索引の検証に失敗",
+            ),
+            amber,
+        ),
+        StageState::ResourceDigestRejected => (
+            lang.text(
+                "资源摘要校验未通过",
+                "Resource digest rejected",
+                "リソースダイジェストの検証に失敗",
             ),
             amber,
         ),

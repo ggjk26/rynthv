@@ -1,7 +1,7 @@
 //! Inspect Flat metadata and run experimental inline DDS inference.
 use rynthv::synthesis::voice::{
     VoiceCatalog,
-    flat::{FlatManifest, FlatTimedScore, FlatVoice},
+    flat::{FlatManifest, FlatTimedScore, FlatVoice, probe::probe_model_path},
 };
 use serde_json::json;
 use std::{
@@ -34,6 +34,7 @@ fn inspect() -> Result<(), String> {
     let mut score_request = None;
     let mut style = None;
     let mut probe_models = false;
+    let mut probe_files: Vec<(String, PathBuf)> = Vec::new();
     let mut args = env::args_os().skip(1);
     while let Some(argument) = args.next() {
         let argument_text = argument.to_string_lossy();
@@ -51,6 +52,9 @@ fn inspect() -> Result<(), String> {
                 "实验性 F0 + 声学：使用 --acoustic-score <乐谱.json> [--style <NOFS 唱法名>] 代替 --pitch-score。"
             );
             println!("实验需要可读的 DNNI v1/v2 DDS 模型，输出音高或声学帧 JSON。");
+            println!(
+                "直接预检：rynthv-flat-inspect --probe-file <acoustic|duration|f0|vocoder> <路径>（可重复）"
+            );
             return Ok(());
         }
         if argument_text == "--models" {
@@ -85,6 +89,17 @@ fn inspect() -> Result<(), String> {
                     .and_then(|arg| arg.into_string().ok())
                     .ok_or("--style 需要一个唱法名")?,
             );
+        } else if argument_text == "--probe-file" {
+            let role = args
+                .next()
+                .and_then(|arg| arg.into_string().ok())
+                .filter(|role| matches!(role.as_str(), "acoustic" | "duration" | "f0" | "vocoder"))
+                .ok_or("--probe-file 需要 acoustic、duration、f0 或 vocoder 角色")?;
+            let file = args.next().ok_or("--probe-file 需要模型路径")?;
+            if probe_files.iter().any(|(existing, _)| existing == &role) {
+                return Err(format!("模型角色重复指定：{role}"));
+            }
+            probe_files.push((role, PathBuf::from(file)));
         } else if argument_text == "--probe-models" {
             probe_models = true;
         } else if argument_text.starts_with('-') {
@@ -94,6 +109,28 @@ fn inspect() -> Result<(), String> {
         } else {
             return Err("只能指定一个声库路径".to_owned());
         }
+    }
+    if !probe_files.is_empty() {
+        if path.is_some()
+            || models.is_some()
+            || timing.is_some()
+            || phonesets.is_some()
+            || score_request.is_some()
+            || style.is_some()
+            || probe_models
+        {
+            return Err("--probe-file 是独立模式，只接收模型角色和文件路径".into());
+        }
+        let stages = probe_files
+            .into_iter()
+            .map(|(role, path)| probe_model_path(&role, path))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+        return print_json(&json!({
+            "kind": "flat-model-file-preflight",
+            "stages": stages,
+            "synthesis_supported": false,
+        }));
     }
     let path: PathBuf = path.ok_or("请提供 Flat NOFS-JSON、info.nofs、config.json 或声库目录")?;
     if score_request.is_some() != phonesets.is_some() {
@@ -194,7 +231,11 @@ fn inspect() -> Result<(), String> {
     } else {
         return Err("不支持的声库格式：非 Flat JSON 且没有 config.json 清单".to_owned());
     };
-    let output = serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?;
+    print_json(&result)
+}
+
+fn print_json(result: &serde_json::Value) -> Result<(), String> {
+    let output = serde_json::to_string_pretty(result).map_err(|error| error.to_string())?;
     println!("{output}");
     Ok(())
 }

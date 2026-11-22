@@ -25,6 +25,24 @@ pub(super) struct Resource {
     verified: OnceLock<Result<()>>,
 }
 
+/// Identify which container check stopped loading.
+#[derive(Debug)]
+pub(super) enum ArchiveLoadError {
+    Header(VoiceError),
+    Signature(VoiceError),
+    Index(VoiceError),
+}
+
+impl From<ArchiveLoadError> for VoiceError {
+    fn from(error: ArchiveLoadError) -> Self {
+        match error {
+            ArchiveLoadError::Header(error)
+            | ArchiveLoadError::Signature(error)
+            | ArchiveLoadError::Index(error) => error,
+        }
+    }
+}
+
 /// Owned immutable file snapshot. Resource state contains offsets, never pointers.
 pub(super) struct Archive {
     bytes: Arc<[u8]>,
@@ -42,10 +60,23 @@ impl Archive {
 
     /// Same authenticated loader for local files and opt-in embedded bytes.
     pub fn from_bytes(bytes: Arc<[u8]>, context: &FormatContext) -> Result<Self> {
-        if bytes.len() < 0x149 || bytes[..8] != [0xff, 0, 0xca, 0x7f, 3, 0, 0, 0] {
-            return Err(VoiceError::new("Invalid DNNI v3 magic or truncated header"));
+        Self::from_bytes_checked(bytes, context).map_err(VoiceError::from)
+    }
+
+    pub fn from_bytes_checked(
+        bytes: Arc<[u8]>,
+        context: &FormatContext,
+    ) -> std::result::Result<Self, ArchiveLoadError> {
+        if bytes.len() < 0x149 || bytes[..8] != [0xff, 0x00, 0xca, 0x7f, 3, 0, 0, 0] {
+            return Err(ArchiveLoadError::Header(VoiceError::new(
+                "Invalid DNNI v3 magic or truncated header",
+            )));
         }
-        verify_signature(&bytes, context)?;
+        verify_signature(&bytes, context).map_err(ArchiveLoadError::Signature)?;
+        Self::from_verified_header(bytes, context).map_err(ArchiveLoadError::Index)
+    }
+
+    fn from_verified_header(bytes: Arc<[u8]>, context: &FormatContext) -> Result<Self> {
         let nonce = array(&bytes, 0x118)?;
         let material: [u8; 32] = stream::decode(
             &bytes[0x124..0x144],

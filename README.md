@@ -98,7 +98,13 @@ Linux 可使用 `./target/release/rynthv --graphics=vulkan`。如需同时打开
 
 工具在指定 `--probe-models`、`--pitch-score` 或 `--acoustic-score` 时读取模型文件。为了保护 UI 响应速度，声库列表的快速扫描依旧只检查是否能定位文件。预检同时输出未经合成使用的 Flat 条件输入：32 维歌声唱法向量、32 维 F0 风格向量、128 维 Duration 风格向量，维度互不混用。
 
-如果 `UnsupportedFormat` 或 `InvalidNativeContainer` 出现，只能说明**当前 RynthV 读取器**不兼容该模型容器或校验参数，不能据此断言用户的模型文件损坏。Flat 原生播放和 WAV 导出仍需实现对应的 DNNI 容器支持、时长推理和声码器。
+也可以直接对 DNNI 文件做预检。为每个文件指定预期的模型角色，路径可保留下载时附加的括号和编号。
+
+```powershell
+.\rynthv-flat-inspect.exe --probe-file acoustic "D:\models\acoustic.dnni" --probe-file f0 "D:\models\pitch.dnni" --probe-file duration "D:\models\timing.dnni" --probe-file vocoder "D:\models\vocoder.dnni"
+```
+
+报告区分文件头、签名、容器索引和资源摘要。出现 `header_signature_rejected` 表示当前读取器在打开索引之前拒绝了签名，文件是否损坏仍未确定。Flat 原生播放和 WAV 导出仍需实现对应的 DNNI 容器支持、时长推理和声码器。
 
 ### Flat v200 NOFS 与外部时长模型
 

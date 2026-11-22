@@ -3,7 +3,8 @@
 use super::{FlatVoice, MAX_STAGE_BYTES, acoustic::inline_acoustic_tree, pitch::inline_f0_tree};
 use crate::synthesis::stages::{sv1_f0::Sv1F0Stage, sv1_timbre::Sv1TimbreNetwork};
 use crate::synthesis::voice::{
-    archive::{Archive, ResourceId},
+    Result, VoiceError,
+    archive::{Archive, ArchiveLoadError, ResourceId},
     format::FormatContext,
 };
 use serde::Serialize;
@@ -21,7 +22,10 @@ pub enum StageState {
     Missing,
     FileUnreadable,
     UnsupportedFormat,
-    InvalidNativeContainer,
+    InvalidNativeHeader,
+    HeaderSignatureRejected,
+    InvalidNativeIndex,
+    ResourceDigestRejected,
     InlineF0GraphReady,
     InlineAcousticGraphReady,
     InvalidInlineGraph,
@@ -32,7 +36,7 @@ pub enum StageState {
 #[derive(Debug, Clone, Serialize)]
 pub struct FlatStageCheck {
     pub role: String,
-    pub id: String,
+    pub id: Option<String>,
     pub path: Option<PathBuf>,
     pub state: StageState,
     pub container: String,
@@ -71,7 +75,7 @@ impl FlatVoice {
                     }
                 }
             }
-            probe_file(model.role, &model.id, path)
+            probe_file(model.role, Some(&model.id), path)
         }).collect();
         let located = stages.iter().filter(|stage| stage.path.is_some()).count();
         let native_resource_identified = stages.iter()
@@ -89,10 +93,19 @@ impl FlatVoice {
     }
 }
 
-fn probe_file(role: &str, id: &str, path: Option<PathBuf>) -> FlatStageCheck {
+/// Probe an explicitly supplied path. The role is a hypothesis until its
+/// graph or stage resource is identified by the reader.
+pub fn probe_model_path(role: &str, path: PathBuf) -> Result<FlatStageCheck> {
+    if known_native_stage_id(role).is_none() {
+        return Err(VoiceError::new(format!("不支持的模型角色：{role}")));
+    }
+    Ok(probe_file(role, None, Some(path)))
+}
+
+fn probe_file(role: &str, id: Option<&str>, path: Option<PathBuf>) -> FlatStageCheck {
     let mut check = FlatStageCheck {
         role: role.to_owned(),
-        id: id.to_owned(),
+        id: id.map(str::to_owned),
         path: path.clone(),
         state: StageState::Missing,
         container: "not checked".to_owned(),
@@ -120,10 +133,16 @@ fn probe_file(role: &str, id: &str, path: Option<PathBuf>) -> FlatStageCheck {
         check.details = "文件过短或超过 1 GiB 安全检查限制".to_owned();
         return check;
     }
+    let mut file = match File::open(&path) {
+        Ok(file) => file,
+        Err(error) => {
+            check.state = StageState::FileUnreadable;
+            check.details = format!("无法打开模型文件：{error}");
+            return check;
+        }
+    };
     let mut magic = [0; 8];
-    if let Err(error) = File::open(&path)
-        .and_then(|mut file| file.read_exact(&mut magic))
-    {
+    if let Err(error) = file.read_exact(&mut magic) {
         check.state = StageState::FileUnreadable;
         check.details = format!("无法读取 DNNI 文件头：{error}");
         return check;
@@ -162,21 +181,39 @@ fn probe_file(role: &str, id: &str, path: Option<PathBuf>) -> FlatStageCheck {
         return check;
     }
     check.container = "DNNI v3".to_owned();
-    let archive = match Archive::load(&path, &FormatContext::dnni_v3())
-        .and_then(|archive| {
-            archive.verify_all()?;
-            Ok(archive)
-        })
+    let mut bytes = magic.to_vec();
+    if let Err(error) = file
+        .take(MAX_STAGE_BYTES - magic.len() as u64 + 1)
+        .read_to_end(&mut bytes)
     {
+        check.state = StageState::FileUnreadable;
+        check.details = format!("无法读取模型文件：{error}");
+        return check;
+    }
+    check.bytes = Some(bytes.len() as u64);
+    if bytes.len() as u64 > MAX_STAGE_BYTES {
+        check.state = StageState::UnsupportedFormat;
+        check.details = "文件超过 1 GiB 检查限制".to_owned();
+        return check;
+    }
+    let archive = match Archive::from_bytes_checked(bytes.into(), &FormatContext::dnni_v3()) {
         Ok(archive) => archive,
         Err(error) => {
-            check.state = StageState::InvalidNativeContainer;
-            check.details = format!(
-                "文件头符合 DNNI v3，但无法通过当前原生解析器的完整性校验：{error}；可能采用不同的 Flat 容器参数"
-            );
+            let (state, details) = match error {
+                ArchiveLoadError::Header(error) => (StageState::InvalidNativeHeader, error),
+                ArchiveLoadError::Signature(error) => (StageState::HeaderSignatureRejected, error),
+                ArchiveLoadError::Index(error) => (StageState::InvalidNativeIndex, error),
+            };
+            check.state = state;
+            check.details = details.to_string();
             return check;
         }
     };
+    if let Err(error) = archive.verify_all() {
+        check.state = StageState::ResourceDigestRejected;
+        check.details = error.to_string();
+        return check;
+    }
     let Some(role_id) = known_native_stage_id(role) else {
         check.state = StageState::StageResourceNotFound;
         check.details = "当前原生内核尚无此 Flat 模型角色的映射；容器已通过验证".to_owned();
