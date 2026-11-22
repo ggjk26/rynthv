@@ -16,18 +16,27 @@ fn main() -> ExitCode {
 fn inspect() -> Result<(), String> {
     let mut path = None;
     let mut models = None;
+    let mut timing = None;
+    let mut probe_models = false;
     let mut args = env::args_os().skip(1);
     while let Some(argument) = args.next() {
         let argument_text = argument.to_string_lossy();
         if argument_text == "--help" || argument_text == "-h" {
-            println!("用法：rynthv-flat-inspect <NOFS-JSON|info.nofs|config.json|目录> [--models 模型目录]");
-            println!("只读取元数据，不执行 Flat 歌声合成。输出 JSON 诊断报告。");
+            println!("用法：rynthv-flat-inspect <NOFS-JSON|info.nofs|config.json|目录> [--models 模型目录] [--timing 时长模型.dnni] [--probe-models]");
+            println!("默认只读取元数据。--probe-models 会校验本地 DNNI v3 容器索引及资源完整性，可能需要较长时间和较多内存；不执行歌声合成。");
+            println!("Flat Timing 文件不能直接作为 SV2 Duration 模型。");
             return Ok(());
         }
         if argument_text == "--models" {
             models = Some(PathBuf::from(
                 args.next().ok_or("--models 需要一个路径参数")?
             ));
+        } else if argument_text == "--timing" {
+            timing = Some(PathBuf::from(
+                args.next().ok_or("--timing 需要一个 .dnni 文件路径")?
+            ));
+        } else if argument_text == "--probe-models" {
+            probe_models = true;
         } else if argument_text.starts_with('-') {
             return Err(format!("未知参数：{argument_text}"));
         } else if path.is_none() {
@@ -39,6 +48,12 @@ fn inspect() -> Result<(), String> {
     let path: PathBuf = path.ok_or(
         "请提供 Flat NOFS-JSON、info.nofs、config.json 或声库目录"
     )?;
+    if (probe_models || timing.is_some()) && (path.is_dir() || file_name_is(&path, "config.json")) {
+        return Err("模型预检需要一个具体的 Flat JSON NOFS 文件；请指定 info.200.nofs 等文件".into());
+    }
+    if timing.is_some() && !probe_models {
+        return Err("--timing 需要同时指定 --probe-models".into());
+    }
     let result = if path.is_dir() {
         json!({
             "kind": "catalog",
@@ -59,11 +74,20 @@ fn inspect() -> Result<(), String> {
                 .map_err(|error| error.to_string())?,
         })
     } else if is_json(&path) {
-        json!({
-            "kind": "flat-nofs-json",
-            "voice": FlatVoice::open(&path, models.as_deref())
-                .map_err(|error| error.to_string())?,
-        })
+        let voice = FlatVoice::open(&path, models.as_deref())
+            .map_err(|error| error.to_string())?;
+        if probe_models {
+            json!({
+                "kind": "flat-model-preflight",
+                "preflight": voice.preflight(timing.as_deref()),
+                "voice": voice,
+            })
+        } else {
+            json!({
+                "kind": "flat-nofs-json",
+                "voice": voice,
+            })
+        }
     } else {
         return Err("不支持的声库格式：非 Flat JSON 且没有 config.json 清单".to_owned());
     };
