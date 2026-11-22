@@ -52,7 +52,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     );
     app.view.piano.start =
         (app.view.piano.start - pan.x as f64 / app.view.piano.beat_width as f64).max(0.0);
-    let response = ui.interact(canvas, Id::new("piano-canvas"), Sense::click_and_drag());
+    // Reserve the rightmost strip for the vertical scrollbar so a scrollbar
+    // drag never starts a note, pitch or playhead gesture underneath it.
+    let edit_canvas = Rect::from_min_max(canvas.min, pos2(canvas.right() - 7.0, canvas.bottom()));
+    let response = ui.interact(edit_canvas, Id::new("piano-canvas"), Sense::click_and_drag());
     let vertical = if phoneme_dragging
         || matches!(app.gesture, Some(Gesture::Pitch(_) | Gesture::Anchor(_)))
     {
@@ -120,7 +123,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         &app.editor.project.time,
         app.view.step(),
     );
-    loop_region::show(
+    app.scrubbing_playhead |= loop_region::show(
         ui,
         Id::new("piano-ruler"),
         ruler,
