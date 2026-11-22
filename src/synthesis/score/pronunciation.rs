@@ -32,18 +32,16 @@ pub(super) fn resolve_note(
     let syllables = if let Some(phones) = explicit {
         match split_syllables(phones, language, tree) {
             Ok(syllables) => syllables,
-            Err(explicit_error) if !note.phonemes.trim().is_empty() => {
-                // A stale explicit phone need not invalidate the entire phrase
-                // if the note's current lyric has a valid dictionary reading.
-                frontend.resolve(language, &note.lyrics).map_err(|fallback_error| {
-                    VoiceError::new(format!(
-                        "音符 {} · {}：显式音素无效（{explicit_error}），歌词回退失败（{fallback_error}）",
-                        note.id,
-                        language.label()
-                    ))
-                })?
+            Err(_) => {
+                // A malformed explicit pronunciation is discarded as a whole:
+                // never send only its valid prefix to the duration model.
+                // Re-read the lyric; when that too is unavailable, silence
+                // this note instead of breaking synthesis for the whole song.
+                match frontend.resolve(language, &note.lyrics) {
+                    Ok(syllables) => syllables,
+                    Err(_) => vec![vec!["sil".to_owned()]],
+                }
             }
-            Err(error) => return Err(error),
         }
     } else {
         frontend.resolve(language, &note.lyrics).map_err(|error| {
@@ -71,6 +69,9 @@ fn split_syllables(
     let mut nuclei = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
         let phone = tree.resolve_phone(language.id(), token)?;
+        if phone.used_silence_fallback && token != "sil" {
+            return Err(VoiceError::new(format!("无效音素：{token}")));
+        }
         if matches!(phone.source_class, Some("vowel" | "diphthong")) {
             nuclei.push(index);
         }
