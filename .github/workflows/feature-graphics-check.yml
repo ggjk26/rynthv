@@ -34,4 +34,4 @@ jobs:
       - name: Check GUI and synthesis binaries
         run: cargo check --locked --bins
       - name: Test Flat NOFS parser and synthesis preflight
-        run: cargo test --locked --lib flat::
+        run: "cargo test --locked --lib flat::"
