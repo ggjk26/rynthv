@@ -98,6 +98,7 @@ impl Worker {
     pub fn spawn(
         path: PathBuf,
         dictionaries: Option<PathBuf>,
+        sv2_duration: Option<PathBuf>,
         repaint: eframe::egui::Context,
     ) -> Result<Self, String> {
         let (tx, commands) = mpsc::channel();
@@ -113,6 +114,7 @@ impl Worker {
                 run(
                     path,
                     dictionaries,
+                    sv2_duration,
                     commands,
                     Events::new(events, repaint),
                     running,
