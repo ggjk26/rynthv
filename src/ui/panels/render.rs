@@ -148,13 +148,22 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             lang,
         );
         ui.weak(lang.text("气声输出", "Aspiration output", "息成分の書き出し"));
-        ui.small(lang.text("独立气声分轨尚未由合成引擎提供；当前仅支持完整音频。", "Separate aspiration stems are not available from the synthesis engine yet; only full audio can be exported.", "合成エンジンは息成分の個別出力に未対応です。現在は全音声のみ書き出せます。"));
+        ui.small(lang.text(
+            "基于 vocoder 的 primary / secondary 原始分量导出；分离模式的主音与气声分别保留一致的采样时间、音量和声像。",
+            "Exports native vocoder primary/secondary components with matching sample timing, gain and pan.",
+            "ボコーダーの primary / secondary 成分を同じサンプル時刻、音量、パンで書き出します。",
+        ));
         let mut aspiration = string(&config, "aspirationFormat");
         combo(
             ui,
             "aspiration-format",
             &mut aspiration,
-            &[("noAspiration".to_owned(), lang.text("无", "None", "なし"))],
+            &[
+                ("noAspiration".to_owned(), lang.text("无（完整混合）", "None (full mix)", "なし（完全ミックス）")),
+                ("separateAspiration".to_owned(), lang.text("分离", "Separate", "分離")),
+                ("onlyMain".to_owned(), lang.text("仅主音", "Primary only", "主成分のみ")),
+                ("onlyAspiration".to_owned(), lang.text("仅气声", "Aspiration only", "息成分のみ")),
+            ],
             lang,
         );
         config.insert("aspirationFormat".into(), aspiration.into());
@@ -209,8 +218,8 @@ fn start_export(app: &mut App) {
     let existing: Vec<_> = request
         .outputs
         .iter()
-        .filter(|(path, _)| path.exists())
-        .map(|(path, _)| path.display().to_string())
+        .filter(|(path, _, _)| path.exists())
+        .map(|(path, _, _)| path.display().to_string())
         .collect();
     if !existing.is_empty()
         && rfd::MessageDialog::new()
