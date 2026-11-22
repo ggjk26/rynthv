@@ -142,6 +142,8 @@ pub struct Preferences {
     pub zoom: f32,
     pub show_status_bar: bool,
     pub control_hints: bool,
+    #[serde(default)]
+    pub graphics_backend: super::GraphicsBackend,
 }
 
 impl Default for Preferences {
@@ -151,6 +153,7 @@ impl Default for Preferences {
             zoom: 1.0,
             show_status_bar: true,
             control_hints: false,
+            graphics_backend: super::GraphicsBackend::default(),
         }
     }
 }
