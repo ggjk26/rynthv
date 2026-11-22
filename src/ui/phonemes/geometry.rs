@@ -14,6 +14,7 @@ pub(super) struct Mapping {
     pub canvas: Rect,
     pub input: Arc<OwnerInput>,
     pub viewport: Viewport,
+    pub preparation_step: f64,
 }
 
 impl Mapping {
@@ -46,7 +47,7 @@ impl Mapping {
         let left = timeline::x_at(
             self.canvas,
             &self.viewport,
-            beats(self.input.visible_begin.0),
+            beats(self.input.visible_begin.0.saturating_sub(ticks(self.preparation_step))),
         );
         let right = self.input.visible_end.map_or(self.canvas.right(), |end| {
             timeline::x_at(self.canvas, &self.viewport, beats(end.0))
