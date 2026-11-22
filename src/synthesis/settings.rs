@@ -18,6 +18,12 @@ pub struct VoiceSelection {
 /// Distinct installation roots. SV1 and SV2 must not be inferred from the
 /// same Synthesizer V installation folder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DurationModelSlot {
+    Sv2,
+    Flat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VoiceDirectory {
     Sv1,
     Sv2,
@@ -32,6 +38,13 @@ pub struct SynthesisSettings {
     pub sv1_databases: Option<PathBuf>,
     pub flat_databases: Option<PathBuf>,
     pub flat_models: Option<PathBuf>,
+    /// External DNNI v3 graph used only when an SV2 voice lacks Duration.
+    #[serde(default)]
+    pub sv2_duration_model: Option<PathBuf>,
+    /// Explicit Flat Timing Model .dnni for metadata dependency checking.
+    /// This is never silently injected into the SV2 Duration stage.
+    #[serde(default)]
+    pub flat_timing_model: Option<PathBuf>,
     pub dictionaries: Option<PathBuf>,
     pub selected_voice: Option<VoiceSelection>,
     /// Older and third-party RynthV builds stored voicebank locations under
