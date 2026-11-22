@@ -1,6 +1,6 @@
 use super::{Runtime, events::WakeOnExit};
 use crate::synthesis::{
-    settings::{SynthesisSettings, VoiceDirectory, VoiceSelection},
+    settings::{SynthesisSettings, VoiceDirectory, DurationModelSlot, VoiceSelection},
     voice::{VoiceAvailability, VoiceCatalog, VoiceCatalogEntry},
 };
 use std::{
@@ -27,7 +27,12 @@ fn scan_roots(settings: &SynthesisSettings) -> LibraryScan {
     let mut catalog = VoiceCatalog::default();
     let mut errors = Vec::new();
     for (label, root) in settings.database_roots() {
-        match VoiceCatalog::scan_with_models(root, settings.flat_models.as_deref()) {
+        match VoiceCatalog::scan_with_resources(
+            root,
+            settings.flat_models.as_deref(),
+            settings.sv2_duration_model.as_deref(),
+            settings.flat_timing_model.as_deref(),
+        ) {
             Ok(found) => {
                 catalog.entries.extend(found.entries);
                 catalog.warnings.extend(
@@ -237,6 +242,46 @@ impl Runtime {
         }
         self.rescan_voices();
         Ok(count)
+    }
+
+    /// Assign or clear an individual Duration DNNI. The Flat model is used
+    /// for metadata/dependency lookup; only a validated SV2 Duration resource
+    /// can be injected into the native SV2 synthesis pipeline.
+    pub fn set_duration_file(
+        &mut self,
+        slot: DurationModelSlot,
+        path: Option<PathBuf>,
+    ) -> Result<(), String> {
+        if self.library.invalid_settings() {
+            return Err("合成配置无法读取，请先备份并恢复 synthesis.json。".into());
+        }
+        if let Some(path) = &path {
+            if !path.is_file() {
+                return Err(format!("时长模型文件不存在或不可读取：{}", path.display()));
+            }
+            if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni")) {
+                return Err(format!("请选择 .dnni 文件，而不是文件夹：{}", path.display()));
+            }
+            // Flat Timing is not decoded or executed by the SV2 pipeline.
+            // For SV2, defer full authenticated index validation to the
+            // background catalog/worker; avoid blocking egui on large models.
+        }
+        let mut settings = self.library.settings.clone();
+        let target = match slot {
+            DurationModelSlot::Sv2 => &mut settings.sv2_duration_model,
+            DurationModelSlot::Flat => &mut settings.flat_timing_model,
+        };
+        if *target == path {
+            return Ok(());
+        }
+        *target = path;
+        if !self.library.update(settings) {
+            return Err(self.library.settings_error().unwrap_or(
+                "无法保存时长模型设置",
+            ).to_owned());
+        }
+        self.rescan_voices();
+        Ok(())
     }
 
     pub fn dictionaries(&self) -> Option<&Path> {
