@@ -88,11 +88,26 @@ pub fn context_menu(app: &mut App, ui: &mut Ui, reference: &GroupRef) {
         return;
     };
     let reference_id = reference.id;
-    ui.menu_button(lang.text("设置此音符组声库", "Set group voice", "グループの歌声を設定"), |ui| {
+    let mut targets = if app.selected_groups.contains(&reference_id) {
+        app.selected_groups.clone()
+    } else {
+        std::collections::BTreeSet::from([reference_id])
+    };
+    let valid: std::collections::BTreeSet<_> = app.editor.project.tracks.iter()
+        .filter(|track| !track.is_instrumental())
+        .flat_map(|track| track.references().map(|r| r.id))
+        .collect();
+    targets.retain(|id| valid.contains(id));
+    let bulk = targets.len() > 1;
+    ui.menu_button(if bulk {
+        lang.text("设定所选音符组声库…", "Set selected groups' voice…", "選択グループの歌声を設定…")
+    } else {
+        lang.text("设定声库…", "Set voice…", "歌声を設定…")
+    }, |ui| {
         if ui.button(lang.text("继承音轨声库", "Inherit track voice", "トラックの歌声を継承")).clicked() {
             app.commit_lyric();
             app.commit_phoneme_text();
-            if let Err(error) = app.editor.set_reference_voice(track_id, reference_id, None) {
+            if let Err(error) = app.editor.set_references_voice(&targets, None) {
                 app.error = Some(error);
             }
             ui.close();
@@ -105,8 +120,8 @@ pub fn context_menu(app: &mut App, ui: &mut Ui, reference: &GroupRef) {
             if ui.button(format!("{name} · {revision}")).clicked() {
                 app.commit_lyric();
                 app.commit_phoneme_text();
-                if let Err(error) = app.editor.set_reference_voice(
-                    track_id, reference_id, Some((id, name, *revision))
+                if let Err(error) = app.editor.set_references_voice(
+                    &targets, Some((id, name, *revision))
                 ) {
                     app.error = Some(error);
                 }
