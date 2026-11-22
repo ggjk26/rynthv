@@ -4,6 +4,7 @@ use crate::synthesis::{
     voice::{VoiceAvailability, VoiceCatalog, VoiceCatalogEntry},
 };
 use std::{
+    io::Read,
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, TryRecvError},
     thread,
@@ -235,6 +236,9 @@ impl Runtime {
         if found.flat_databases.is_some() {
             settings.flat_databases = found.flat_databases;
         }
+        if found.flat_models.is_some() {
+            settings.flat_models = found.flat_models;
+        }
         settings.roots = None;
         settings.selected_voice = None;
         if !self.library.update(settings) {
@@ -262,9 +266,17 @@ impl Runtime {
             if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni")) {
                 return Err(format!("请选择 .dnni 文件，而不是文件夹：{}", path.display()));
             }
-            // Flat Timing is not decoded or executed by the SV2 pipeline.
-            // For SV2, defer full authenticated index validation to the
-            // background catalog/worker; avoid blocking egui on large models.
+            // Do a lightweight header check synchronously; full DNNI
+            // resource-authenticity checks run off the UI thread on rescan.
+            if slot == DurationModelSlot::Sv2 {
+                let mut header = [0u8; 8];
+                std::fs::File::open(path)
+                    .and_then(|mut file| file.read_exact(&mut header))
+                    .map_err(|error| format!("无法读取 SV2 Duration DNNI 文件头：{error}"))?;
+                if header != [0xff, 0, 0xca, 0x7f, 3, 0, 0, 0] {
+                    return Err("SV2 Duration 需要 DNNI v3 文件；Flat Timing 与 SV2 Duration 不能直接混用。".into());
+                }
+            }
         }
         let mut settings = self.library.settings.clone();
         let target = match slot {
