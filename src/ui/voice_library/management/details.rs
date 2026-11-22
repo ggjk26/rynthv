@@ -104,6 +104,67 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             ui.ctx().copy_text(report);
         }
     }
+    if entry.database_id.starts_with("svflat:") {
+        ui.add_space(8.0);
+        if app.synthesis.library.flat_probe_running() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(lang.text(
+                    "正在校验 Flat 模型文件完整性…",
+                    "Validating Flat model archive integrity…",
+                    "Flat モデルの整合性を確認中…",
+                ));
+            });
+        } else if ui.button(lang.text(
+            "验证已安装的 Flat DNNI 模型…",
+            "Verify installed Flat DNNI models…",
+            "インストール済み Flat DNNI を検証…",
+        )).clicked() {
+            if let Err(error) = app.synthesis.inspect_flat_models(&entry.directory) {
+                app.error = Some(error);
+            }
+        }
+        if let Some(probe) = app.synthesis.library.flat_probe_for(&entry.directory) {
+            match probe {
+                Ok(report) => {
+                    ui.label(format!(
+                        "{}：{}/{}",
+                        lang.text(
+                            "已定位依赖模型",
+                            "Located model stages",
+                            "モデルの検出数",
+                        ),
+                        report.located,
+                        report.stages.len(),
+                    ));
+                    for stage in &report.stages {
+                        let color = match stage.state {
+                            crate::synthesis::voice::flat::probe::StageState::NativeResourceFound =>
+                                Color32::from_rgb(139, 205, 120),
+                            crate::synthesis::voice::flat::probe::StageState::Missing =>
+                                Color32::from_rgb(232, 143, 117),
+                            _ => Color32::from_rgb(237, 191, 119),
+                        };
+                        ui.colored_label(color, format!(
+                            "{} · {} · {:?}", stage.role, stage.id, stage.state
+                        ));
+                        ui.small(&stage.details);
+                    }
+                    ui.weak(&report.next_step);
+                    if ui.button(lang.text(
+                        "复制完整模型预检报告",
+                        "Copy full model preflight report",
+                        "モデル検証レポートをコピー",
+                    )).clicked() {
+                        if let Ok(text) = serde_json::to_string_pretty(report) {
+                            ui.ctx().copy_text(text);
+                        }
+                    }
+                }
+                Err(error) => super::super::error_label(ui, error),
+            }
+        }
+    }
     if app.synthesis.inventory(&selection).is_some()
         || app.synthesis.voice_error(&selection).is_some()
     {
