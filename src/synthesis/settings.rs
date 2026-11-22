@@ -182,6 +182,7 @@ impl SynthesisSettings {
                 (&mut settings.databases, documents.join("Dreamtonics/Synthesizer V Studio 2/databases")),
                 (&mut settings.sv1_databases, documents.join("Dreamtonics/Synthesizer V Studio/databases")),
                 (&mut settings.flat_databases, documents.join("OPSV/Dreamtonics/Synthesizer V Studio/databases")),
+                (&mut settings.flat_models, documents.join("OPSV/Dreamtonics/Synthesizer V Studio/models")),
             ] {
                 if candidate.is_dir() {
                     *destination = Some(candidate);
