@@ -50,6 +50,58 @@ pub struct FlatVoice {
     pub notes: Vec<String>,
 }
 
+/// Explicit, immutable conditioning inputs for a future native Flat render
+/// session. These are the source bank's recorded vectors; the interpreter
+/// must still validate graph topology and input slots before execution.
+#[derive(Clone, Debug, Serialize)]
+pub struct FlatConditioning {
+    pub language: crate::model::Language,
+    pub phoneset: String,
+    pub style_name: String,
+    pub acoustic_style: Vec<f32>,
+    pub style_extra: Option<f32>,
+    pub f0_style: Option<Vec<f32>>,
+    pub duration_style: Option<Vec<f32>>,
+}
+
+impl FlatVoice {
+    /// Select a single existing Flat vocal style. Do not invent interpolation
+    /// or copy a 32D embedding into a 128D Duration input; both operations
+    /// require verified model-specific input contracts.
+    pub fn conditioning(&self, style_name: Option<&str>) -> Result<FlatConditioning> {
+        let language = crate::model::Language::parse(&self.language)
+            .ok_or_else(|| VoiceError::new(format!(
+                "Flat 默认语言暂不支持：{}", self.language
+            )))?;
+        let style = match style_name {
+            Some(name) => self.styles.iter()
+                .find(|style| style.name == name)
+                .ok_or_else(|| VoiceError::new(format!("未找到 Flat 唱法：{name}")))?,
+            None => self.styles.iter()
+                .find(|style| style.name == "(base)")
+                .or_else(|| self.styles.first())
+                .ok_or_else(|| VoiceError::new("Flat 声库不包含可使用的唱法向量"))?,
+        };
+        let phoneset = self.phoneset.clone()
+            .unwrap_or_else(|| language.phoneme_alphabet().to_owned());
+        if phoneset != language.phoneme_alphabet() {
+            return Err(VoiceError::new(format!(
+                "Flat 的音素字母表 {phoneset} 与默认语言 {} 不匹配",
+                language.id()
+            )));
+        }
+        Ok(FlatConditioning {
+            language,
+            phoneset,
+            style_name: style.name.clone(),
+            acoustic_style: style.vector.clone(),
+            style_extra: style.extra,
+            f0_style: self.f0_style.clone(),
+            duration_style: self.duration_style.clone(),
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct FlatManifest {
     pub name: String,
