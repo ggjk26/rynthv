@@ -1,7 +1,7 @@
 use super::{Runtime, events::WakeOnExit};
 use crate::synthesis::{
     settings::{SynthesisSettings, VoiceDirectory, DurationModelSlot, VoiceSelection},
-    voice::{VoiceAvailability, VoiceCatalog, VoiceCatalogEntry},
+    voice::{VoiceAvailability, VoiceCatalog, VoiceCatalogEntry, flat::{FlatVoice, probe::FlatPreflight}},
 };
 use std::{
     io::Read,
@@ -14,6 +14,8 @@ pub struct VoiceLibrary {
     pub settings: SynthesisSettings,
     catalog: Option<VoiceCatalog>,
     scan: Option<Receiver<LibraryScan>>,
+    flat_probe: Option<Receiver<(PathBuf, Result<FlatPreflight, String>)>>,
+    flat_probe_result: Option<(PathBuf, Result<FlatPreflight, String>)>,
     catalog_error: Option<String>,
     settings_error: Option<String>,
     invalid_settings: bool,
@@ -97,6 +99,8 @@ impl VoiceLibrary {
             settings,
             catalog: None,
             scan: None,
+            flat_probe: None,
+            flat_probe_result: None,
             catalog_error: None,
             settings_error,
             invalid_settings,
@@ -113,6 +117,45 @@ impl VoiceLibrary {
 
     pub fn is_scanning(&self) -> bool {
         self.scan.is_some()
+    }
+
+    pub fn flat_probe_running(&self) -> bool {
+        self.flat_probe.is_some()
+    }
+
+    pub fn flat_probe_for(&self, path: &Path) -> Option<&Result<FlatPreflight, String>> {
+        self.flat_probe_result.as_ref()
+            .filter(|(checked, _)| checked == path)
+            .map(|(_, report)| report)
+    }
+
+    fn start_flat_probe(
+        &mut self,
+        path: PathBuf,
+        repaint: eframe::egui::Context,
+    ) -> Result<(), String> {
+        if self.flat_probe.is_some() {
+            return Err("已有 Flat 模型预检正在执行".into());
+        }
+        if !path.is_file() || !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("nofs")) {
+            return Err("请选择一个 Flat JSON NOFS，而不是普通 SV1 NOFS 或不可解析的二进制包".into());
+        }
+        let models = self.settings.flat_models.clone();
+        let timing = self.settings.flat_timing_model.clone();
+        let (tx, rx) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name("flat-model-preflight".into())
+            .spawn(move || {
+                let _wake = WakeOnExit(repaint);
+                let report = FlatVoice::open(&path, models.as_deref())
+                    .map(|voice| voice.preflight(timing.as_deref()))
+                    .map_err(|error| error.to_string());
+                let _ = tx.send((path, report));
+            })
+            .map_err(|error| format!("无法启动 Flat 模型预检：{error}"))?;
+        self.flat_probe_result = None;
+        self.flat_probe = Some(rx);
+        Ok(())
     }
 
     pub fn catalog_error(&self) -> Option<&str> {
@@ -163,6 +206,8 @@ impl VoiceLibrary {
         // Dropping the receiver prevents an earlier directory scan from
         // replacing the catalog after the user changes paths again.
         self.scan = None;
+        self.flat_probe = None;
+        self.flat_probe_result = None;
         self.catalog = None;
         self.catalog_error = None;
         if self.invalid_settings {
@@ -187,27 +232,51 @@ impl VoiceLibrary {
     }
 
     fn poll(&mut self) -> bool {
-        let Some(scan) = &self.scan else {
-            return false;
-        };
-        match scan.try_recv() {
-            Ok(result) => {
-                self.scan = None;
-                self.catalog = Some(result.catalog);
-                self.catalog_error = result.error;
-                true
+        let mut changed = false;
+        if let Some(probe) = &self.flat_probe {
+            match probe.try_recv() {
+                Ok(result) => {
+                    self.flat_probe = None;
+                    self.flat_probe_result = Some(result);
+                    changed = true;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.flat_probe = None;
+                    self.flat_probe_result = Some((PathBuf::new(), Err(
+                        "Flat 模型预检线程意外退出".into()
+                    )));
+                    changed = true;
+                }
+                Err(TryRecvError::Empty) => {}
             }
-            Err(TryRecvError::Disconnected) => {
-                self.scan = None;
-                self.catalog_error = Some("声库扫描线程意外终止。".into());
-                true
-            }
-            Err(TryRecvError::Empty) => false,
         }
+        if let Some(scan) = &self.scan {
+            match scan.try_recv() {
+                Ok(result) => {
+                    self.scan = None;
+                    self.catalog = Some(result.catalog);
+                    self.catalog_error = result.error;
+                    changed = true;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.scan = None;
+                    self.catalog_error = Some("声库扫描线程意外终止。".into());
+                    changed = true;
+                }
+                Err(TryRecvError::Empty) => {}
+            }
+        }
+        changed
     }
 }
 
 impl Runtime {
+    /// Validate a Flat voice's actual installed model archives off the UI thread.
+    /// This does not mark Flat voice synthesis as supported.
+    pub fn inspect_flat_models(&mut self, path: &Path) -> Result<(), String> {
+        self.library.start_flat_probe(path.to_owned(), self.repaint.clone())
+    }
+
     /// Reset malformed resource settings only after explicit UI confirmation.
     /// The original configuration remains available in a timestamp-independent
     /// unique backup for manual path recovery.
