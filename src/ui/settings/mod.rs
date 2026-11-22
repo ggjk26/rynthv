@@ -27,16 +27,18 @@ enum Page {
     Editing,
     Recording,
     Rendering,
+    Voicebanks,
     Shortcuts,
 }
 
 impl Page {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::General,
         Self::Audio,
         Self::Editing,
         Self::Recording,
         Self::Rendering,
+        Self::Voicebanks,
         Self::Shortcuts,
     ];
     fn label(self, language: UiLanguage) -> &'static str {
@@ -46,9 +48,18 @@ impl Page {
             Self::Editing => language.text("编辑", "Editing", "編集"),
             Self::Recording => language.text("录制", "Recording", "録音"),
             Self::Rendering => language.text("渲染", "Rendering", "レンダリング"),
+            Self::Voicebanks => language.text("声库目录", "Voice folders", "歌声フォルダー"),
             Self::Shortcuts => language.text("快捷键", "Shortcuts", "ショートカット"),
         }
     }
+}
+
+/// Open an immediately accessible dedicated page for all voicebank roots.
+pub fn open_voice_paths(app: &mut App, ctx: &Context) {
+    ctx.data_mut(|data| data.insert_temp(Id::new("settings-page"), Page::Voicebanks));
+    app.voice_manager = false;
+    app.settings = true;
+    ctx.request_repaint();
 }
 
 pub fn show(app: &mut App, ctx: &Context) {
@@ -144,6 +155,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                         Page::Editing => pages::editing(app, ui),
                         Page::Recording => pages::recording(ui, app.preferences.language),
                         Page::Rendering => pages::rendering(app, ui),
+                        Page::Voicebanks => crate::ui::voice_library::settings(app, ui),
                         Page::Shortcuts => shortcuts::show(ui, app.preferences.language),
                     }
                 });
@@ -191,6 +203,7 @@ fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> 
                 .circle_stroke(icon.center(), 7.0, Stroke::new(1.0, MUTED));
         }
         Page::Rendering => Icon::Render.paint(ui, icon, MUTED),
+        Page::Voicebanks => Icon::Microphone.paint(ui, icon, MUTED),
         Page::Audio => widgets::speaker(ui, icon),
         Page::Shortcuts => widgets::keyboard(ui, icon),
     }
