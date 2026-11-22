@@ -79,7 +79,7 @@ pub fn show(
     transport: &mut Transport,
     options: RulerOptions,
     lang: crate::ui::settings::UiLanguage,
-) {
+) -> bool {
     let response = ui.interact(ruler, id, Sense::click_and_drag());
     let drag_id = id.with("loop-drag");
     let menu_id = id.with("loop-menu-position");
@@ -204,6 +204,8 @@ pub fn show(
             StrokeKind::Inside,
         );
     }
+    let scrubbing = enabled && transport.playing && drag.is_none()
+        && response.dragged_by(PointerButton::Primary);
     ui.ctx().data_mut(|data| {
         if let Some(drag) = drag.filter(|_| primary_down && enabled) {
             data.insert_temp(drag_id, drag);
@@ -211,4 +213,5 @@ pub fn show(
             data.remove::<Drag>(drag_id);
         }
     });
+    scrubbing
 }
