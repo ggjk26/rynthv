@@ -455,7 +455,8 @@ mod v200_tests {
         let path = std::env::temp_dir().join(format!(
             "rynthv-flat-v200-{}-{}.nofs",
             std::process::id(),
-            std::thread::current().name().unwrap_or("test"),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
         ));
         std::fs::write(&path, document.to_string()).unwrap();
         let voice = FlatVoice::open(&path, None).unwrap();
