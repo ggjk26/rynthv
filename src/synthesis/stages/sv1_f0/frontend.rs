@@ -66,6 +66,26 @@ impl<'a> Frontend<'a> {
         })
     }
 
+    pub(super) fn verify_phone_mapping(
+        &self,
+        language: &str,
+        token: &str,
+        mapped: &str,
+    ) -> Result<()> {
+        let resolved = resolve_explicit(&self.languages, self.unified, language, token)?;
+        if !resolved.selected_phone_set.starts_with(language)
+            || resolved.local_stored_index.is_none()
+            || resolved.used_silence_fallback
+            || resolved.unified_symbol != mapped
+        {
+            return Err(VoiceError::new(format!(
+                "Flat and DDS phoneme tables disagree for {language}:{token} (Flat: {mapped}, DDS: {})",
+                resolved.unified_symbol,
+            )));
+        }
+        Ok(())
+    }
+
     pub fn encode(
         &self,
         notes: &[FrontendNote],

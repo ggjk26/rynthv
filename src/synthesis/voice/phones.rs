@@ -150,9 +150,9 @@ fn validate_unique(values: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    offset: usize,
+pub(super) struct Reader<'a> {
+    pub(super) bytes: &'a [u8],
+    pub(super) offset: usize,
 }
 
 impl Reader<'_> {
@@ -162,7 +162,7 @@ impl Reader<'_> {
         Ok(value)
     }
 
-    fn string(&mut self) -> Result<String> {
+    pub(super) fn string(&mut self) -> Result<String> {
         let length = self.count()?;
         let bounds = range(self.offset, length, self.bytes.len())?;
         let value = std::str::from_utf8(&self.bytes[bounds.clone()])
@@ -171,7 +171,7 @@ impl Reader<'_> {
         Ok(value.to_owned())
     }
 
-    fn strings(&mut self) -> Result<Vec<String>> {
+    pub(super) fn strings(&mut self) -> Result<Vec<String>> {
         let count = self.count()?;
         if count > (self.bytes.len() - self.offset) / 4 {
             return Err(VoiceError::new(

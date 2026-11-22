@@ -1,7 +1,9 @@
 //! Flat voicebank metadata and finite embedding vectors.
 //!
-//! Does not decrypt, synthesize, or write protected model resources. A Flat
-//! voicebank is metadata plus references to separately installed base models.
+//! A Flat voicebank stores metadata and references to separately installed
+//! models. Individual adapters validate the model graphs before inference.
+mod phones;
+pub mod pitch;
 pub mod probe;
 
 use super::{Result, VoiceError};
@@ -13,6 +15,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const MAX_STAGE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_JSON_BYTES: u64 = 1024 * 1024;
 const MAX_STYLES: usize = 256;
 

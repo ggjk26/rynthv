@@ -1,7 +1,7 @@
-//! Read-only Flat model preflight. This is a bridge from the NOFS manifest to
-//! actual local model inspection, not a claim that the SV2 renderer can
-//! execute a Flat-conditioned acoustic model.
-use super::FlatVoice;
+//! Read-only Flat model preflight with container checks and optional
+//! preparation of a readable inline DDS F0 graph.
+use super::{FlatVoice, MAX_STAGE_BYTES, pitch::inline_f0_tree};
+use crate::synthesis::stages::sv1_f0::Sv1F0Stage;
 use crate::synthesis::voice::{
     archive::{Archive, ResourceId},
     format::FormatContext,
@@ -13,7 +13,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MAX_STAGE_BYTES: u64 = 1024 * 1024 * 1024;
 const DNNI_V3_MAGIC: [u8; 8] = [0xff, 0x00, 0xca, 0x7f, 3, 0, 0, 0];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -23,6 +22,8 @@ pub enum StageState {
     FileUnreadable,
     UnsupportedFormat,
     InvalidNativeContainer,
+    InlineF0GraphReady,
+    InvalidInlineF0Graph,
     StageResourceNotFound,
     NativeResourceFound,
 }
@@ -114,7 +115,7 @@ fn probe_file(role: &str, id: &str, path: Option<PathBuf>) -> FlatStageCheck {
         }
     };
     check.bytes = Some(metadata.len());
-    if metadata.len() < 0x149 || metadata.len() > MAX_STAGE_BYTES {
+    if metadata.len() < 8 || metadata.len() > MAX_STAGE_BYTES {
         check.state = StageState::UnsupportedFormat;
         check.details = "文件过短或超过 1 GiB 安全检查限制".to_owned();
         return check;
@@ -125,6 +126,27 @@ fn probe_file(role: &str, id: &str, path: Option<PathBuf>) -> FlatStageCheck {
     {
         check.state = StageState::FileUnreadable;
         check.details = format!("无法读取 DNNI 文件头：{error}");
+        return check;
+    }
+    if role == "f0"
+        && magic[..4] == DNNI_V3_MAGIC[..4]
+        && matches!(u32::from_le_bytes(magic[4..].try_into().unwrap()), 1 | 2)
+    {
+        check.container = format!("Inline DNNI v{}", magic[4]);
+        match inline_f0_tree(&path)
+            .and_then(|tree| Sv1F0Stage::prepare_native(&tree, 0.0).map(|_| ()))
+        {
+            Ok(()) => {
+                check.state = StageState::InlineF0GraphReady;
+                check.details =
+                    "DDS F0 计算图已通过准备，可使用 --pitch-score 和显式音素时长运行单阶段实验"
+                        .into();
+            }
+            Err(error) => {
+                check.state = StageState::InvalidInlineF0Graph;
+                check.details = format!("内联 DDS F0 计算图准备失败：{error}");
+            }
+        }
         return check;
     }
     if magic != DNNI_V3_MAGIC {

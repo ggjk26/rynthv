@@ -78,7 +78,7 @@ Linux 可使用 `./target/release/rynthv --graphics=vulkan`。如需同时打开
 
 声库列表现在能识别 SV Flat 的纯文本 NOFS-JSON，也支持识别相邻 config.json + info.nofs 的安装清单。设置中可单独选择 Flat 声库目录、Flat 模型目录（后者仅供依赖扫描）。对相邻 config.json + info.nofs 清单，还会检查对应依赖模型的文件是否存在（不读取或解密模型内容）；非法模型路径不会被拼接访问。目前可以读取元数据、唱法、部分 Float32 音色/音高/时长向量与模型标识，但模型文件存在并不代表引擎支持推理。
 
-**重要：SV Flat 目前只有只读识别与诊断功能，不能合成/试听/导出。** .sfpk 安装包解包和 Flat 原生合成模型加载尚未实现，识别到的 Flat 声库会明确显示为不可用，不会误当作 SV1 声库加载。
+**SV Flat 整曲合成、试听和音频导出仍待实现。** .sfpk 安装包解包和 Flat 原生合成模型加载尚未实现，识别到的 Flat 声库会明确显示为不可用，不会误当作 SV1 声库加载。
 
 ### Flat 合成兼容性预检（开发阶段）
 
@@ -155,13 +155,25 @@ cargo run --release --locked --bin rynthv-flat-inspect -- "D:\FlatDatabases"
 
 此命令不会解密模型或生成音频。用于模型格式适配前的元数据与资源诊断。
 
+### Flat F0 单阶段实验
+
+`rynthv-flat-inspect --pitch-score` 可用 NOFS 的 `f0_style` 运行可读的内联 DDS F0 计算图。它使用声库声明的 F0 模型 ID 定位文件，要求模型为 DNNI v1/v2，并核对 `phonesets/*-phones.data` 的音素映射与图内字典一致。输出是带起始时间和采样步长的 MIDI 音高曲线 JSON。
+
+```powershell
+.\rynthv-flat-inspect.exe "D:\FlatVoice\info.200.nofs" --models "D:\ReadableModels" --phonesets "D:\FlatVoice\phonesets" --pitch-score "D:\score.json"
+```
+
+`score.json` 包含 `score`（采用 `examples/synthesis/mandarin-phrase.json` 的显式音素乐谱格式）和 `phone_seconds`（每条乐谱记录对应一个时长数组，每个音素对应一个秒数）。每条数组的总时长必须等于该记录的时长，分音节记录按 `parts` 均分。例如，时长为 0.5 秒的两个音素可填写 `[0.05, 0.45]`。
+
+此实验使用 DDS 图的基础风格向量输入槽，尚未和 Flat 的运行结果逐帧比对。该命令要求已知音素时长，输出全句音高估计，包含静音时段。安装包中的 DNNI v3、Flat Duration、声学图和声码器仍待适配。
+
 程序仍不自动探测模型目录，不附带商业声库或用户模型上下文。
 
 | 声库类型 | Windows | Linux |
 | --- | --- | --- |
 | 一代声库 | 支持 | 支持 |
 | 二代声库 | 需要导入模型上下文 | 需要导入模型上下文 |
-| SV Flat（NOFS-JSON / 清单） | 只读诊断，尚不可合成 | 只读诊断，尚不可合成 |
+| SV Flat（NOFS-JSON / 清单） | 只读诊断和 F0 单阶段实验 | 只读诊断和 F0 单阶段实验 |
 
 配置目录：Windows 为 `%LOCALAPPDATA%/RynthV`，Linux 为 `$XDG_CONFIG_HOME/RynthV`（未设置时为 `$HOME/.config/RynthV`）。模型上下文在 Windows 保存在 `%APPDATA%/RynthV/context.json`，Linux 保存在上述配置目录的 `context.json`。
 

@@ -113,6 +113,22 @@ fn stage_status(state: &StageState, lang: UiLanguage) -> (&'static str, Color32)
             ),
             amber,
         ),
+        StageState::InlineF0GraphReady => (
+            lang.text(
+                "内联 F0 图已装配",
+                "Inline F0 graph prepared",
+                "インライン F0 グラフ構築済み",
+            ),
+            GREEN,
+        ),
+        StageState::InvalidInlineF0Graph => (
+            lang.text(
+                "内联 F0 图装配失败",
+                "Inline F0 graph preparation failed",
+                "インライン F0 グラフの構築に失敗",
+            ),
+            amber,
+        ),
         StageState::StageResourceNotFound => (
             lang.text(
                 "容器已验证，未匹配阶段",
