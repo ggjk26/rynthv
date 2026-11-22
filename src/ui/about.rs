@@ -119,7 +119,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                         detail(ui, lang.text("设备 ID", "Vendor / Device", "デバイス ID"), &app.graphics.vendor_device);
                         detail(ui, lang.text("驱动", "Driver", "ドライバー"), &app.graphics.driver);
                         detail(ui, lang.text("启动时的图形选择", "Startup graphics setting", "起動時の描画設定"), requested);
-                        if app.preferences.graphics_backend != app.graphics.configured {
+                        if app.preferences.graphics_backend != app.graphics.preference_at_start {
                             ui.add_space(6.0);
                             ui.colored_label(
                                 Color32::from_rgb(242, 189, 115),
