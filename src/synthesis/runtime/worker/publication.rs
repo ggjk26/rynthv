@@ -83,7 +83,10 @@ impl<'network, 'tree> WorkState<'network, 'tree> {
             self.force_publication = false;
             self.published_revision = publication;
             let stats = self.cache.stats();
-            let complete = stats.queued == 0 && stats.running == 0 && stats.failed == 0;
+            // A failed owner must not suppress already rendered owners or
+            // prevent exporting valid tracks. Keep the failure in the status
+            // while publishing the available completed audio.
+            let complete = stats.queued == 0 && stats.running == 0;
             let owners = if complete {
                 self.cache.snapshot()
             } else {
