@@ -158,6 +158,13 @@ impl VoiceInventory {
     /// Load exactly the selected revision directory. Catalog selection, not
     /// the model loader, resolves a database root and its installed revisions.
     pub fn load(directory: &Path) -> Result<Self> {
+        Self::load_with_duration(directory, None)
+    }
+
+    pub fn load_with_duration(
+        directory: &Path,
+        sv2_duration: Option<&Path>,
+    ) -> Result<Self> {
         if super::nofs::is_file(directory) {
             if super::catalog::flat::is_flat(directory)
                 || super::catalog::flat::is_flat_package(directory) {
@@ -273,14 +280,14 @@ impl VoiceInventory {
             file.graphs.iter().any(|graph| graph.role == "duration")
         });
         if !has_duration {
-            if let Some(archive) = super::bundled::duration()? {
+            if let Some((archive, source)) = super::shared_duration::selected(sv2_duration)? {
                 if archive.index(CONFIGURATION_ID).is_some() {
                     return Err(VoiceError::new(
-                        "内嵌时长模型包含独立声库配置，不能作为共享 Duration 注入",
+                        "共享时长模型包含独立声库配置，不能作为 SV2 Duration 注入",
                     ));
                 }
                 let (file, trees) = inspect::file(
-                    Path::new("bundled-duration.dnni"), &archive,
+                    Path::new(&source), &archive,
                 )?;
                 if !file.graphs.iter().any(|graph| graph.role == "duration")
                     || file.graphs.iter().any(|graph| {
@@ -288,7 +295,7 @@ impl VoiceInventory {
                     })
                 {
                     return Err(VoiceError::new(
-                        "内嵌模型不是独立的 SV2 Duration 阶段",
+                        "所选共享模型不是独立的 SV2 Duration 阶段",
                     ));
                 }
                 inventory.files.push(file);
