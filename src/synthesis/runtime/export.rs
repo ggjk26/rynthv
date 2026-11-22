@@ -178,9 +178,9 @@ impl Runtime {
             && self.export.is_none()
             && self.recording_error.is_none()
             && self.recordings.pending.is_empty()
-            && self.pending_voices.is_empty()
-            // A missing singer on another track must not globally block
-            // exporting already-completed vocal or instrumental tracks.
+            // Missing/unresolvable singer assignments must not globally
+            // block the finished vocal tracks or instrumental recordings.
+            // Only active synthesis/loading still prevents an incomplete export.
             && !self.is_busy()
             && (!self.export_owners.is_empty() || !self.recordings.layers.is_empty())
     }
