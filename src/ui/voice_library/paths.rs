@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::{error_label, text, weak};
-use crate::{app::App, ui::settings::UiLanguage};
+use crate::{app::App, synthesis::settings::VoiceDirectory, ui::settings::UiLanguage};
 use eframe::egui::*;
 
 pub fn settings(app: &mut App, ui: &mut Ui) {
@@ -50,23 +50,20 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
         "Checks the three separate installation locations under Documents, applies only existing folders, and clears stale legacy roots.",
         "Documents 内の３つの独立したインストール先を調べ、存在するフォルダーだけを設定し旧 roots を消去します。",
     ));
-    text(ui, lang.text("SV2 声库根目录（databases）", "SV2 voicebank root (databases)", "SV2 歌声ルート（databases）"));
-    path_label(ui, app.synthesis.library.settings.databases.as_deref(), lang);
-    ui.horizontal(|ui| {
-        if ui.button(lang.text("选择 SV2 databases…", "Choose SV2 databases…", "SV2 databases を選択…")).clicked() {
-            choose_databases(app);
-        }
-        if ui
-            .add_enabled(
-                !app.synthesis.library.is_scanning()
-                    && app.synthesis.library.settings.has_databases(),
-                Button::new(lang.text("重新扫描", "Rescan", "再スキャン")),
-            )
-            .clicked()
-        {
-            app.synthesis.rescan_voices();
-        }
-    });
+    voice_root_editor(app, ui, VoiceDirectory::Sv2,
+        lang.text("SV2 声库根目录（Studio 2 / databases）",
+            "SV2 root (Studio 2 / databases)",
+            "SV2 フォルダー（Studio 2 / databases）"));
+    if ui
+        .add_enabled(
+            !app.synthesis.library.is_scanning()
+                && app.synthesis.library.settings.has_databases(),
+            Button::new(lang.text("重新扫描所有声库", "Rescan all voices", "すべての歌声を再スキャン")),
+        )
+        .clicked()
+    {
+        app.synthesis.rescan_voices();
+    }
     // Show imported roots from older synthesis.json layouts so the paths
     // actually being searched remain visible to the user.
     if app.synthesis.library.settings.roots.is_some() {
@@ -86,24 +83,21 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
             }
         }
     }
-    ui.add_space(8.0);
-    text(ui, lang.text("SV1 原生声库根目录", "Native SV1 voicebank root", "SV1 ネイティブ歌声のルート"));
-    path_label(ui, app.synthesis.library.settings.sv1_databases.as_deref(), lang);
-    if ui.button(lang.text("选择 SV1 databases…", "Choose SV1 databases…", "SV1 databases を選択…")).clicked() {
-        choose_sv1_databases(app);
-    }
-    ui.add_space(8.0);
-    text(ui, lang.text("SV Flat 声库根目录（已解包的 NOFS-JSON 或 info.nofs）", "SV Flat root (extracted NOFS-JSON or info.nofs)", "SV Flat ルート（展開済み NOFS-JSON / info.nofs）"));
-    path_label(ui, app.synthesis.library.settings.flat_databases.as_deref(), lang);
-    if ui.button(lang.text("选择 Flat databases…", "Choose Flat databases…", "Flat databases を選択…")).clicked() {
-        choose_flat_databases(app);
-    }
-    ui.add_space(8.0);
-    text(ui, lang.text("Flat 模型根目录（可选，仅用于依赖扫描）", "Flat model root (optional; dependency scan only)", "Flat モデルルート（任意、依存関係の確認のみ）"));
-    path_label(ui, app.synthesis.library.settings.flat_models.as_deref(), lang);
-    if ui.button(lang.text("选择 Flat models…", "Choose Flat models…", "Flat models を選択…")).clicked() {
-        choose_flat_models(app);
-    }
+    ui.add_space(10.0);
+    voice_root_editor(app, ui, VoiceDirectory::Sv1,
+        lang.text("SV1 原生声库根目录（Studio / databases）",
+            "Native SV1 root (Studio / databases)",
+            "SV1 フォルダー（Studio / databases）"));
+    ui.add_space(10.0);
+    voice_root_editor(app, ui, VoiceDirectory::Flat,
+        lang.text("SV Flat 声库根目录（OPSV / databases）",
+            "SV Flat root (OPSV / databases)",
+            "SV Flat フォルダー（OPSV / databases）"));
+    ui.add_space(10.0);
+    voice_root_editor(app, ui, VoiceDirectory::FlatModels,
+        lang.text("Flat 模型目录（可选，仅依赖扫描）",
+            "Flat models (optional, dependencies only)",
+            "Flat モデル（任意、依存関係のみ）"));
     ui.add_space(8.0);
     text(ui, lang.text("可选外部发音词典（不设置则使用内置普通话 / 日语 / 英语词典）", "External pronunciation dictionaries (optional; Mandarin, Japanese and English are built in)", "外部発音辞書（任意、中国語・日本語・英語は内蔵）"));
     path_label(ui, app.synthesis.dictionaries(), lang);
@@ -122,40 +116,116 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
     }
     weak(
         ui,
-        lang.text("声库目录需要手动选择；普通话、日语和英语词典随程序提供，其他语言需外部词典或显式音素。", "Voicebank folders must be selected manually. Mandarin, Japanese and English dictionaries are built in; other languages need an external dictionary or explicit phonemes.", "歌声フォルダーは手動選択が必要です。中国語・日本語・英語の辞書は内蔵されています。他の言語は外部辞書か音素の指定が必要です。"),
+        lang.text("也可直接粘贴路径并点击应用。SV1、SV2 与 Flat 分别使用独立的 databases 目录；保存后立即重新扫描。", "Paste a path and click Apply, or browse. SV1, SV2 and Flat use separate databases directories; saving rescans automatically.", "パスを貼り付けて適用、または参照できます。SV1、SV2、Flat は別々の databases フォルダーを使用し、保存後に再スキャンします。"),
     );
 }
 
-pub(super) fn choose_databases(app: &mut App) {
-    if let Some(path) =
-        folder_dialog(app.synthesis.library.settings.databases.as_deref()).pick_folder()
-    {
-        app.synthesis.set_databases(path);
+/// Dedicated editable path field: typing and pasting work even when the OS
+/// folder picker cannot be opened from a nested voice-manager popup.
+fn voice_root_editor(
+    app: &mut App,
+    ui: &mut Ui,
+    kind: VoiceDirectory,
+    title: &str,
+) {
+    let lang = app.preferences.language;
+    let (key, path) = match kind {
+        VoiceDirectory::Sv2 => ("sv2", app.synthesis.library.settings.databases.clone()),
+        VoiceDirectory::Sv1 => ("sv1", app.synthesis.library.settings.sv1_databases.clone()),
+        VoiceDirectory::Flat => ("flat", app.synthesis.library.settings.flat_databases.clone()),
+        VoiceDirectory::FlatModels => ("flat-models", app.synthesis.library.settings.flat_models.clone()),
+    };
+    let id = Id::new(("voice-root-edit", key));
+    let source = path.as_ref().map_or_else(String::new, |path| path.to_string_lossy().into_owned());
+    let mut draft = ui.ctx().data_mut(|data| {
+        let old = data.get_temp::<String>(id.with("source"));
+        if old.as_deref() != Some(source.as_str()) {
+            data.insert_temp(id.with("source"), source.clone());
+            data.insert_temp(id.with("draft"), source.clone());
+        }
+        data.get_temp::<String>(id.with("draft")).unwrap_or(source.clone())
+    });
+    ui.label(RichText::new(title).strong());
+    let mut apply = false;
+    let mut browse = false;
+    let mut clear = false;
+    ui.horizontal(|ui| {
+        let available = (ui.available_width() - 170.0).max(130.0);
+        let response = ui.add(
+            TextEdit::singleline(&mut draft)
+                .id(id.with("edit"))
+                .desired_width(available)
+                .hint_text(lang.text("输入或粘贴 databases 文件夹路径",
+                    "Enter or paste the databases folder path",
+                    "databases のフォルダーパスを入力・貼り付け")),
+        );
+        apply = ui.button(lang.text("应用", "Apply", "適用")).clicked()
+            || (response.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)));
+        browse = ui.button(lang.text("浏览…", "Browse…", "参照…")).clicked();
+        clear = ui.add_enabled(path.is_some(),
+            Button::new(lang.text("清除", "Clear", "解除"))).clicked();
+    });
+    ui.ctx().data_mut(|data| data.insert_temp(id.with("draft"), draft.clone()));
+    if apply {
+        let cleaned = draft.trim().trim_matches('"').trim();
+        let path = if cleaned.is_empty() { None } else { Some(std::path::PathBuf::from(cleaned)) };
+        apply_root(app, kind, path);
+    } else if browse {
+        pick_root(app, kind);
+    } else if clear {
+        apply_root(app, kind, None);
     }
+    if let Some(path) = path {
+        if !path.is_dir() {
+            ui.colored_label(
+                Color32::from_rgb(230, 150, 116),
+                lang.text("已保存的目录不存在或不可访问",
+                    "Saved directory does not exist or is not accessible",
+                    "保存済みのフォルダーが存在しないかアクセスできません"),
+            );
+        }
+    }
+}
+
+fn apply_root(app: &mut App, kind: VoiceDirectory, path: Option<std::path::PathBuf>) {
+    match app.synthesis.set_voice_directory(kind, path) {
+        Ok(()) => {
+            app.status = app.preferences.language.text(
+                "声库目录已保存，正在重新扫描",
+                "Voice directory saved; rescanning",
+                "歌声フォルダーを保存し、再スキャン中",
+            ).to_owned();
+        }
+        Err(error) => app.error = Some(error),
+    }
+}
+
+fn pick_root(app: &mut App, kind: VoiceDirectory) {
+    let path = match kind {
+        VoiceDirectory::Sv2 => app.synthesis.library.settings.databases.as_deref(),
+        VoiceDirectory::Sv1 => app.synthesis.library.settings.sv1_databases.as_deref(),
+        VoiceDirectory::Flat => app.synthesis.library.settings.flat_databases.as_deref(),
+        VoiceDirectory::FlatModels => app.synthesis.library.settings.flat_models.as_deref(),
+    };
+    if let Some(path) = folder_dialog(path).pick_folder() {
+        apply_root(app, kind, Some(path));
+    }
+}
+
+pub(super) fn choose_databases(app: &mut App) {
+    pick_root(app, VoiceDirectory::Sv2);
 }
 
 pub(super) fn choose_sv1_databases(app: &mut App) {
-    if let Some(path) =
-        folder_dialog(app.synthesis.library.settings.sv1_databases.as_deref()).pick_folder()
-    {
-        app.synthesis.set_sv1_databases(path);
-    }
+    pick_root(app, VoiceDirectory::Sv1);
 }
 
 pub(super) fn choose_flat_databases(app: &mut App) {
-    if let Some(path) =
-        folder_dialog(app.synthesis.library.settings.flat_databases.as_deref()).pick_folder()
-    {
-        app.synthesis.set_flat_databases(path);
-    }
+    pick_root(app, VoiceDirectory::Flat);
 }
 
 pub(super) fn choose_flat_models(app: &mut App) {
-    if let Some(path) =
-        folder_dialog(app.synthesis.library.settings.flat_models.as_deref()).pick_folder()
-    {
-        app.synthesis.set_flat_models(path);
-    }
+    pick_root(app, VoiceDirectory::FlatModels);
 }
 
 pub(super) fn directory_menu(app: &mut App, ui: &mut Ui) {
