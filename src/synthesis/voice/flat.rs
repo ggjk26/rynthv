@@ -425,3 +425,53 @@ fn read_json(path: &Path) -> Result<Value> {
     serde_json::from_slice(content)
         .map_err(|error| VoiceError::new(format!("Flat JSON 无法解析：{error}")))
 }
+
+#[cfg(test)]
+mod v200_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parses_flat_v200_and_keeps_distinct_style_spaces() {
+        let id = "7b0ea690ada94b4484b50d9d64a21cae";
+        let document = json!({
+            "name": "Synthetic Flat v200 test",
+            "version": "200",
+            "vendor": "Fixture",
+            "language": "japanese",
+            "phoneset": "romaji",
+            "support_languages": ["japanese", "mandarin"],
+            "acoustic": "2c233d8e9b19f1f4dc0276ba3a5542c1",
+            "vocoder": "b0dbc93ad9636601a8a24425788a884e",
+            "duration": id,
+            "f0": "dcee89442f69984189a5b2aedbf9f090",
+            "styles": [
+                {"name": "(base)", "data": "00000000".repeat(32)},
+                {"name": "Joyful", "data": "0000803F".repeat(32), "extra": "0000A040"}
+            ],
+            "f0_style": "00000000".repeat(32),
+            "duration_style": "00000000".repeat(128)
+        });
+        let path = std::env::temp_dir().join(format!(
+            "rynthv-flat-v200-{}-{}.nofs",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test"),
+        ));
+        std::fs::write(&path, document.to_string()).unwrap();
+        let voice = FlatVoice::open(&path, None).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(voice.models.len(), 4);
+        assert_eq!(voice.models.iter().find(|v| v.role == "duration").unwrap().id, id);
+        assert_eq!(voice.duration_style.as_ref().unwrap().len(), 128);
+        assert_eq!(voice.f0_style.as_ref().unwrap().len(), 32);
+        let base = voice.conditioning(None).unwrap();
+        assert_eq!(base.style_name, "(base)");
+        assert_eq!(base.acoustic_style.len(), 32);
+        assert_eq!(base.duration_style.unwrap().len(), 128);
+        let joyful = voice.conditioning(Some("Joyful")).unwrap();
+        assert_eq!(joyful.style_extra, Some(5.0));
+        assert_eq!(joyful.acoustic_style[0], 1.0);
+        assert_eq!(joyful.language, crate::model::Language::Japanese);
+        assert!(voice.conditioning(Some("does-not-exist")).is_err());
+    }
+}
