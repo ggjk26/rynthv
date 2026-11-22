@@ -2,6 +2,8 @@
 //!
 //! Does not decrypt, synthesize, or write protected model resources. A Flat
 //! voicebank is metadata plus references to separately installed base models.
+pub mod probe;
+
 use super::{Result, VoiceError};
 use serde::Serialize;
 use serde_json::{Map, Value};
