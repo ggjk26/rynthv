@@ -29,6 +29,7 @@ pub struct App {
     pub synthesis: synthesis::runtime::Runtime,
     pub view: ViewState,
     pub preferences: ui::settings::Preferences,
+    pub graphics: ui::settings::GraphicsInfo,
     pub path: Option<PathBuf>,
     pub error: Option<String>,
     pub settings: bool,
@@ -70,7 +71,11 @@ pub struct App {
     last_persist: Instant,
 }
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, path: Option<PathBuf>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        path: Option<PathBuf>,
+        backend: ui::settings::GraphicsBackend,
+    ) -> Self {
         ui::theme::install(&cc.egui_ctx);
         egui_extras::install_image_loaders(&cc.egui_ctx);
         let mut error = ui::theme::fonts(&cc.egui_ctx).err();
@@ -118,6 +123,7 @@ impl App {
             synthesis: synthesis::runtime::Runtime::new(cc.egui_ctx.clone()),
             view,
             preferences,
+            graphics: ui::settings::GraphicsInfo::from_context(cc, backend),
             path: None,
             error,
             settings: false,
