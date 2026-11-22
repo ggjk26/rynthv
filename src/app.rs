@@ -511,6 +511,11 @@ impl eframe::App for App {
                             .size(11.0)
                             .color(ui::theme::MUTED),
                     );
+                    ui.label(
+                        RichText::new(format!("{} ·", self.graphics.active_backend))
+                            .size(11.0)
+                            .color(ui::theme::GREEN.gamma_multiply(0.75)),
+                    ).on_hover_text(&self.graphics.gpu_name);
                 });
             });
         }
