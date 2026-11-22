@@ -69,7 +69,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     // Explicit wheel/pan activity takes priority over playback following.
     let center_pause = Id::new("piano-auto-pitch-pause");
     let now = ui.input(|input| input.time);
-    if vertical.abs() > f32::EPSILON || app.view_pan.is_active() {
+    let wheel_used = ui.input(|input| {
+        input.pointer.hover_pos().is_some_and(|point| canvas.contains(point))
+            && input.raw.events.iter().any(|event| matches!(event, Event::MouseWheel { .. }))
+    });
+    if vertical.abs() > f32::EPSILON || wheel_used || app.view_pan.is_active() {
         ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 1.2));
     }
     let pause_until = ui.ctx().data_mut(|data| data.get_temp::<f64>(center_pause)).unwrap_or(0.0);
@@ -217,21 +221,30 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     }
 }
 
-/// Prefer notes near the playback cursor; fall back to the current visible
-/// group when the cursor is between phrases. Using a median ignores outliers.
+/// Center on the median pitch of currently sounding notes across all
+/// visible group instances in the selected vocal track. Explicitly muted
+/// notes/instances are excluded; rests keep the existing viewport.
 fn median_playback_pitch(app: &App) -> Option<i32> {
-    let reference = app.editor.active_ref()?;
     let cursor = app.editor.transport.position;
-    // Follow only notes that are actually sounding at the transport cursor.
-    let mut pitches: Vec<i32> = app.editor.notes().iter()
-        .filter_map(|note| {
-            let (start, end) = reference.note_range(note)?;
-            (start <= cursor && cursor < end)
-                .then_some(note.pitch + reference.pitch_offset)
-        })
-        .collect();
-    // In a rest, keep the current vertical viewport rather than jumping to
-    // unrelated notes in the group.
+    let mut pitches = Vec::new();
+    for reference in app.editor.current_track().visible_references() {
+        if reference.mute {
+            continue;
+        }
+        let Some(group) = app.editor.project.group(&reference.group_id) else {
+            continue;
+        };
+        for note in &group.notes {
+            if note.muted() {
+                continue;
+            }
+            if let Some((begin, end)) = reference.note_range(note)
+                && begin <= cursor && cursor < end
+            {
+                pitches.push(note.pitch + reference.pitch_offset);
+            }
+        }
+    }
     if pitches.is_empty() {
         return None;
     }
