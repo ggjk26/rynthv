@@ -25,6 +25,7 @@ use std::{
 pub(super) fn run(
     path: PathBuf,
     dictionaries: Option<PathBuf>,
+    sv2_duration: Option<PathBuf>,
     commands: Receiver<Command>,
     events: Events,
     alive: Arc<AtomicBool>,
@@ -41,7 +42,10 @@ pub(super) fn run(
         }
     };
     let started = Instant::now();
-    let loaded = VoiceInventory::load(&path).and_then(|inventory| {
+    let loaded = VoiceInventory::load_with_duration(
+        &path,
+        sv2_duration.as_deref(),
+    ).and_then(|inventory| {
         loading_checkpoint()?;
         let prepared = inventory.prepare()?;
         loading_checkpoint()?;
