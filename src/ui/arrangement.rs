@@ -148,7 +148,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     if !ui.input(|i| i.pointer.any_down()) && !app.view_pan.is_active() {
         ui.ctx().data_mut(|d| d.insert_temp(follow_id, app.editor.transport.position));
     }
-    loop_region::show(
+    app.scrubbing_playhead |= loop_region::show(
         ui,
         Id::new("arrangement-ruler"),
         ruler,
