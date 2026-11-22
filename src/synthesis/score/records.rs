@@ -59,6 +59,10 @@ pub(super) fn redistribute_onsets(
         }
         if let Some(previous) = previous
             && prefix > 0
+            // Moving the first real note's onset into a synthetic leading
+            // silence record places that consonant outside the published
+            // interval and clips it away. Keep that onset with its note.
+            && !(previous == 0 && notes[previous].kind == 1)
         {
             let (earlier, current) = records.split_at_mut(index);
             earlier[previous]
