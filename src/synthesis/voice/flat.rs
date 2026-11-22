@@ -496,4 +496,40 @@ mod v200_tests {
         assert_eq!(joyful.language, crate::model::Language::Japanese);
         assert!(voice.conditioning(Some("does-not-exist")).is_err());
     }
+
+    #[test]
+    fn detects_models_directory_beside_databases_without_settings() {
+        let id = "7b0ea690ada94b4484b50d9d64a21cae";
+        let root = std::env::temp_dir().join(format!(
+            "rynthv-flat-nearby-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        ));
+        let database = root.join("databases/voice");
+        let models = root.join("models/duration");
+        std::fs::create_dir_all(&database).unwrap();
+        std::fs::create_dir_all(&models).unwrap();
+        std::fs::write(models.join(format!("{id}.dnni")), b"not an executable model").unwrap();
+        let path = database.join("info.200.nofs");
+        std::fs::write(&path, json!({
+            "name": "test",
+            "version": "200",
+            "language": "japanese",
+            "duration": id
+        }).to_string()).unwrap();
+        let voice = FlatVoice::open(&path, None).unwrap();
+        assert_eq!(voice.models.len(), 1);
+        assert!(voice.models[0].installed);
+        assert_eq!(voice.models[0].id, id);
+        // A discovered file isn't verified: the runtime model preflight
+        // must still reject its deliberately invalid DNNI content.
+        let preflight = voice.preflight(None);
+        assert!(!preflight.synthesis_supported);
+        assert_ne!(
+            preflight.stages[0].state,
+            super::probe::StageState::NativeResourceFound
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
 }
