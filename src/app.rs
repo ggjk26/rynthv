@@ -406,6 +406,9 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let lang = self.preferences.language;
         let ctx = ui.ctx().clone();
+        ctx.data_mut(|data| data.insert_temp(
+            Id::new("toolbar-hover-status"), String::new()
+        ));
         ui::piano::begin_keyboard_frame(self, &ctx);
         self.synthesis.poll();
         self.poll_audio_import();
@@ -478,7 +481,11 @@ impl eframe::App for App {
         if self.preferences.show_status_bar {
             let mut status_ui = ui::child(ui, status.shrink2(vec2(8.0, 1.0)), "status");
             status_ui.horizontal(|ui| {
-                let hint = if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchAnchor {
+                let hovered = ctx.data(|data| data.get_temp::<String>(Id::new("toolbar-hover-status")))
+                    .unwrap_or_default();
+                let hint = if !hovered.is_empty() {
+                    hovered.as_str()
+                } else if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchAnchor {
                     lang.text("双击创建控制点 · 拖动框选 / 移动 · 四边手柄缩放 · Delete 删除 · Esc 取消 · Ctrl+Z 撤销", "Double-click to add control points · Drag to select / move · Resize by handles · Delete · Esc · Ctrl+Z", "ダブルクリックで制御点を追加 · ドラッグで選択／移動 · ハンドルで拡縮 · Delete · Esc · Ctrl+Z")
                 } else if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchDraw {
                     lang.text("左键拖动绘制音高 · 右键拖动擦除 · Esc 取消本次绘制 · Ctrl+Z 撤销 · 中键拖动视野", "Drag left button to draw pitch · Right button to erase · Esc cancel · Ctrl+Z undo · Middle button to pan", "左ドラッグでピッチ描画 · 右ドラッグで消去 · Esc キャンセル · Ctrl+Z 元に戻す · 中ドラッグで移動")
