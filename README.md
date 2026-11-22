@@ -26,7 +26,7 @@
 
 ### Windows
 
-需要 MSVC、Windows SDK 和支持 DX12 的显卡。
+需要 MSVC、Windows SDK，以及支持 DirectX 12 或 Vulkan 的显卡与驱动。Windows Vulkan 后端需要可用的 Vulkan 驱动；在未提供 Vulkan 的机器上请选择 DX12。
 
 ```powershell
 cargo run --release
@@ -44,6 +44,27 @@ cargo build --release --locked --bins
 ```
 
 需要可用的图形驱动、ALSA 音频设备和桌面对应的 XDG 门户后端（KDE 使用 `xdg-desktop-portal-kde`）。
+
+### 界面 GPU 后端：DX12 / Vulkan
+
+在「**设置 → 常规 → 图形与显示 → 界面图形后端**」选择图形 API：
+- Windows：自动选择、**DirectX 12**、**Vulkan**。
+- Linux：自动选择、**Vulkan**（自动模式也可使用 OpenGL）。
+- 此选项影响的是 **egui/wgpu 界面渲染**，不改变歌声推理、音频声码器或训练计算设备。
+
+图形设备在程序启动时创建，因此**需要关闭并重新启动 RynthV 才能应用新的后端**。设置页与「关于 RynthV」都会显示当前实际运行的 API；关于窗口还可复制 GPU、驱动、版本和运行状态诊断信息。
+
+如果指定后端在当前系统不可用，运行以下命令临时覆盖设置（不修改已保存的偏好），然后在设置中选择可用的后端：
+
+```powershell
+.\target\release\rynthv.exe --graphics=auto
+.\target\release\rynthv.exe --graphics=dx12
+.\target\release\rynthv.exe --graphics=vulkan
+```
+
+Linux 可使用 `./target/release/rynthv --graphics=vulkan`。如需同时打开工程，把工程文件路径作为另一个参数传入即可。
+
+手动恢复时，也可编辑配置目录中的 `preferences.json`，将 `graphics_backend` 设为 `"auto"`。如果强制选择的后端缺少 GPU 驱动，程序可能在创建窗口前失败；CLI 参数提供了恢复入口。
 
 ## 多语言界面（开发中）
 
