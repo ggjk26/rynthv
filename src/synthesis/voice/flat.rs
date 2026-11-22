@@ -116,6 +116,10 @@ impl FlatVoice {
     /// Only parses a self-contained text NOFS-JSON file. Model references are
     /// inspectable without reading their contents.
     pub fn open(path: &Path, model_root: Option<&Path>) -> Result<Self> {
+        let inferred_root = model_root.is_none()
+            .then(|| Self::nearby_model_root(path))
+            .flatten();
+        let model_root = model_root.or(inferred_root.as_deref());
         let value = read_json(path)?;
         let object = value.as_object().ok_or_else(|| {
             VoiceError::new("Flat NOFS-JSON 顶层必须是对象")
@@ -231,6 +235,23 @@ impl FlatVoice {
             phoneset: optional_text(object, "phoneset")?.map(str::to_owned),
             models, styles, pitch, timing, f0_style, duration_style, notes,
         })
+    }
+}
+
+impl FlatVoice {
+    /// Discover a Flat model cache beside the database installation without
+    /// relying on a fixed Windows username or on Documents not being moved.
+    /// Only inspect parent folders; never interpret NOFS model IDs as paths.
+    pub fn nearby_model_root(path: &Path) -> Option<PathBuf> {
+        for ancestor in path.parent()?.ancestors().take(8) {
+            if ancestor.file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("databases"))
+            {
+                let root = ancestor.parent()?.join("models");
+                return root.is_dir().then_some(root);
+            }
+        }
+        None
     }
 }
 
