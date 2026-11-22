@@ -1,6 +1,25 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // A short revision is useful for support diagnostics, but packaging must
+    // not depend on Git being installed or on a checkout containing .git.
+    let revision = env::var("GITHUB_SHA")
+        .ok()
+        .filter(|value| value.len() >= 8 && value.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(|value| value[..8].to_owned())
+        .or_else(|| {
+            std::process::Command::new("git")
+                .args(["rev-parse", "--short=8", "HEAD"])
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+                .map(|value| value.trim().to_owned())
+                .filter(|value| value.len() >= 7 && value.chars().all(|c| c.is_ascii_hexdigit()))
+        });
+    if let Some(revision) = revision {
+        println!("cargo::rustc-env=RYNTHV_BUILD_REV={revision}");
+    }
     // Opt-in, local-only model bundling. No third-party weights are checked
     // into the repository or downloaded by CI.
     println!("cargo::rerun-if-env-changed=RYNTHV_DURATION_DNNI");
