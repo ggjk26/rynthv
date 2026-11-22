@@ -34,7 +34,11 @@ pub fn draw(app: &App, ui: &Ui, canvas: Rect) {
         painter.hline(
             r.x_range(),
             y,
-            Stroke::new(0.5, Color32::from_rgb(43, 42, 45)),
+            if pitch.rem_euclid(12) == 0 {
+                Stroke::new(1.3, Color32::from_rgb(105, 104, 116))
+            } else {
+                Stroke::new(0.5, Color32::from_rgb(43, 42, 45))
+            },
         );
     }
 }
