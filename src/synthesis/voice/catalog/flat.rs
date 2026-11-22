@@ -34,6 +34,10 @@ pub(super) fn entry(
     model_root: Option<&Path>,
     timing_override: Option<&Path>,
 ) -> Result<VoiceCatalogEntry> {
+    let inferred_root = model_root.is_none()
+        .then(|| FlatVoice::nearby_model_root(path))
+        .flatten();
+    let model_root = model_root.or(inferred_root.as_deref());
     let canonical = fs::canonicalize(path)?;
     let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
     let id = format!("svflat:{}", crate::synthesis::voice::hex(&digest[..12]));
