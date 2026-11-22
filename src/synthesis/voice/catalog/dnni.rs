@@ -10,6 +10,7 @@ pub(super) fn scan(
     database_id: uuid::Uuid,
     catalog: &mut VoiceCatalog,
     metadata: &MetadataIndex,
+    duration_override: Option<&Path>,
 ) -> Result<()> {
     let context = FormatContext::dnni_v3();
     let revisions = match fs::read_dir(database) {
@@ -71,15 +72,15 @@ pub(super) fn scan(
                 entry.family = Some(family);
                 let mut missing = configuration.models.missing(configuration.model_version);
                 if missing.contains(&"时长") {
-                    match super::super::bundled::duration() {
-                        Ok(Some(_)) => {
+                    match super::super::shared_duration::selected(duration_override) {
+                        Ok(Some((_, source))) => {
                             missing.retain(|role| *role != "时长");
-                            entry.model_dependencies.push(
-                                "Duration：本地编译嵌入（容器及资源标识已校验）".to_owned(),
-                            );
+                            entry.model_dependencies.push(format!(
+                                "SV2 Duration：{source}（DNNI 资源身份已验证）"
+                            ));
                         }
                         Err(error) => entry.model_dependencies.push(format!(
-                            "内嵌 Duration 不兼容：{error}"
+                            "SV2 Duration 文件不可用：{error}"
                         )),
                         Ok(None) => {}
                     }
@@ -123,6 +124,7 @@ pub(super) fn scan(
 pub(super) fn scan_named(
     directory: &Path,
     metadata: &MetadataIndex,
+    duration_override: Option<&Path>,
 ) -> Result<Option<VoiceCatalogEntry>> {
     if !has_dnni_models(directory)? {
         return Ok(None);
@@ -176,15 +178,15 @@ pub(super) fn scan_named(
             entry.languages = configuration.languages;
             let mut missing = configuration.models.missing(configuration.model_version);
             if missing.contains(&"时长") {
-                match super::super::bundled::duration() {
-                    Ok(Some(_)) => {
+                match super::super::shared_duration::selected(duration_override) {
+                    Ok(Some((_, source))) => {
                         missing.retain(|role| *role != "时长");
-                        entry.model_dependencies.push(
-                            "Duration：本地编译嵌入（容器及资源标识已校验）".to_owned()
-                        );
+                        entry.model_dependencies.push(format!(
+                            "SV2 Duration：{source}（DNNI 资源身份已验证）"
+                        ));
                     }
                     Err(error) => entry.model_dependencies.push(format!(
-                        "内嵌 Duration 不兼容：{error}"
+                        "SV2 Duration 文件不可用：{error}"
                     )),
                     Ok(None) => {}
                 }
