@@ -29,7 +29,11 @@ pub(in crate::synthesis::voice) fn is_flat_package(path: &Path) -> bool {
     path.file_name().is_some_and(|name| name.eq_ignore_ascii_case("info.nofs"))
 }
 
-pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatalogEntry> {
+pub(super) fn entry(
+    path: &Path,
+    model_root: Option<&Path>,
+    timing_override: Option<&Path>,
+) -> Result<VoiceCatalogEntry> {
     let canonical = fs::canonicalize(path)?;
     let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
     let id = format!("svflat:{}", crate::synthesis::voice::hex(&digest[..12]));
@@ -70,7 +74,29 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
     };
     if is_flat(path) {
         match FlatVoice::open(path, model_root) {
-            Ok(voice) => {
+            Ok(mut voice) => {
+                // An explicitly selected Flat timing model is a read-only
+                // dependency override. It must match this voicebank's declared
+                // 32-hex model ID, not just have a .dnni extension.
+                if let Some(override_path) = timing_override {
+                    if let Some(model) = voice.models.iter_mut().find(|model| model.role == "duration") {
+                        if override_matches(override_path, &model.id) {
+                            model.installed = true;
+                            model.path = Some(override_path.to_owned());
+                            voice.notes.push(format!(
+                                "Flat Timing：已从手动路径定位模型 {}",
+                                override_path.display()
+                            ));
+                        } else {
+                            voice.notes.push(format!(
+                                "手动指定的 Flat Timing 文件与声库声明的模型 {} 不匹配：{}",
+                                model.id, override_path.display()
+                            ));
+                        }
+                    } else {
+                        voice.notes.push("当前 Flat 声库未声明 Duration / Timing Model，无法匹配手动文件".into());
+                    }
+                }
                 entry.revision = revision(&voice.version);
                 entry.version_label = Some(voice.version.clone());
                 entry.display_name = voice.name;
@@ -90,8 +116,8 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                     })
                     .collect();
                 let installed = voice.models.iter().filter(|item| item.installed).count();
-                let checks = if let Some(root) = model_root {
-                    format!("模型检查 {installed}/{}（{}）", voice.models.len(), root.display())
+                let checks = if model_root.is_some() || timing_override.is_some() {
+                    format!("模型检查 {installed}/{}（已指定模型目录或 Timing 文件）", voice.models.len())
                 } else {
                     "模型目录未配置".to_owned()
                 };
@@ -133,7 +159,9 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                 entry.model_dependencies = manifest.model_ids.iter().enumerate()
                     .map(|(i, id)| {
                         let role = manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown");
-                        let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id));
+                        let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id))
+                            || (is_timing_role(role)
+                                && timing_override.is_some_and(|path| override_matches(path, id)));
                         if found { installed += 1; }
                         let status = if found {
                             "已找到文件"
@@ -145,7 +173,7 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                         format!("{role}：{id}（{status}）")
                     })
                     .collect();
-                let check = if model_root.is_some() {
+                let check = if model_root.is_some() || timing_override.is_some() {
                     format!("依赖模型 {installed}/{} 已找到", manifest.model_ids.len())
                 } else {
                     "未配置 Flat 模型目录".to_owned()
@@ -168,6 +196,18 @@ fn revision(version: &str) -> u32 {
     // identifier is represented by the integer field.
     version.chars().take_while(|ch| ch.is_ascii_digit())
         .collect::<String>().parse().unwrap_or(0)
+}
+
+fn is_timing_role(role: &str) -> bool {
+    matches!(role.to_ascii_lowercase().as_str(), "duration" | "timing_model")
+}
+
+fn override_matches(path: &Path, id: &str) -> bool {
+    valid_model_id(id)
+        && path.is_file()
+        && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni"))
+        && path.file_stem().and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case(id))
 }
 
 /// Read-only, bounded lookup: never use arbitrary manifest strings as paths.
