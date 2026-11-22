@@ -15,6 +15,16 @@ pub struct VoiceSelection {
     pub revision: u32,
 }
 
+/// Distinct installation roots. SV1 and SV2 must not be inferred from the
+/// same Synthesizer V installation folder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoiceDirectory {
+    Sv1,
+    Sv2,
+    Flat,
+    FlatModels,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SynthesisSettings {
