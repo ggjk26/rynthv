@@ -44,6 +44,36 @@ pub(super) fn mix(
     mix_with_recordings(owners, solo_tracks, &[])
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Component {
+    Primary,
+    Secondary,
+}
+
+/// Build a temporary component-only owner set, with the same exact coverage,
+/// mixer controls, pan and gain as the normal full-output mixer. Instrumental
+/// recordings are passed only for the main (primary) component.
+pub(super) fn mix_component_with_recordings(
+    owners: &[PublishedOwner],
+    solo_tracks: &BTreeSet<u64>,
+    recordings: &[AudioLayer],
+    component: Component,
+) -> Result<Option<Arc<RenderedAudio>>, String> {
+    let mut selected = Vec::new();
+    selected.try_reserve_exact(owners.len())
+        .map_err(|error| format!("无法分配独立气声音轨：{error}"))?;
+    for owner in owners {
+        let audio = owner.components
+            .publish_component(&owner.audio, component == Component::Secondary)
+            .map_err(|error| format!("音符组 {} 分量拆分失败：{error}", owner.owner.0))?;
+        let mut separated = owner.clone();
+        separated.audio = Arc::new(audio);
+        selected.push(separated);
+    }
+    mix_with_recordings(&selected, solo_tracks,
+        if component == Component::Primary { recordings } else { &[] })
+}
+
 pub(super) fn mix_with_recordings(
     owners: &[PublishedOwner],
     solo_tracks: &BTreeSet<u64>,
