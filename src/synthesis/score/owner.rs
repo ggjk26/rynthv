@@ -147,13 +147,30 @@ impl ExplicitScore {
                     VoiceError::new(format!("Note {} pitch is outside MIDI range", note.id))
                 })? as f32;
             let note_language = lexicon.note_language(note, language)?;
-            let syllables = super::pronunciation::resolve_note(
-                note,
-                note_language,
-                lexicon,
-                input.voice.dictionary.as_ref(),
-                duration_tree,
-            )?;
+            // "-" is an extension of the preceding *sounding* phoneme,
+            // not a dictionary entry. Prefer its last vowel/diphthong, but
+            // permit a consonant-only note to carry a consonant as well.
+            // An intervening rest, missing predecessor or changed language
+            // cannot inherit pronunciation from an unrelated phrase.
+            let extension = note.lyrics.trim() == "-";
+            let syllables = if extension && note.phonemes.trim().is_empty() {
+                let inherited = (begin_seconds - previous_end_seconds).abs() < 1e-7
+                    && score.notes.last().is_some_and(|note| note.source_note_id.is_some());
+                let token = if inherited {
+                    last_sustained_phone(&score.notes, note_language.id(), duration_tree)?
+                } else {
+                    None
+                };
+                vec![vec![token.unwrap_or_else(|| "sil".to_owned())]]
+            } else {
+                super::pronunciation::resolve_note(
+                    note,
+                    note_language,
+                    lexicon,
+                    input.voice.dictionary.as_ref(),
+                    duration_tree,
+                )?
+            };
             let parts = u32::try_from(syllables.len())
                 .map_err(|_| VoiceError::new("Too many syllables in one note"))?;
             if parts == 0 || syllables.iter().any(Vec::is_empty) {
@@ -161,6 +178,8 @@ impl ExplicitScore {
             }
             let phoneme_attributes =
                 crate::model::PhonemeAttributes::read(&note.attributes).map_err(VoiceError::new)?;
+            let extension_has_sound = extension && syllables.iter().flatten()
+                .any(|token| !matches!(token.as_str(), "sil" | "pau" | "br"));
             let mut phone_index = 0;
             for (part_index, tokens) in syllables.into_iter().enumerate() {
                 score.notes.push(ScoreNote {
@@ -193,7 +212,7 @@ impl ExplicitScore {
                             }
                         })
                         .collect(),
-                    kind: 0,
+                    kind: if extension_has_sound { 2 } else { 0 },
                     // SV1 uses the note flag for even syllable splitting,
                     // which is enabled unless the note explicitly disables it.
                     flag: family == VoiceFamily::Sv1
@@ -220,6 +239,38 @@ impl ExplicitScore {
         // and moves leading consonants into the preceding temporal record.
         Ok(score)
     }
+}
+
+/// Select the last vowel nucleus of a source note when present. When there
+/// is no vowel (e.g. the user explicitly entered a sustained "m" or "n"),
+/// carry that consonant instead. A silence/breath record breaks inheritance.
+fn last_sustained_phone(
+    notes: &[ScoreNote],
+    language: &str,
+    tree: &PreparedTree,
+) -> Result<Option<String>> {
+    let Some(previous) = notes.last().filter(|note| note.source_note_id.is_some()) else {
+        return Ok(None);
+    };
+    let mut last_consonant = None;
+    let mut last_vowel = None;
+    for phone in &previous.phones {
+        if phone.language != language
+            || matches!(phone.token.as_str(), "sil" | "pau" | "br")
+        {
+            return Ok(None);
+        }
+        let resolved = tree.resolve_phone(language, &phone.token)?;
+        if resolved.used_silence_fallback {
+            return Ok(None);
+        }
+        if matches!(resolved.source_class, Some("vowel" | "diphthong")) {
+            last_vowel = Some(phone.token.clone());
+        } else {
+            last_consonant = Some(phone.token.clone());
+        }
+    }
+    Ok(last_vowel.or(last_consonant))
 }
 
 /// Native SV1 retains seconds; SV2 uses integer frame positions. The latter
