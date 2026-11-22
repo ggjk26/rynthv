@@ -54,6 +54,9 @@ fn inspect() -> Result<(), String> {
     if timing.is_some() && !probe_models {
         return Err("--timing 需要同时指定 --probe-models".into());
     }
+    if probe_models && !is_json(&path) {
+        return Err("DNNI 模型预检只支持 Flat JSON NOFS；加密的 info.nofs 仅能通过 config.json 检查安装清单".into());
+    }
     let result = if path.is_dir() {
         json!({
             "kind": "catalog",
@@ -77,9 +80,21 @@ fn inspect() -> Result<(), String> {
         let voice = FlatVoice::open(&path, models.as_deref())
             .map_err(|error| error.to_string())?;
         if probe_models {
+            let preflight = voice.preflight(timing.as_deref());
+            let conditioning = match voice.conditioning(None) {
+                Ok(controls) => json!({
+                    "status": "parsed_only",
+                    "inputs": controls,
+                }),
+                Err(error) => json!({
+                    "status": "unavailable",
+                    "reason": error.to_string(),
+                }),
+            };
             json!({
                 "kind": "flat-model-preflight",
-                "preflight": voice.preflight(timing.as_deref()),
+                "preflight": preflight,
+                "conditioning": conditioning,
                 "voice": voice,
             })
         } else {
