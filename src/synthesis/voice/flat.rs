@@ -41,6 +41,10 @@ pub struct FlatVoice {
     pub styles: Vec<FlatStyle>,
     pub pitch: Option<Vec<f32>>,
     pub timing: Option<Vec<f32>>,
+    /// Native Flat per-voice F0 style vector (32 float32 components).
+    pub f0_style: Option<Vec<f32>>,
+    /// Native Flat duration style vector (128 float32 components).
+    pub duration_style: Option<Vec<f32>>,
     pub notes: Vec<String>,
 }
 
@@ -64,17 +68,35 @@ impl FlatVoice {
         })?;
         let mut notes = Vec::new();
         let mut models = Vec::new();
-        for (key, role, folder) in [
-            ("base_model", "base_model", "acoustic"),
-            ("sing_model", "sing_model", "pitch"),
-            ("timing_model", "timing_model", "duration"),
-            ("f0_model", "f0_model", "f0"),
+        // Flat v200 databases (e.g. Kasane Teto AI 2) use the short
+        // acoustic/vocoder/duration/f0 keys. Older manifests also appear
+        // with base_model/sing_model/timing_model/f0_model. Recognize both
+        // rather than reporting every dependency as missing.
+        for (aliases, role, folder) in [
+            (&["acoustic", "base_model"][..], "acoustic", "acoustic"),
+            (&["vocoder"][..], "vocoder", "vocoder"),
+            (&["duration", "timing_model"][..], "duration", "duration"),
+            (&["f0", "f0_model"][..], "f0", "f0"),
+            (&["sing_model"][..], "sing_model", "pitch"),
         ] {
-            let Some(id) = optional_text(object, key)? else {
-                notes.push(format!("{key} 未指定；需要根据具体 Flat 版本确认默认值"));
+            let mut id = None;
+            for &key in aliases {
+                if let Some(candidate) = optional_text(object, key)? {
+                    let candidate = verify_model_id(candidate, key)?;
+                    if id.as_ref().is_some_and(|previous| previous != &candidate) {
+                        return Err(VoiceError::new(format!(
+                            "Flat {role} 有两个冲突的模型标识"
+                        )));
+                    }
+                    id = Some(candidate);
+                }
+            }
+            let Some(id) = id else {
+                if role != "sing_model" && role != "vocoder" {
+                    notes.push(format!("{role} 未指定；请检查所用 Flat 版本的模型清单"));
+                }
                 continue;
             };
-            let id = verify_model_id(id, key)?;
             let path = model_root.and_then(|root| locate_model(root, &id, folder));
             models.push(FlatModelReference {
                 role, id, installed: path.is_some(), path,
@@ -116,11 +138,17 @@ impl FlatVoice {
                     )?;
                     let extra = match item.get("extra") {
                         None | Some(Value::Null) => None,
+                        // Flat v200 stores this as 4 little-endian float32
+                        // bytes written as eight hexadecimal characters.
+                        Some(Value::String(hex)) => {
+                            let field = format!("styles[{index}].extra");
+                            Some(parse_hex_vector(hex, 1, &field)?[0])
+                        }
                         Some(number) => {
                             let value = number.as_f64()
                                 .filter(|value| value.is_finite() && value.abs() <= 1_000_000.0)
                                 .ok_or_else(|| VoiceError::new(format!(
-                                    "styles[{index}].extra 必须是有限的数值"
+                                    "styles[{index}].extra 必须是有限的数值或 float32 十六进制字符串"
                                 )))?;
                             Some(value as f32)
                         }
@@ -133,6 +161,8 @@ impl FlatVoice {
         };
         let pitch = optional_vector(object, "pitch", 32)?;
         let timing = optional_vector(object, "timing", 128)?;
+        let f0_style = optional_vector(object, "f0_style", 32)?;
+        let duration_style = optional_vector(object, "duration_style", 128)?;
         let language = optional_text(object, "language")?.unwrap_or_default().to_owned();
         let mut supported_languages = text_array(object, "support_languages")?;
         if !language.is_empty() && !supported_languages.iter().any(|s| s == &language) {
@@ -145,7 +175,7 @@ impl FlatVoice {
             language,
             supported_languages,
             phoneset: optional_text(object, "phoneset")?.map(str::to_owned),
-            models, styles, pitch, timing, notes,
+            models, styles, pitch, timing, f0_style, duration_style, notes,
         })
     }
 }
