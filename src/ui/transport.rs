@@ -24,17 +24,21 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 .icon_size(21.0)
         };
         let transport = &mut app.editor.transport;
-        if ui
-            .add(button(
-                if transport.playing {
-                    Icon::Pause
-                } else {
-                    Icon::Play
-                },
+        let play = ui.add(
+            IconButton::new(
+                if transport.playing { Icon::Pause } else { Icon::Play },
                 lang.text("播放 / 暂停（Space）", "Play / Pause (Space)", "再生／一時停止（Space）"),
-            ))
-            .clicked()
-        {
+            )
+            .size(vec2(42.0, 34.0))
+            .icon_size(25.0)
+            .framed()
+            .background(PANEL),
+        );
+        ui.painter().rect_stroke(
+            play.rect.expand(1.0), 5.0,
+            Stroke::new(1.0, BORDER), StrokeKind::Outside,
+        );
+        if play.clicked() {
             transport.toggle();
         }
         if ui.add(button(Icon::Stop, lang.text("停止（Ctrl+Space）", "Stop (Ctrl+Space)", "停止（Ctrl+Space）"))).clicked() {
