@@ -19,7 +19,8 @@ pub(super) fn show(ui: &mut Ui, lang: super::UiLanguage) {
             &[
                 (lang.text("撤销", "Undo", "元に戻す"), "Ctrl+Z"),
                 (lang.text("重做", "Redo", "やり直し"), "Ctrl+Y / Ctrl+Shift+Z"),
-                (lang.text("全选音符", "Select all notes", "すべてのノートを選択"), "Ctrl+A"),
+                (lang.text("全选人声轨", "Select all vocal tracks", "すべての歌声トラックを選択"), "Ctrl+A"),
+                (lang.text("全选当前音符组", "Select all notes in current group", "現在のグループの全ノートを選択"), "Ctrl+Shift+A"),
                 (lang.text("复制 / 剪切 / 粘贴", "Copy / Cut / Paste", "コピー／切り取り／貼り付け"), "Ctrl+C / X / V"),
                 (lang.text("重复音符", "Duplicate notes", "ノートを複製"), "Ctrl+D"),
                 (lang.text("删除音符", "Delete notes", "ノートを削除"), "Delete"),
@@ -49,6 +50,7 @@ pub(super) fn show(ui: &mut Ui, lang: super::UiLanguage) {
                 (lang.text("平移视野", "Pan view", "表示位置を移動"), lang.text("中键拖动", "Middle-drag", "中ボタンドラッグ")),
                 (lang.text("水平滚动", "Horizontal scroll", "水平スクロール"), lang.text("Shift+滚轮", "Shift+Wheel", "Shift+ホイール")),
                 (lang.text("缩放", "Zoom", "ズーム"), lang.text("Ctrl+滚轮", "Ctrl+Wheel", "Ctrl+ホイール")),
+                (lang.text("适应全曲", "Fit song", "曲全体に合わせる"), "Shift+F"),
             ][..],
         ),
     ] {
