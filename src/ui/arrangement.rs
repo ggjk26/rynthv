@@ -129,17 +129,25 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         d.insert_temp(scroll_id, value);
         value
     });
+    let follow_id = Id::new("arrangement-followed-playhead-position");
+    let previous = ui.ctx().data_mut(|d| d.get_temp::<i64>(follow_id));
+    let paused_seek = !app.editor.transport.playing
+        && previous.is_some_and(|old| old != app.editor.transport.position);
+    let follow = app.editor.transport.playing || paused_seek;
     follow_playhead(
         ui,
         Rect::from_min_max(ruler.min, body.max),
         &mut app.view.arrangement,
         app.editor.transport.position,
-        app.editor.transport.playing
+        follow
             && app.gesture.is_none()
             && app.group_gesture.is_none()
             && app.audio_drag.is_none()
             && !app.view_pan.is_active(),
     );
+    if !ui.input(|i| i.pointer.any_down()) && !app.view_pan.is_active() {
+        ui.ctx().data_mut(|d| d.insert_temp(follow_id, app.editor.transport.position));
+    }
     loop_region::show(
         ui,
         Id::new("arrangement-ruler"),
