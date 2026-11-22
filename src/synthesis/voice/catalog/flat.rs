@@ -75,10 +75,22 @@ pub(super) fn entry(
     if is_flat(path) {
         match FlatVoice::open(path, model_root) {
             Ok(mut voice) => {
+                if voice.f0_style.is_some() {
+                    voice.notes.push("F0 风格向量：32 维 Float32 已解析".to_owned());
+                }
+                if voice.duration_style.is_some() {
+                    voice.notes.push("时长风格向量：128 维 Float32 已解析".to_owned());
+                }
                 // An explicitly selected Flat timing model is a read-only
                 // dependency override. It must match this voicebank's declared
                 // 32-hex model ID, not just have a .dnni extension.
                 if let Some(override_path) = timing_override {
+                    if model_root.is_none() {
+                        // Avoid saying all models were unchecked when the
+                        // explicitly selected Timing file was checked.
+                        voice.notes.retain(|note| note != "尚未配置 Flat 模型目录，未进行模型文件检查");
+                        voice.notes.push("其余 Flat 模型请在「Flat 模型目录」设置后检查".to_owned());
+                    }
                     if let Some(model) = voice.models.iter_mut().find(|model| model.role == "duration") {
                         if override_matches(override_path, &model.id) {
                             model.installed = true;
