@@ -88,7 +88,7 @@ pub fn scroll(ui: &Ui, response: &Response, rect: Rect, view: &mut Viewport) -> 
     if modifiers.ctrl && delta.y != 0.0 {
         let x = pointer.map_or(rect.center().x, |p| p.x);
         let anchor = beat_at(rect, view, x);
-        view.beat_width = (view.beat_width * (delta.y * 0.002).exp()).clamp(8.0, 640.0);
+        view.beat_width = (view.beat_width * (delta.y * 0.002).exp()).clamp(2.0, 640.0);
         view.start = (anchor - (x - rect.left()) as f64 / view.beat_width as f64).max(0.0);
     } else if modifiers.shift || delta.x != 0.0 {
         view.start = (view.start - (delta.x + delta.y) as f64 / view.beat_width as f64).max(0.0);
