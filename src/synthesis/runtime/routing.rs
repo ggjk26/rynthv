@@ -95,6 +95,7 @@ impl Runtime {
                 worker::Worker::spawn(
                     entry.directory.clone(),
                     dictionaries,
+                    self.library.settings.sv2_duration_model.clone(),
                     self.repaint.clone(),
                 )
             })();
