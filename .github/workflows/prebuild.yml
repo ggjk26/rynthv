@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - master
-      - feat/editor-playback-export-polish
     tags:
       - 'v*'
 
