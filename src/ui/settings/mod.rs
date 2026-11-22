@@ -70,6 +70,11 @@ pub fn show(app: &mut App, ctx: &Context) {
         .show(ctx, |ui| {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             let header = Rect::from_min_size(rect.min, vec2(rect.width(), 50.0));
+            ui.painter().rect_filled(
+                Rect::from_min_size(header.min, vec2(header.width(), 3.0)),
+                2.0,
+                GREEN.gamma_multiply(0.85),
+            );
             let mut title = child(ui, header.shrink2(vec2(18.0, 10.0)), "settings-title");
             title.spacing_mut().interact_size.y = 30.0;
             title.horizontal(|ui| {
@@ -154,9 +159,28 @@ pub fn show(app: &mut App, ctx: &Context) {
 
 fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
-    if selected || response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 4, if selected { BUTTON_ACTIVE } else { BUTTON });
+    let hover = ui.ctx().animate_bool_with_time(
+        response.id.with("navigation-hover"),
+        response.hovered() && !selected,
+        0.1,
+    );
+    if selected || hover > 0.001 {
+        ui.painter().rect_filled(
+            rect,
+            5,
+            if selected {
+                BUTTON_ACTIVE
+            } else {
+                FILL.lerp_to_gamma(BUTTON_HOVER, hover)
+            },
+        );
+    }
+    if selected {
+        ui.painter().rect_filled(
+            Rect::from_min_size(rect.min + vec2(1.0, 6.0), vec2(3.0, rect.height() - 12.0)),
+            1.0,
+            GREEN,
+        );
     }
     let icon = Rect::from_center_size(rect.left_center() + vec2(19.0, 0.0), Vec2::splat(18.0));
     match page {
@@ -179,7 +203,7 @@ fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> 
         } else {
             FontId::proportional(12.0)
         },
-        TEXT,
+        if selected { TEXT } else { MUTED.lerp_to_gamma(TEXT, hover) },
     );
     response.widget_info(|| {
         WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, page.label(language))
