@@ -18,6 +18,10 @@ concurrency:
 
 jobs:
   build:
+    # Feature PRs use the dedicated Linux typecheck instead of starting the
+    # paid Windows packaging runner on every incremental interface commit.
+    # Remove this branch-specific guard after integration/Windows verification.
+    if: ${{ github.head_ref != 'feat/editor-playback-export-polish' }}
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     strategy:
