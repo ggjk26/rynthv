@@ -80,6 +80,26 @@ Linux 可使用 `./target/release/rynthv --graphics=vulkan`。如需同时打开
 
 **重要：SV Flat 目前只有只读识别与诊断功能，不能合成/试听/导出。** .sfpk 安装包解包和 Flat 原生合成模型加载尚未实现，识别到的 Flat 声库会明确显示为不可用，不会误当作 SV1 声库加载。
 
+### Flat 合成兼容性预检（开发阶段）
+
+已经增加可从「声库管理 → 选中 Flat 歌手 → 验证已安装的 Flat DNNI 模型」启动的**后台检查**。它会逐一打开已定位的模型，检测当前读取器支持的 DNNI v3 容器、验证索引与资源摘要，并对比是否出现已知 SV2 阶段资源标识。结果可复制为 JSON 诊断报告。**这只是模型解析和原生内核兼容性检查，不会将 Flat 声库标记为可合成。**
+
+命令行示例（Windows PowerShell）：
+
+```powershell
+.\rynthv-flat-inspect.exe "C:\Users\admin\Documents\OPSV\Dreamtonics\Synthesizer V Studio\databases\<声库目录>\info.200.nofs" --models "C:\Users\admin\Documents\OPSV\Dreamtonics\Synthesizer V Studio\models" --probe-models
+```
+
+如果 Duration 文件放在独立目录，也可以追加：
+
+```powershell
+--timing "C:\path\to\7b0ea690ada94b4484b50d9d64a21cae.dnni"
+```
+
+工具仅在加上 `--probe-models` 时读取并验证大型模型文件。为了保护 UI 响应速度，声库列表的快速扫描依旧只检查是否能定位文件。预检同时输出未经合成使用的 Flat 条件输入：32 维歌声唱法向量、32 维 F0 风格向量、128 维 Duration 风格向量，维度互不混用。
+
+如果 `UnsupportedFormat` 或 `InvalidNativeContainer` 出现，只能说明**当前 RynthV 读取器**不兼容该模型容器或校验参数，不能据此断言用户的模型文件损坏。下一阶段仍需要针对这些模型实现专用图计算、音素字典映射、声学条件、Pitch/F0、Duration 和 Vocoder 协议，验证成功后才会开放 Flat 原生播放和 WAV 导出。
+
 ### Flat v200 NOFS 与外部时长模型
 
 RynthV 可以只读解析 Kasane Teto AI 2 v200 一类 **JSON 格式的 `info.200.nofs`**。该版本使用 `acoustic`、`vocoder`、`duration`、`f0` 四个模型引用键；旧版的 `base_model`、`sing_model`、`timing_model`、`f0_model` 也会识别。解析器同时支持十六进制小端 Float32 编码的 `styles[].extra`、32 维 `f0_style`、128 维 `duration_style`。识别上述字段与模型引用**不代表 Flat 原生推理可用**。
