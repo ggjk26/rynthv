@@ -1,13 +1,62 @@
 use super::{Runtime, events::WakeOnExit, mixer};
 use crate::{
     model::Project,
-    synthesis::audio::{self, ChannelLayout, WaveFormat},
+    synthesis::audio::{self, ChannelLayout, RenderedAudio, WaveFormat},
 };
-use std::{path::PathBuf, sync::mpsc, thread};
+use std::{path::{Path, PathBuf}, sync::{Arc, mpsc}, thread};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ExportPart {
+    Full,
+    Primary,
+    Secondary,
+}
+
+#[derive(Clone, Copy)]
+enum AspirationMode {
+    None,
+    Separate,
+    PrimaryOnly,
+    SecondaryOnly,
+}
 
 pub struct ExportRequest {
-    pub outputs: Vec<(PathBuf, Option<u64>)>,
+    pub outputs: Vec<(PathBuf, Option<u64>, ExportPart)>,
     format: WaveFormat,
+}
+
+fn add_outputs(
+    outputs: &mut Vec<(PathBuf, Option<u64>, ExportPart)>,
+    destination: &Path,
+    stem: &str,
+    track: Option<u64>,
+    mode: AspirationMode,
+) {
+    let base = destination.join(format!("{stem}.wav"));
+    let asp = destination.join(format!("{stem}_asp.wav"));
+    match mode {
+        AspirationMode::None => outputs.push((base, track, ExportPart::Full)),
+        AspirationMode::Separate => {
+            outputs.push((base, track, ExportPart::Primary));
+            outputs.push((asp, track, ExportPart::Secondary));
+        }
+        AspirationMode::PrimaryOnly => outputs.push((base, track, ExportPart::Primary)),
+        AspirationMode::SecondaryOnly => outputs.push((asp, track, ExportPart::Secondary)),
+    }
+}
+
+fn align_stem(source: Option<Arc<RenderedAudio>>, frames: usize)
+    -> Result<Arc<RenderedAudio>, String>
+{
+    let mut samples = source.as_ref()
+        .map_or_else(Vec::new, |audio| audio.samples().to_vec());
+    if samples.len() > frames.saturating_mul(2) {
+        return Err("气声分量超过完整混音长度".into());
+    }
+    samples.resize(frames.checked_mul(2).ok_or("导出样本数溢出")?, 0.0);
+    RenderedAudio::new(48_000, 0.0, ChannelLayout::Stereo, samples)
+        .map(Arc::new)
+        .map_err(|error| error.to_string())
 }
 
 impl ExportRequest {
@@ -60,16 +109,20 @@ impl ExportRequest {
             2 => ChannelLayout::Stereo,
             _ => return Err("请选择有效的声道数".into()),
         };
-        if text("aspirationFormat") != "noAspiration" {
-            return Err("暂不支持单独导出气声".into());
-        }
+        let mode = match text("aspirationFormat") {
+            "" | "noAspiration" => AspirationMode::None,
+            "separateAspiration" => AspirationMode::Separate,
+            "onlyMain" => AspirationMode::PrimaryOnly,
+            "onlyAspiration" => AspirationMode::SecondaryOnly,
+            other => return Err(format!("不支持的气声输出模式：{other}")),
+        };
         let mut outputs = Vec::new();
         if config
             .get("exportMixDown")
             .and_then(serde_json::Value::as_bool)
             == Some(true)
         {
-            outputs.push((directory.join(format!("{stem}_mixdown.wav")), None));
+            add_outputs(&mut outputs, &directory, &format!("{stem}_mixdown"), None, mode);
         }
         for (index, track) in project.tracks.iter().enumerate() {
             if track
@@ -91,14 +144,13 @@ impl ExportRequest {
                     }
                 })
                 .collect();
-            outputs.push((
-                directory.join(format!(
-                    "{stem}_{:02}_{}.wav",
-                    index + 1,
-                    safe.trim_end_matches(['.', ' '])
-                )),
+            add_outputs(
+                &mut outputs,
+                &directory,
+                &format!("{stem}_{:02}_{}", index + 1, safe.trim_end_matches(['.', ' '])),
                 Some(track.id),
-            ));
+                mode,
+            );
         }
         if outputs.is_empty() {
             return Err("请勾选混音导出或至少一条音轨".into());
@@ -152,27 +204,35 @@ impl Runtime {
                 let result = (|| {
                     // Validate all selected sources before writing the first file.
                     let mut sources = Vec::new();
-                    for (path, track) in request.outputs {
-                        let audio = if let Some(track) = track {
-                            let stems: Vec<_> = owners
-                                .iter()
-                                .filter(|owner| owner.controls.track_id == track)
-                                .cloned()
-                                .collect();
-                            let backing: Vec<_> = recordings
-                                .iter()
-                                .filter(|layer| layer.track_id == track)
-                                .cloned()
-                                .collect();
-                            mixer::mix_with_recordings(&stems, &solo, &backing)?
-                        } else {
-                            mixer::mix_with_recordings(&owners, &solo, &recordings)?
+                    for (path, track, component) in request.outputs {
+                        let stems: Vec<_> = owners.iter()
+                            .filter(|owner| track.is_none_or(|id| owner.controls.track_id == id))
+                            .cloned()
+                            .collect();
+                        let backing: Vec<_> = recordings.iter()
+                            .filter(|layer| track.is_none_or(|id| layer.track_id == id))
+                            .cloned()
+                            .collect();
+                        let full = mixer::mix_with_recordings(&stems, &solo, &backing)?;
+                        let Some(full) = full else {
+                            // Skip empty or missing-singer tracks while still
+                            // allowing all remaining outputs to be written.
+                            continue;
                         };
-                        // Empty/missing-singer tracks are skipped instead of
-                        // aborting an otherwise valid mixdown or stem export.
-                        if let Some(audio) = audio {
-                            sources.push((path, audio));
-                        }
+                        let audio = match component {
+                            ExportPart::Full => full,
+                            ExportPart::Primary => align_stem(
+                                mixer::mix_component_with_recordings(
+                                    &stems, &solo, &backing, mixer::Component::Primary
+                                )?, full.frames()
+                            )?,
+                            ExportPart::Secondary => align_stem(
+                                mixer::mix_component_with_recordings(
+                                    &stems, &solo, &[], mixer::Component::Secondary
+                                )?, full.frames()
+                            )?,
+                        };
+                        sources.push((path, audio));
                     }
                     if sources.is_empty() {
                         return Err("所选音轨均没有可导出的音频。".into());
