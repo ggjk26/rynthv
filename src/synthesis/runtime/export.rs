@@ -93,7 +93,7 @@ impl ExportRequest {
                 .collect();
             outputs.push((
                 directory.join(format!(
-                    "{stem}-{:02}-{}.wav",
+                    "{stem}_{:02}_{}.wav",
                     index + 1,
                     safe.trim_end_matches(['.', ' '])
                 )),
@@ -127,13 +127,9 @@ impl Runtime {
             && self.recording_error.is_none()
             && self.recordings.pending.is_empty()
             && self.pending_voices.is_empty()
-            && (self
-                .planner
-                .plan()
-                .requests
-                .keys()
-                .all(|id| !self.routes.contains_key(id) && !self.binding_errors.contains_key(id))
-                || (!self.is_busy() && self.stats.failed == 0 && self.error.is_none()))
+            // A missing singer on another track must not globally block
+            // exporting already-completed vocal or instrumental tracks.
+            && !self.is_busy()
             && (!self.export_owners.is_empty() || !self.recordings.layers.is_empty())
     }
 
@@ -172,13 +168,14 @@ impl Runtime {
                         } else {
                             mixer::mix_with_recordings(&owners, &solo, &recordings)?
                         };
-                        let audio = audio.ok_or_else(|| {
-                            format!(
-                                "{} 没有可导出的音频，请检查音轨是否为空、静音或被独奏排除",
-                                path.display()
-                            )
-                        })?;
-                        sources.push((path, audio));
+                        // Empty/missing-singer tracks are skipped instead of
+                        // aborting an otherwise valid mixdown or stem export.
+                        if let Some(audio) = audio {
+                            sources.push((path, audio));
+                        }
+                    }
+                    if sources.is_empty() {
+                        return Err("所选音轨均没有可导出的音频。".into());
                     }
                     let mut written = Vec::new();
                     for (path, audio) in sources {
