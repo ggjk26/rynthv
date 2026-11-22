@@ -18,9 +18,10 @@ pub(super) fn resolve_note(
     // actual voice phoneme inventory rather than through the word dictionary.
     if note.lyrics.trim().eq_ignore_ascii_case("br")
         && note.phonemes.trim().is_empty()
-        && tree.resolve_phone(language.id(), "br").is_ok()
     {
-        return Ok(vec![vec!["br".to_owned()]]);
+        let supported = tree.resolve_phone(language.id(), "br")
+            .is_ok_and(|phone| !phone.used_silence_fallback);
+        return Ok(vec![vec![if supported { "br" } else { "sil" }.to_owned()]]);
     }
     let explicit = (!note.phonemes.trim().is_empty())
         .then_some(note.phonemes.as_str())
@@ -44,9 +45,10 @@ pub(super) fn resolve_note(
             }
         }
     } else {
-        frontend.resolve(language, &note.lyrics).map_err(|error| {
-            VoiceError::new(format!("音符 {} · {}：{error}", note.id, language.label()))
-        })?
+        // Unknown ordinary lyrics (including unsupported silent tokens)
+        // should affect only this note, not abort the whole phrase/song.
+        frontend.resolve(language, &note.lyrics)
+            .unwrap_or_else(|_| vec![vec!["sil".to_owned()]])
     };
     if note
         .attributes
