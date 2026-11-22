@@ -18,6 +18,7 @@ mod phones;
 mod preparation;
 mod prepared;
 mod sidecar;
+mod shared_duration;
 pub mod session_identity;
 mod stream;
 mod tensor;
