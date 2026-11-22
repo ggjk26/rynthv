@@ -1,6 +1,6 @@
 use super::{Runtime, events::WakeOnExit};
 use crate::synthesis::{
-    settings::{SynthesisSettings, VoiceSelection},
+    settings::{SynthesisSettings, VoiceDirectory, VoiceSelection},
     voice::{VoiceAvailability, VoiceCatalog, VoiceCatalogEntry},
 };
 use std::{
@@ -219,9 +219,17 @@ impl Runtime {
         let count = [found.databases.as_ref(), found.sv1_databases.as_ref(), found.flat_databases.as_ref()]
             .into_iter().flatten().count();
         let mut settings = self.library.settings.clone();
-        settings.databases = found.databases;
-        settings.sv1_databases = found.sv1_databases;
-        settings.flat_databases = found.flat_databases;
+        // Preserve a manually configured directory when the corresponding
+        // standard location does not exist (e.g. Documents redirected to OneDrive).
+        if found.databases.is_some() {
+            settings.databases = found.databases;
+        }
+        if found.sv1_databases.is_some() {
+            settings.sv1_databases = found.sv1_databases;
+        }
+        if found.flat_databases.is_some() {
+            settings.flat_databases = found.flat_databases;
+        }
         settings.roots = None;
         settings.selected_voice = None;
         if !self.library.update(settings) {
@@ -234,33 +242,59 @@ impl Runtime {
     pub fn dictionaries(&self) -> Option<&Path> {
         self.library.settings.dictionaries.as_deref()
     }
-    pub fn set_databases(&mut self, path: PathBuf) {
-        let mut settings = self.library.settings.clone();
-        settings.databases = Some(path);
-        if self.library.update(settings) {
-            self.rescan_voices();
+    /// Apply one root from either the native folder picker or a pasted path.
+    /// Validate before touching the saved configuration and report failures to
+    /// the UI rather than silently keeping the previous root.
+    pub fn set_voice_directory(
+        &mut self,
+        directory: VoiceDirectory,
+        path: Option<PathBuf>,
+    ) -> Result<(), String> {
+        if self.library.invalid_settings() {
+            return Err("声库设置文件无法读取；请先备份并重置损坏的 synthesis.json。".into());
         }
+        if let Some(path) = &path {
+            let metadata = std::fs::metadata(path).map_err(|error| {
+                format!("无法访问声库目录 {}：{error}", path.display())
+            })?;
+            if !metadata.is_dir() {
+                return Err(format!("选择的路径不是文件夹：{}", path.display()));
+            }
+        }
+        let mut settings = self.library.settings.clone();
+        let target = match directory {
+            VoiceDirectory::Sv1 => &mut settings.sv1_databases,
+            VoiceDirectory::Sv2 => &mut settings.databases,
+            VoiceDirectory::Flat => &mut settings.flat_databases,
+            VoiceDirectory::FlatModels => &mut settings.flat_models,
+        };
+        if *target == path {
+            return Ok(());
+        }
+        *target = path;
+        // Explicit modern paths supersede old, untyped roots. Otherwise a
+        // stale legacy directory can continue generating scan errors after a
+        // user has successfully selected a new SV1/SV2 location.
+        settings.roots = None;
+        if !self.library.update(settings) {
+            return Err(self.library.settings_error().unwrap_or(
+                "声库目录保存失败，请检查 synthesis.json 的权限。"
+            ).to_owned());
+        }
+        self.rescan_voices();
+        Ok(())
     }
-    pub fn set_sv1_databases(&mut self, path: PathBuf) {
-        let mut settings = self.library.settings.clone();
-        settings.sv1_databases = Some(path);
-        if self.library.update(settings) {
-            self.rescan_voices();
-        }
+    pub fn set_databases(&mut self, path: PathBuf) -> Result<(), String> {
+        self.set_voice_directory(VoiceDirectory::Sv2, Some(path))
     }
-    pub fn set_flat_databases(&mut self, path: PathBuf) {
-        let mut settings = self.library.settings.clone();
-        settings.flat_databases = Some(path);
-        if self.library.update(settings) {
-            self.rescan_voices();
-        }
+    pub fn set_sv1_databases(&mut self, path: PathBuf) -> Result<(), String> {
+        self.set_voice_directory(VoiceDirectory::Sv1, Some(path))
     }
-    pub fn set_flat_models(&mut self, path: PathBuf) {
-        let mut settings = self.library.settings.clone();
-        settings.flat_models = Some(path);
-        if self.library.update(settings) {
-            self.rescan_voices();
-        }
+    pub fn set_flat_databases(&mut self, path: PathBuf) -> Result<(), String> {
+        self.set_voice_directory(VoiceDirectory::Flat, Some(path))
+    }
+    pub fn set_flat_models(&mut self, path: PathBuf) -> Result<(), String> {
+        self.set_voice_directory(VoiceDirectory::FlatModels, Some(path))
     }
     pub fn set_dictionaries(&mut self, path: PathBuf) {
         let mut settings = self.library.settings.clone();
