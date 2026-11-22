@@ -56,9 +56,9 @@ pub fn show(app: &mut App, ui: &mut Ui, rect: Rect, track: &Track) {
         let bulk = targets.len() > 1;
         if !track.is_instrumental() {
             ui.menu_button(if bulk {
-                lang.text("设置所选音轨歌声", "Set selected tracks' voices", "選択したトラックの歌声を設定")
+                lang.text("设定所选轨道声库…", "Set selected tracks' voices…", "選択トラックの歌声を設定…")
             } else {
-                lang.text("设置音轨歌声", "Set track voice", "トラックの歌声を設定")
+                lang.text("设定声库…", "Set voice…", "歌声を設定…")
             }, |ui| {
                 if ui.button(lang.text("取消音轨歌声", "Remove track voice", "トラックの歌声を解除")).clicked() {
                     app.commit_lyric();
