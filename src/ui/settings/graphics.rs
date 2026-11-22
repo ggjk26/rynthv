@@ -78,6 +78,9 @@ pub struct GraphicsInfo {
     /// Backend requested at application startup (not the potentially edited
     /// setting, which only takes effect on the next process launch).
     pub configured: GraphicsBackend,
+    /// The persisted preference as read when this process started. A temporary
+    /// CLI override must not produce a false unsaved/restart warning.
+    pub preference_at_start: GraphicsBackend,
     /// Actual adapter backend reported by wgpu, not merely the request.
     pub active_backend: String,
     pub gpu_name: String,
@@ -87,10 +90,15 @@ pub struct GraphicsInfo {
 }
 
 impl GraphicsInfo {
-    pub fn from_context(cc: &CreationContext<'_>, configured: GraphicsBackend) -> Self {
+    pub fn from_context(
+        cc: &CreationContext<'_>,
+        configured: GraphicsBackend,
+        preference_at_start: GraphicsBackend,
+    ) -> Self {
         let Some(state) = cc.wgpu_render_state.as_ref() else {
             return Self {
                 configured,
+                preference_at_start,
                 active_backend: "wgpu (unknown)".into(),
                 gpu_name: "Unknown".into(),
                 gpu_type: "Unknown".into(),
@@ -107,6 +115,7 @@ impl GraphicsInfo {
         };
         Self {
             configured,
+            preference_at_start,
             active_backend: backend.into(),
             gpu_name: adapter.name,
             gpu_type: format!("{:?}", adapter.device_type),
