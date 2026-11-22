@@ -96,7 +96,30 @@ fn contents(app: &mut App, ui: &mut Ui) {
             app.view.snap = !app.view.snap;
         }
         crate::ui::scale::controls::toolbar(app, ui);
+        ui.add_space(8.0);
+        if ui.button(lang.text("适应全曲", "Fit song", "曲全体に合わせる"))
+            .on_hover_text(lang.text(
+                "按全曲长度调整横向缩放（Shift+F）",
+                "Fit horizontal zoom to the entire song (Shift+F)",
+                "曲全体が見えるように横方向を調整（Shift+F）"
+            ))
+            .clicked()
+        {
+            fit_song(app, ui.ctx());
+        }
     });
+}
+
+/// Fit the whole project timeline inside the actual piano canvas. This is
+/// shared with Shift+F so the button and keyboard shortcut behave identically.
+pub fn fit_song(app: &mut App, ctx: &Context) {
+    let width = ctx.data_mut(|data| data.get_temp::<f32>(Id::new("piano-canvas-width")))
+        .unwrap_or(800.0).max(100.0);
+    let span = crate::model::beats(app.editor.project.end()).max(1.0);
+    app.view.piano.start = 0.0;
+    app.view.piano.beat_width = (f64::from(width) / (span + 1.0))
+        .clamp(2.0, 640.0) as f32;
+    ctx.request_repaint();
 }
 
 fn title(app: &mut App, ui: &mut Ui) {
