@@ -118,12 +118,17 @@ impl App {
             .options_mut(|options| options.zoom_with_keyboard = false);
         let last_preferences =
             serde_json::to_string_pretty(&preferences).expect("valid interface preferences");
+        let graphics = ui::settings::GraphicsInfo::from_context(
+            cc,
+            backend,
+            preferences.graphics_backend,
+        );
         let mut app = Self {
             editor: Editor::new(Project::default()),
             synthesis: synthesis::runtime::Runtime::new(cc.egui_ctx.clone()),
             view,
             preferences,
-            graphics: ui::settings::GraphicsInfo::from_context(cc, backend),
+            graphics,
             path: None,
             error,
             settings: false,
