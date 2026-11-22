@@ -33,7 +33,7 @@ pub fn grid(ui: &Ui, rect: Rect, view: &Viewport, time: &TimeAxis, step: f64) {
             ),
         );
     }
-    for (beat, _, _, _) in time.bars(visible_end(rect, view) + 1.0) {
+    for (beat, index, _, _) in time.bars(visible_end(rect, view) + 1.0) {
         painter.vline(
             x_at(rect, view, beat),
             rect.y_range(),
