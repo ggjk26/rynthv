@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use eframe::egui::*;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub struct SceneGroup {
     pub reference: GroupRef,
@@ -58,6 +59,24 @@ pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
     let colors = TrackColors::new(app.editor.current_track());
     let drawing_pitch = app.piano_tool.is_pitch();
     for g in groups {
+        // A sorted sweep detects overlapping notes in O(n log n) rather
+        // than checking every note against every other note in large groups.
+        let mut sorted: Vec<_> = g.notes.iter().collect();
+        sorted.sort_unstable_by_key(|note| note.onset);
+        let mut latest: BTreeMap<i32, (i64, EntityId)> = BTreeMap::new();
+        let mut overlaps = BTreeSet::new();
+        for note in sorted {
+            if let Some((end, previous)) = latest.get(&note.pitch).copied()
+                && note.onset < end
+            {
+                overlaps.insert(previous);
+                overlaps.insert(note.id);
+            }
+            let end = note.onset.saturating_add(note.duration);
+            if latest.get(&note.pitch).is_none_or(|(last_end, _)| end > *last_end) {
+                latest.insert(note.pitch, (end, note.id));
+            }
+        }
         let active = app.editor.reference == Some(g.reference.id);
         let painter = ui.painter().with_clip_rect(
             clip_rect(&g.reference, canvas, &app.view.piano).intersect(ui.clip_rect()),
@@ -108,33 +127,54 @@ pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
                     r,
                     corner_radius,
                     Stroke::new(
-                        0.7,
-                        if selected {
-                            colors.highlight
-                        } else {
-                            colors
-                                .accent
-                                .gamma_multiply(if active { 0.7 } else { 0.35 })
+                        if selected { 1.5 } else { 0.7 },
+                        if selected { Color32::WHITE } else {
+                            colors.accent.gamma_multiply(if active { 0.7 } else { 0.35 })
                         },
                     ),
                     StrokeKind::Inside,
                 );
+                if selected {
+                    for x in [r.left() + 1.0, r.right() - 1.0] {
+                        painter.vline(x, r.y_range(), Stroke::new(1.0, Color32::WHITE));
+                    }
+                }
+                if note.muted() {
+                    painter.hline(
+                        r.left()..=r.right(),
+                        r.bottom() - 1.0,
+                        Stroke::new(2.0, Color32::from_rgb(241, 90, 92)),
+                    );
+                }
+                if overlaps.contains(&note.id) {
+                    let size = r.width().min(r.height()).min(10.0);
+                    painter.add(Shape::convex_polygon(
+                        vec![r.right_top(), pos2(r.right() - size, r.top()), pos2(r.right(), r.top() + size)],
+                        Color32::from_rgb(243, 170, 67),
+                        Stroke::NONE,
+                    ));
+                }
             }
-            painter
-                .with_clip_rect(r.intersect(painter.clip_rect()))
-                .text(
-                    r.left_center() + vec2(6.0, 0.0),
-                    Align2::LEFT_CENTER,
-                    &note.lyrics,
-                    FontId::proportional(12.0),
-                    if drawing_pitch || (note.muted() && active) {
-                        TEXT
-                    } else if active {
-                        foreground(color)
-                    } else {
-                        MUTED
-                    },
+            // Short notes hide text instead of letting lyrics spill into
+            // adjacent note rectangles. Long notes center their labels.
+            let ink = if drawing_pitch || (note.muted() && active) {
+                TEXT
+            } else if active {
+                foreground(color)
+            } else {
+                MUTED
+            };
+            let label = painter.layout_no_wrap(
+                note.lyrics.clone(), FontId::proportional(12.0), ink
+            );
+            if label.size().x + 10.0 <= r.width() && label.size().y <= r.height() {
+                painter.galley(
+                    pos2(r.center().x - label.size().x * 0.5,
+                         r.center().y - label.size().y * 0.5),
+                    label,
+                    ink,
                 );
+            }
         }
     }
 }
