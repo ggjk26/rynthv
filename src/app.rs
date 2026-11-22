@@ -396,15 +396,7 @@ impl App {
             });
         }
         if self.about {
-            Modal::new(Id::new("about")).show(ctx, |ui| {
-                ui.heading(format!("RynthV {}", env!("CARGO_PKG_VERSION")));
-                ui.label(lang.text("Rust + egui 歌声合成引擎", "Rust + egui singing synthesis engine", "Rust + egui 歌声合成エンジン"));
-                ui.label(lang.text("多音轨编辑、歌词与音高调整、MIDI 导入和 WAV 导出。", "Multitrack editing, lyrics, pitch control, MIDI import and WAV export.", "マルチトラック編集、歌詞とピッチ調整、MIDI 読み込み、WAV 書き出しに対応。"));
-                ui.label(lang.text("支持 Windows 和 Linux。", "Supports Windows and Linux.", "Windows と Linux に対応。"));
-                if ui.button(lang.text("关闭", "Close", "閉じる")).clicked() {
-                    self.about = false;
-                }
-            });
+            ui::about::show(self, ctx);
         }
         if self.settings {
             ui::settings::show(self, ctx);
