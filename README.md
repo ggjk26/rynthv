@@ -80,6 +80,16 @@ Linux 可使用 `./target/release/rynthv --graphics=vulkan`。如需同时打开
 
 **重要：SV Flat 目前只有只读识别与诊断功能，不能合成/试听/导出。** .sfpk 安装包解包和 Flat 原生合成模型加载尚未实现，识别到的 Flat 声库会明确显示为不可用，不会误当作 SV1 声库加载。
 
+### Flat v200 NOFS 与外部时长模型
+
+RynthV 可以只读解析 Kasane Teto AI 2 v200 一类 **JSON 格式的 `info.200.nofs`**。该版本使用 `acoustic`、`vocoder`、`duration`、`f0` 四个模型引用键；旧版的 `base_model`、`sing_model`、`timing_model`、`f0_model` 也会识别。解析器同时支持十六进制小端 Float32 编码的 `styles[].extra`、32 维 `f0_style`、128 维 `duration_style`。识别上述字段与模型引用**不代表 Flat 原生推理可用**。
+
+「**设置 → 声库目录**」现在除了 SV1、SV2、Flat 的数据库目录，还提供两种独立的时长模型文件选择：
+- **SV2 Duration DNNI**：选择 DNNI v3 文件；声库缺少自身 Duration 时可作为共享模型加载，后台验证资源索引、SV2 Duration 角色和完整性。无效文件会在声库列表显示不兼容，不能替换其他模型。
+- **Flat Timing Model DNNI（仅检查）**：手动选择与 Flat NOFS 里 `duration` / `timing_model` 标识**文件名一致**的 `.dnni`，例如声库声明 `7b0ea690ada94b4484b50d9d64a21cae` 时，文件名应为 `7b0ea690ada94b4484b50d9d64a21cae.dnni`。此设置只用于 Flat 依赖定位/诊断，不会注入 SV2 Duration 推理。
+
+在 Windows 点击「**检测并应用本机 SV1 / SV2 / Flat 声库目录**」时，也会检查 `Documents/OPSV/Dreamtonics/Synthesizer V Studio/models` 是否存在并作为 Flat 共享模型目录；已有的手动目录会在默认路径不存在时保留。
+
 ### 本地编译时内嵌 SV2 Duration（可选）
 
 如果拥有相应模型的使用与再分发许可，可以在**自己的电脑**编译时通过
