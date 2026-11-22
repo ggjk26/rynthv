@@ -4,7 +4,10 @@ use crate::synthesis::{
     stages::duration::DurationResult,
     voice::{Result, VoiceError},
 };
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeMap, btree_map::Entry},
+    sync::Arc,
+};
 
 impl RenderedPhonemeTrack {
     pub fn from_phrase(phrase: &PreparedPhrase, duration: &DurationResult) -> Result<Self> {
@@ -34,7 +37,7 @@ impl RenderedPhonemeTrack {
         let mut phones = Vec::with_capacity(count);
         let mut frames = 0_usize;
         let mut default_frames = 0_usize;
-        let mut sources = BTreeSet::new();
+        let mut sources = BTreeMap::new();
         for (index, (actual, default)) in duration
             .durations
             .iter()
@@ -66,7 +69,10 @@ impl RenderedPhonemeTrack {
             let Some(identity) = &source.source else {
                 continue;
             };
-            if !sources.insert((identity.note_id, identity.phone_index)) {
+            if sources
+                .insert((identity.note_id, identity.phone_index), phones.len())
+                .is_some()
+            {
                 return Err(VoiceError::new(
                     "Rendered phoneme source identity is duplicated",
                 ));
@@ -114,8 +120,23 @@ impl RenderedPhonemeTrack {
                         || source.attributes.activity.is_some()),
             });
         }
+        let mut labels = BTreeMap::<_, String>::new();
+        for ((note, _), index) in sources {
+            let token = &phones[index].token;
+            match labels.entry(note) {
+                Entry::Vacant(entry) => {
+                    entry.insert(token.clone());
+                }
+                Entry::Occupied(mut entry) => {
+                    let label = entry.get_mut();
+                    label.push(' ');
+                    label.push_str(token);
+                }
+            }
+        }
         Ok(Self {
             phones: phones.into(),
+            labels: Arc::new(labels),
         })
     }
 }

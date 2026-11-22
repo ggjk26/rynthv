@@ -71,11 +71,7 @@ impl PcmComponents {
     /// Extract a single native vocoder component using the *exact* visible
     /// sample window of the published full output. Keeping these boundaries
     /// identical is required for phase-coherent stem summation.
-    pub fn publish_component(
-        &self,
-        visible: &RenderedAudio,
-        secondary: bool,
-    ) -> Result<RenderedAudio> {
+    pub fn component_samples(&self, visible: &RenderedAudio, secondary: bool) -> Result<&[f32]> {
         if visible.sample_rate() != SAMPLE_RATE
             || visible.layout() != ChannelLayout::Mono
             || self.primary.len() != self.secondary.len()
@@ -92,12 +88,7 @@ impl PcmComponents {
             .filter(|&end| end <= self.primary.len())
             .ok_or_else(|| VoiceError::new("Vocoder stem has mismatched sample length"))?;
         let source = if secondary { &self.secondary } else { &self.primary };
-        RenderedAudio::new(
-            SAMPLE_RATE,
-            visible.start_seconds(),
-            ChannelLayout::Mono,
-            source[first..end].to_vec(),
-        ).map_err(|error| VoiceError::new(error.to_string()))
+        Ok(&source[first..end])
     }
 
     pub fn memory_bytes(&self) -> usize {

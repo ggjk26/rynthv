@@ -151,7 +151,6 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         &app.editor.project.time,
         app.view.step(),
     );
-    let groups = scene::snapshot(app);
     if !app.editor.current_track().is_instrumental()
         && app.group_gesture.is_none()
         && !app.view_pan.is_active()
@@ -162,20 +161,20 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         } else if app.piano_tool == super::Tool::PitchAnchor {
             super::pitch_anchor::interaction(app, ui, &response, canvas);
         } else {
-            interaction(app, ui, &response, canvas, &groups);
+            interaction(app, ui, &response, canvas);
         }
     }
-    let groups = scene::snapshot(app);
+    let references = scene::references(app);
     super::background_notes::draw(app, ui, canvas);
-    super::rendered::waveforms(app, ui, canvas, &groups);
-    scene::draw_notes(app, ui, canvas, &groups);
-    super::rendered::phonemes(app, ui, canvas, &groups);
+    super::rendered::waveforms(app, ui, canvas, &references);
+    scene::draw_notes(app, ui, canvas, &references);
+    super::rendered::phonemes(app, ui, canvas, &references);
     super::rendered::text_editor(app, ui, canvas);
-    super::rendered::pitch(app, ui, canvas, &groups);
-    super::pitch_edit::draw(app, ui, canvas, &groups);
+    super::rendered::pitch(app, ui, canvas, &references);
+    super::pitch_edit::draw(app, ui, canvas, &references);
     super::pitch_anchor::draw(app, ui, canvas);
-    super::retakes::show(app, ui, canvas, &groups);
-    scene::headers(app, ui, canvas, &groups);
+    super::retakes::show(app, ui, canvas, &references);
+    scene::headers(app, ui, canvas, &references);
     if let Some(Gesture::Select { origin, .. }) = &app.gesture
         && let Some(p) = ui.input(|i| i.pointer.interact_pos())
     {
@@ -228,7 +227,7 @@ fn median_playback_pitch(app: &App) -> Option<i32> {
     let cursor = app.editor.transport.position;
     let mut pitches = Vec::new();
     for reference in app.editor.current_track().visible_references() {
-        if reference.mute {
+        if reference.mute || !reference.contains(cursor) {
             continue;
         }
         let Some(group) = app.editor.project.group(&reference.group_id) else {
@@ -251,37 +250,33 @@ fn median_playback_pitch(app: &App) -> Option<i32> {
     pitches.sort_unstable();
     Some(pitches[pitches.len() / 2])
 }
-fn interaction(
-    app: &mut App,
-    ui: &mut Ui,
-    response: &Response,
-    canvas: Rect,
-    groups: &[scene::SceneGroup],
-) {
+fn interaction(app: &mut App, ui: &mut Ui, response: &Response, canvas: Rect) {
     let lang = app.preferences.language;
     let hit = response
         .interact_pointer_pos()
-        .and_then(|p| scene::hit_note(app, groups, canvas, p));
-    if let Some(p) = ui.input(|i| i.pointer.hover_pos())
-        && let Some((r, n)) = scene::hit_note(app, groups, canvas, p)
+        .and_then(|point| scene::hit_note(app, canvas, point));
+    if response.hovered()
+        && let Some(p) = ui.input(|i| i.pointer.hover_pos())
+        && let Some(rect) = hit
+            .as_ref()
+            .map(|hit| hit.rect)
+            .or_else(|| scene::hit_note(app, canvas, p).map(|hit| hit.rect))
+        && ((p.x - rect.left()).abs() < 6.0 || (p.x - rect.right()).abs() < 6.0)
     {
-        let rect = note_rect(&n, r.blick_offset, r.pitch_offset, canvas, app);
-        if (p.x - rect.left()).abs() < 6.0 || (p.x - rect.right()).abs() < 6.0 {
-            response
-                .clone()
-                .on_hover_cursor(CursorIcon::ResizeHorizontal);
-        }
+        response
+            .clone()
+            .on_hover_cursor(CursorIcon::ResizeHorizontal);
     }
     if response.double_clicked()
         && let Some(p) = response.interact_pointer_pos()
     {
         app.commit_lyric();
-        if super::rendered::begin_text_edit(app, canvas, groups, p) {
+        if super::rendered::begin_text_edit(app, canvas, p) {
             // Editing a rendered phoneme label takes precedence over creating
             // a note at the same double-click location.
-        } else if let Some((reference, note)) = hit {
-            app.editor.select_reference(app.editor.track, reference.id);
-            app.editor.selected = BTreeSet::from([note.id]);
+        } else if let Some(hit) = &hit {
+            app.editor.select_reference(app.editor.track, hit.reference);
+            app.editor.selected = BTreeSet::from([hit.note]);
             app.edit_lyric();
         } else {
             app.editor.begin(app.preferences.language.text("创建音符", "Create note", "ノートを作成"));
@@ -299,14 +294,14 @@ fn interaction(
         && let Some(p) = response.interact_pointer_pos()
     {
         app.commit_lyric();
-        if let Some((reference, note)) = hit {
-            app.editor.select_reference(app.editor.track, reference.id);
+        if let Some(hit) = &hit {
+            app.editor.select_reference(app.editor.track, hit.reference);
             if ui.input(|i| i.modifiers.ctrl || i.modifiers.shift) {
-                if !app.editor.selected.remove(&note.id) {
-                    app.editor.selected.insert(note.id);
+                if !app.editor.selected.remove(&hit.note) {
+                    app.editor.selected.insert(hit.note);
                 }
             } else {
-                app.editor.selected = BTreeSet::from([note.id]);
+                app.editor.selected = BTreeSet::from([hit.note]);
             }
         } else {
             let at = ticks(beat_at(canvas, &app.view.piano, p.x));
@@ -319,13 +314,12 @@ fn interaction(
         }
     }
     if response.secondary_clicked()
-        && let Some(p) = response.interact_pointer_pos()
-        && let Some((reference, note)) = scene::hit_note(app, groups, canvas, p)
+        && let Some(hit) = hit
     {
         app.commit_lyric();
-        app.editor.select_reference(app.editor.track, reference.id);
-        if !app.editor.selected.contains(&note.id) {
-            app.editor.selected = BTreeSet::from([note.id]);
+        app.editor.select_reference(app.editor.track, hit.reference);
+        if !app.editor.selected.contains(&hit.note) {
+            app.editor.selected = BTreeSet::from([hit.note]);
         }
     }
     response.context_menu(|ui| {
@@ -378,7 +372,7 @@ fn interaction(
         }
     });
     if response.drag_started_by(PointerButton::Primary) {
-        start_gesture(app, ui, canvas, groups);
+        start_gesture(app, ui, canvas);
     }
     if response.dragged_by(PointerButton::Primary) {
         update_gesture(app, ui, canvas);

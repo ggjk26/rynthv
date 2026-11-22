@@ -1,22 +1,20 @@
 use crate::{
     app::App,
-    model::{PitchControl, beats, ticks},
+    model::{GroupRef, PitchControl, beats, ticks},
     ui::{
         group_geometry::clip_rect,
-        piano::scene::SceneGroup,
         timeline::{beat_at, x_at},
         track_color::TrackColors,
     },
 };
 use eframe::egui::*;
 
-pub(in crate::ui::piano) fn draw(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
+pub(in crate::ui::piano) fn draw(app: &App, ui: &Ui, canvas: Rect, references: &[GroupRef]) {
     if !app.show_pitch {
         return;
     }
     let colors = TrackColors::new(app.editor.current_track());
-    for group in groups {
-        let reference = &group.reference;
+    for reference in references {
         let Some(model) = app.editor.project.group(&reference.group_id) else {
             continue;
         };

@@ -6,19 +6,28 @@ use crate::synthesis::{
 use std::{
     io::Read,
     path::{Path, PathBuf},
-    sync::mpsc::{self, Receiver, TryRecvError},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, TryRecvError},
+    },
     thread,
 };
 
 pub struct VoiceLibrary {
     pub settings: SynthesisSettings,
-    catalog: Option<VoiceCatalog>,
+    catalog: Option<Arc<VoiceCatalog>>,
     scan: Option<Receiver<LibraryScan>>,
-    flat_probe: Option<Receiver<(PathBuf, Result<FlatPreflight, String>)>>,
+    flat_probe: Option<FlatProbe>,
     flat_probe_result: Option<(PathBuf, Result<FlatPreflight, String>)>,
     catalog_error: Option<String>,
     settings_error: Option<String>,
     invalid_settings: bool,
+}
+
+struct FlatProbe {
+    path: PathBuf,
+    receiver: Receiver<Result<FlatPreflight, String>>,
+    invalidated: bool,
 }
 
 struct LibraryScan {
@@ -112,7 +121,11 @@ impl VoiceLibrary {
     }
 
     pub fn catalog(&self) -> Option<&VoiceCatalog> {
-        self.catalog.as_ref()
+        self.catalog.as_deref()
+    }
+
+    pub fn catalog_snapshot(&self) -> Option<Arc<VoiceCatalog>> {
+        self.catalog.clone()
     }
 
     pub fn is_scanning(&self) -> bool {
@@ -121,6 +134,13 @@ impl VoiceLibrary {
 
     pub fn flat_probe_running(&self) -> bool {
         self.flat_probe.is_some()
+    }
+
+    pub fn flat_probe_path(&self) -> Option<&Path> {
+        self.flat_probe
+            .as_ref()
+            .filter(|probe| !probe.invalidated)
+            .map(|probe| probe.path.as_path())
     }
 
     pub fn flat_probe_for(&self, path: &Path) -> Option<&Result<FlatPreflight, String>> {
@@ -143,18 +163,23 @@ impl VoiceLibrary {
         let models = self.settings.flat_models.clone();
         let timing = self.settings.flat_timing_model.clone();
         let (tx, rx) = mpsc::sync_channel(1);
+        let source = path.clone();
         thread::Builder::new()
             .name("flat-model-preflight".into())
             .spawn(move || {
                 let _wake = WakeOnExit(repaint);
-                let report = FlatVoice::open(&path, models.as_deref())
+                let report = FlatVoice::open(&source, models.as_deref())
                     .map(|voice| voice.preflight(timing.as_deref()))
                     .map_err(|error| error.to_string());
-                let _ = tx.send((path, report));
+                let _ = tx.send(report);
             })
             .map_err(|error| format!("无法启动 Flat 模型预检：{error}"))?;
         self.flat_probe_result = None;
-        self.flat_probe = Some(rx);
+        self.flat_probe = Some(FlatProbe {
+            path,
+            receiver: rx,
+            invalidated: false,
+        });
         Ok(())
     }
 
@@ -206,7 +231,9 @@ impl VoiceLibrary {
         // Dropping the receiver prevents an earlier directory scan from
         // replacing the catalog after the user changes paths again.
         self.scan = None;
-        self.flat_probe = None;
+        if let Some(probe) = &mut self.flat_probe {
+            probe.invalidated = true;
+        }
         self.flat_probe_result = None;
         self.catalog = None;
         self.catalog_error = None;
@@ -231,30 +258,30 @@ impl VoiceLibrary {
         }
     }
 
-    fn poll(&mut self) -> bool {
-        let mut changed = false;
-        if let Some(probe) = &self.flat_probe {
-            match probe.try_recv() {
-                Ok(result) => {
-                    self.flat_probe = None;
-                    self.flat_probe_result = Some(result);
-                    changed = true;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    self.flat_probe = None;
-                    self.flat_probe_result = Some((PathBuf::new(), Err(
-                        "Flat 模型预检线程意外退出".into()
-                    )));
-                    changed = true;
-                }
-                Err(TryRecvError::Empty) => {}
-            }
+    fn poll_flat_probe(&mut self) {
+        let Some(probe) = &self.flat_probe else {
+            return;
+        };
+        let result = match probe.receiver.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Disconnected) => Err("Flat 模型预检线程意外退出".into()),
+            Err(TryRecvError::Empty) => return,
+        };
+        if let Some(probe) = self.flat_probe.take()
+            && !probe.invalidated
+        {
+            self.flat_probe_result = Some((probe.path, result));
         }
+    }
+
+    fn poll(&mut self) -> bool {
+        self.poll_flat_probe();
+        let mut changed = false;
         if let Some(scan) = &self.scan {
             match scan.try_recv() {
                 Ok(result) => {
                     self.scan = None;
-                    self.catalog = Some(result.catalog);
+                    self.catalog = Some(Arc::new(result.catalog));
                     self.catalog_error = result.error;
                     changed = true;
                 }

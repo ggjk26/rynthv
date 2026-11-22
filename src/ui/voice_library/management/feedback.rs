@@ -1,7 +1,10 @@
 use super::super::{context, error_label, localized_diagnostic, text, weak};
 use crate::{
     app::App,
-    synthesis::{runtime::VoiceState, voice::VoiceCatalogEntry},
+    synthesis::{
+        runtime::VoiceState,
+        voice::{VoiceCatalog, VoiceCatalogEntry},
+    },
     ui::theme::*,
 };
 use eframe::egui::*;
@@ -79,9 +82,14 @@ pub(super) fn diagnostics(app: &App, ui: &mut Ui, entry: &VoiceCatalogEntry) {
             weak(ui, format!("{} {:.2} {}", lang.text("加载耗时", "Load time", "読み込み時間"), elapsed.as_secs_f64(), lang.text("秒", "s", "秒")));
         }
     }
-    if let Some(catalog) = app.synthesis.library.catalog()
-        && !catalog.warnings.is_empty()
-    {
+}
+
+pub(super) fn scan_warnings(
+    ui: &mut Ui,
+    catalog: &VoiceCatalog,
+    lang: crate::ui::settings::UiLanguage,
+) {
+    if !catalog.warnings.is_empty() {
         ui.collapsing(
             format!("{} ({})", lang.text("扫描提示", "Scan warnings", "スキャンの警告"), catalog.warnings.len()),
             |ui| {

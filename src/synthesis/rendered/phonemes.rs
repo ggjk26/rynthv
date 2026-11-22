@@ -1,5 +1,5 @@
-use crate::synthesis::plan::OwnerInput;
-use std::sync::Arc;
+use crate::{model::EntityId, synthesis::plan::OwnerInput};
+use std::{collections::BTreeMap, sync::Arc};
 
 mod prepare;
 
@@ -29,12 +29,24 @@ pub struct RenderedPhoneme {
 #[derive(Clone, Debug)]
 pub struct RenderedPhonemeTrack {
     pub phones: Arc<[RenderedPhoneme]>,
+    labels: Arc<BTreeMap<EntityId, String>>,
 }
 
 impl RenderedPhonemeTrack {
+    pub fn label(&self, note: EntityId) -> Option<&str> {
+        self.labels.get(&note).map(String::as_str)
+    }
+
     pub fn memory_bytes(&self) -> usize {
         self.phones.iter().fold(
-            std::mem::size_of_val(self.phones.as_ref()),
+            self.labels.values().fold(
+                std::mem::size_of_val(self.phones.as_ref()),
+                |bytes, label| {
+                    bytes
+                        .saturating_add(std::mem::size_of::<(EntityId, String)>())
+                        .saturating_add(label.capacity())
+                },
+            ),
             |bytes, phone| {
                 bytes
                     .saturating_add(phone.token.capacity())

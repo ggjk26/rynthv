@@ -4,6 +4,7 @@
 
 mod live;
 mod recordings;
+use super::export::ExportPart;
 pub(super) use live::LiveMixer;
 pub(super) use recordings::{RecordingMix, recordings};
 
@@ -27,6 +28,7 @@ struct Controls {
 
 struct Span<'a> {
     audio: &'a RenderedAudio,
+    owner: Option<&'a PublishedOwner>,
     output_start: usize,
     source_start: usize,
     frames: usize,
@@ -44,117 +46,118 @@ pub(super) fn mix(
     mix_with_recordings(owners, solo_tracks, &[])
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Component {
-    Primary,
-    Secondary,
-}
-
-/// Build a temporary component-only owner set, with the same exact coverage,
-/// mixer controls, pan and gain as the normal full-output mixer. Instrumental
-/// recordings are passed only for the main (primary) component.
-pub(super) fn mix_component_with_recordings(
-    owners: &[PublishedOwner],
-    solo_tracks: &BTreeSet<u64>,
-    recordings: &[AudioLayer],
-    component: Component,
-) -> Result<Option<Arc<RenderedAudio>>, String> {
-    let mut selected = Vec::new();
-    selected.try_reserve_exact(owners.len())
-        .map_err(|error| format!("无法分配独立气声音轨：{error}"))?;
-    for owner in owners {
-        let audio = owner.components
-            .publish_component(&owner.audio, component == Component::Secondary)
-            .map_err(|error| format!("音符组 {} 分量拆分失败：{error}", owner.owner.0))?;
-        let mut separated = owner.clone();
-        separated.audio = Arc::new(audio);
-        selected.push(separated);
-    }
-    mix_with_recordings(&selected, solo_tracks,
-        if component == Component::Primary { recordings } else { &[] })
-}
-
 pub(super) fn mix_with_recordings(
     owners: &[PublishedOwner],
     solo_tracks: &BTreeSet<u64>,
     recordings: &[AudioLayer],
 ) -> Result<Option<Arc<RenderedAudio>>, String> {
-    let mut spans = Vec::new();
-    spans
-        .try_reserve_exact(owners.len())
-        .map_err(|error| format!("无法分配混音片段：{error}"))?;
-    let mut output_frames = 0;
-    for owner in owners {
-        if owner.audio.sample_rate() != NATIVE_SAMPLE_RATE {
-            return Err(format!(
-                "音符组 {} 的 PCM 采样率为 {} Hz，混音要求所有音符组使用 48000 Hz",
-                owner.owner.0,
-                owner.audio.sample_rate()
-            ));
+    Mix::prepare(owners.iter(), solo_tracks, recordings.iter())?.render(ExportPart::Full)
+}
+
+pub(super) struct Mix<'a> {
+    spans: Vec<Span<'a>>,
+    frames: usize,
+}
+
+impl<'a> Mix<'a> {
+    pub fn prepare(
+        owners: impl Iterator<Item = &'a PublishedOwner>,
+        solo_tracks: &BTreeSet<u64>,
+        recordings: impl Iterator<Item = &'a AudioLayer>,
+    ) -> Result<Self, String> {
+        let mut spans = Vec::new();
+        spans
+            .try_reserve(owners.size_hint().0)
+            .map_err(|error| format!("无法分配混音片段：{error}"))?;
+        let mut output_frames = 0;
+        for owner in owners {
+            if owner.audio.sample_rate() != NATIVE_SAMPLE_RATE {
+                return Err(format!(
+                    "音符组 {} 的 PCM 采样率为 {} Hz，混音要求所有音符组使用 48000 Hz",
+                    owner.owner.0,
+                    owner.audio.sample_rate()
+                ));
+            }
+            let controls = Controls::read(&owner.controls.mixer)
+                .map_err(|error| format!("音轨 {}：{error}", owner.controls.track_id))?;
+            if controls.solo != solo_tracks.contains(&owner.controls.track_id) {
+                return Err(format!(
+                    "音轨 {} 的独奏状态与项目混音快照不一致",
+                    owner.controls.track_id
+                ));
+            }
+            if owner.controls.reference_muted
+                || controls.mute
+                || (!solo_tracks.is_empty() && !controls.solo)
+            {
+                continue;
+            }
+            let Some(span) = prepare_span(owner, controls)? else {
+                continue;
+            };
+            output_frames = output_frames.max(
+                span.output_start
+                    .checked_add(span.frames)
+                    .ok_or("混音结束位置溢出")?,
+            );
+            spans.push(span);
         }
-        let controls = Controls::read(&owner.controls.mixer)
-            .map_err(|error| format!("音轨 {}：{error}", owner.controls.track_id))?;
-        if controls.solo != solo_tracks.contains(&owner.controls.track_id) {
-            return Err(format!(
-                "音轨 {} 的独奏状态与项目混音快照不一致",
-                owner.controls.track_id
-            ));
+        for layer in recordings {
+            output_frames = output_frames.max(layer.end_frame());
+            spans.push(Span {
+                audio: &layer.audio,
+                owner: None,
+                output_start: layer.start_frame,
+                source_start: 0,
+                frames: layer.frames,
+                left: f64::from(layer.gains[0]),
+                right: f64::from(layer.gains[1]),
+            });
         }
-        if owner.controls.reference_muted
-            || controls.mute
-            || (!solo_tracks.is_empty() && !controls.solo)
-        {
-            continue;
+        Ok(Self {
+            spans,
+            frames: output_frames,
+        })
+    }
+
+    pub fn render(&self, part: ExportPart) -> Result<Option<Arc<RenderedAudio>>, String> {
+        if self.spans.is_empty() {
+            return Ok(None);
         }
-        let Some(span) = prepare_span(owner, controls)? else {
-            continue;
-        };
-        output_frames = output_frames.max(
-            span.output_start
-                .checked_add(span.frames)
-                .ok_or("混音结束位置溢出")?,
-        );
-        spans.push(span);
-    }
-    for layer in recordings {
-        output_frames = output_frames.max(layer.end_frame());
-        spans.push(Span {
-            audio: &layer.audio,
-            output_start: layer.start_frame,
-            source_start: 0,
-            frames: layer.frames,
-            left: f64::from(layer.gains[0]),
-            right: f64::from(layer.gains[1]),
-        });
-    }
-    if spans.is_empty() {
-        return Ok(None);
-    }
-    let sample_count = output_frames.checked_mul(2).ok_or("混音样本数量溢出")?;
-    let mut samples = Vec::new();
-    samples
-        .try_reserve_exact(sample_count)
-        .map_err(|error| format!("无法分配立体声混音缓冲区：{error}"))?;
-    samples.resize(sample_count, 0.0_f32);
-    for span in spans {
-        let channels = span.audio.layout().channels();
-        let source = &span.audio.samples()
-            [span.source_start * channels..(span.source_start + span.frames) * channels];
-        let destination =
-            &mut samples[span.output_start * 2..(span.output_start + span.frames) * 2];
-        for (input, output) in source
-            .chunks_exact(channels)
-            .zip(destination.as_chunks_mut::<2>().0)
-        {
-            let right = input[channels - 1];
-            output[0] = (f64::from(output[0]) + f64::from(input[0]) * span.left) as f32;
-            output[1] = (f64::from(output[1]) + f64::from(right) * span.right) as f32;
+        let sample_count = self.frames.checked_mul(2).ok_or("混音样本数量溢出")?;
+        let mut samples = Vec::new();
+        samples
+            .try_reserve_exact(sample_count)
+            .map_err(|error| format!("无法分配立体声混音缓冲区：{error}"))?;
+        samples.resize(sample_count, 0.0_f32);
+        for span in &self.spans {
+            let pcm = match (part, span.owner) {
+                (ExportPart::Full, _) | (ExportPart::Primary, None) => span.audio.samples(),
+                (ExportPart::Secondary, None) => continue,
+                (part, Some(owner)) => owner
+                    .components
+                    .component_samples(span.audio, part == ExportPart::Secondary)
+                    .map_err(|error| format!("音符组 {} 分量拆分失败：{error}", owner.owner.0))?,
+            };
+            let channels = span.audio.layout().channels();
+            let source =
+                &pcm[span.source_start * channels..(span.source_start + span.frames) * channels];
+            let destination =
+                &mut samples[span.output_start * 2..(span.output_start + span.frames) * 2];
+            for (input, output) in source
+                .chunks_exact(channels)
+                .zip(destination.as_chunks_mut::<2>().0)
+            {
+                let right = input[channels - 1];
+                output[0] = (f64::from(output[0]) + f64::from(input[0]) * span.left) as f32;
+                output[1] = (f64::from(output[1]) + f64::from(right) * span.right) as f32;
+            }
         }
+        RenderedAudio::new(NATIVE_SAMPLE_RATE, 0.0, ChannelLayout::Stereo, samples)
+            .map(Arc::new)
+            .map(Some)
+            .map_err(|error| format!("混音输出无效：{error}"))
     }
-    RenderedAudio::new(NATIVE_SAMPLE_RATE, 0.0, ChannelLayout::Stereo, samples)
-        .map(Arc::new)
-        .map(Some)
-        .map_err(|error| format!("混音输出无效：{error}"))
 }
 
 fn prepare_span(owner: &PublishedOwner, controls: Controls) -> Result<Option<Span<'_>>, String> {
@@ -187,6 +190,7 @@ fn prepare_span(owner: &PublishedOwner, controls: Controls) -> Result<Option<Spa
     let (left, right) = controls.gains(owner.audio.layout());
     Ok(Some(Span {
         audio: &owner.audio,
+        owner: Some(owner),
         output_start,
         source_start: output_start - origin,
         frames: output_end - output_start,

@@ -1,12 +1,12 @@
 use super::{pitch_y, position_at_x, seconds_at_x, waveform_flash::Flash, x_at_seconds};
 use crate::{
     app::App,
-    model::beats,
+    model::{GroupRef, beats},
     synthesis::{
         plan::NoteInput,
         rendered::{VisualSnapshot, VisualTimeline},
     },
-    ui::{piano::scene::SceneGroup, timeline::x_at},
+    ui::timeline::x_at,
 };
 use eframe::egui::*;
 use std::time::Instant;
@@ -15,7 +15,7 @@ pub(super) fn draw(
     app: &App,
     painter: &Painter,
     canvas: Rect,
-    group: &SceneGroup,
+    reference: &GroupRef,
     snapshot: &VisualSnapshot,
     visuals: &VisualTimeline,
     now: Instant,
@@ -23,7 +23,7 @@ pub(super) fn draw(
     let waveform = &snapshot.data.waveform;
     let input = &snapshot.input;
     let tempo = &input.tempo;
-    let active = app.editor.reference == Some(group.reference.id);
+    let active = app.editor.reference == Some(reference.id);
     let color = Color32::from_rgba_unmultiplied(166, 164, 170, if active { 72 } else { 40 });
     let clip = painter.clip_rect();
     let flash_active = visuals.animating_in(

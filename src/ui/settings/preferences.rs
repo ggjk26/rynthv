@@ -31,6 +31,14 @@ impl UiLanguage {
 
     pub fn editor_message<'a>(self, message: &'a str) -> &'a str {
         match message {
+            "请选择目标文件夹" => self.text("请选择目标文件夹", "Choose a destination folder", "保存先フォルダーを選択してください"),
+            "导出目标路径不是文件夹" => self.text("导出目标路径不是文件夹", "The export destination is not a folder", "書き出し先がフォルダーではありません"),
+            "请输入有效的文件名称" => self.text("请输入有效的文件名称", "Enter a valid file name", "有効なファイル名を入力してください"),
+            "请选择有效的采样率" => self.text("请选择有效的采样率", "Select a supported sample rate", "対応するサンプルレートを選択してください"),
+            "请选择有效的位深度" => self.text("请选择有效的位深度", "Select a supported bit depth", "対応するビット深度を選択してください"),
+            "请选择有效的声道数" => self.text("请选择有效的声道数", "Select a supported channel count", "対応するチャンネル数を選択してください"),
+            "请选择有效的气声输出模式" => self.text("请选择有效的气声输出模式", "Select a supported aspiration mode", "対応する息成分モードを選択してください"),
+            "请勾选混音导出或至少一条音轨" => self.text("请勾选混音导出或至少一条音轨", "Select mixdown or at least one track", "ミックスダウンまたは1つ以上のトラックを選択してください"),
             "无法编辑当前音素" => self.text("无法编辑当前音素", "Cannot edit the current phoneme", "現在の音素を編集できません"),
             "无法重置当前音素的强度和爆破设置" => self.text("无法重置当前音素的强度和爆破设置", "Cannot reset phoneme strength or burst settings", "音素の強さ／バースト設定をリセットできません"),
             "此音素没有可独立编辑的右边界" => self.text("此音素没有可独立编辑的右边界", "This phoneme has no independently editable end boundary", "この音素に独立して編集できる終端境界はありません"),

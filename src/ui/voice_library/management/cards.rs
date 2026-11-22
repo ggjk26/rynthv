@@ -1,7 +1,7 @@
 mod actions;
 use super::{
     super::{artwork, family_name, language_name},
-    ACCENT, CARD, INK, State, catalog, details,
+    ACCENT, CARD, INK, State, details,
 };
 use crate::{
     app::App,
@@ -10,7 +10,13 @@ use crate::{
 };
 use eframe::egui::*;
 
-pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry, state: &mut State) {
+pub(super) fn show(
+    app: &mut App,
+    ui: &mut Ui,
+    entry: &VoiceCatalogEntry,
+    state: &mut State,
+    current: bool,
+) {
     ui.push_id((&entry.database_id, "voice-product"), |ui| {
         Frame::new()
             .fill(CARD)
@@ -23,6 +29,10 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry, state:
                     vec2(ui.available_width(), if compact { 152.0 } else { 88.0 }),
                     Sense::hover(),
                 );
+                if !ui.is_rect_visible(rect) && state.expanded.as_ref() != Some(&entry.database_id)
+                {
+                    return;
+                }
                 let art = Rect::from_min_size(
                     rect.min + vec2(0.0, 4.0),
                     Vec2::splat(if compact { 60.0 } else { 80.0 }),
@@ -61,7 +71,6 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, entry: &VoiceCatalogEntry, state:
                     ),
                 );
                 tags_row(ui, entry, tags, app.preferences.language);
-                let current = app.voice_selection().as_ref() == Some(&catalog::selection(entry));
                 let badge_rect = if compact {
                     Rect::from_min_max(
                         pos2(rect.left(), rect.bottom() - 34.0),
