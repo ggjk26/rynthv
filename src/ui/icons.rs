@@ -151,6 +151,11 @@ impl Widget for IconButton {
         );
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, self.label));
         let hovered = response.hovered() && enabled;
+        if hovered {
+            ui.ctx().data_mut(|data| data.insert_temp(
+                Id::new("toolbar-hover-status"), self.label.to_owned()
+            ));
+        }
         if (self.framed && !self.shared_background) || self.selected || hovered {
             let fill = if self.selected || response.is_pointer_button_down_on() {
                 self.background.unwrap_or(BUTTON_ACTIVE)
