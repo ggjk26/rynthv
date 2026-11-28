@@ -31,6 +31,29 @@ pub struct PhoneLookup<'a> {
     pub mapped_symbol: Option<&'a str>,
 }
 
+/// Check an external Flat table against the selected graph's language and
+/// unified phoneme tables before running an inline DDS stage.
+pub(crate) fn verify_flat_mapping(
+    languages: &[&PhoneSet],
+    unified: &PhoneSet,
+    language: &str,
+    token: &str,
+    mapped: &str,
+) -> Result<()> {
+    let resolved = resolve_explicit(languages, unified, language, token)?;
+    if !resolved.selected_phone_set.starts_with(language)
+        || resolved.local_stored_index.is_none()
+        || resolved.used_silence_fallback
+        || resolved.unified_symbol != mapped
+    {
+        return Err(VoiceError::new(format!(
+            "Flat and DDS phoneme tables disagree for {language}:{token} (Flat: {mapped}, DDS: {})",
+            resolved.unified_symbol,
+        )));
+    }
+    Ok(())
+}
+
 /// The two categorical indexes consumed by the duration frontend.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct ResolvedPhone<'a> {
@@ -150,9 +173,9 @@ fn validate_unique(values: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    offset: usize,
+pub(super) struct Reader<'a> {
+    pub(super) bytes: &'a [u8],
+    pub(super) offset: usize,
 }
 
 impl Reader<'_> {
@@ -162,7 +185,7 @@ impl Reader<'_> {
         Ok(value)
     }
 
-    fn string(&mut self) -> Result<String> {
+    pub(super) fn string(&mut self) -> Result<String> {
         let length = self.count()?;
         let bounds = range(self.offset, length, self.bytes.len())?;
         let value = std::str::from_utf8(&self.bytes[bounds.clone()])
@@ -171,7 +194,7 @@ impl Reader<'_> {
         Ok(value.to_owned())
     }
 
-    fn strings(&mut self) -> Result<Vec<String>> {
+    pub(super) fn strings(&mut self) -> Result<Vec<String>> {
         let count = self.count()?;
         if count > (self.bytes.len() - self.offset) / 4 {
             return Err(VoiceError::new(

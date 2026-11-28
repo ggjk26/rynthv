@@ -1,32 +1,21 @@
-use super::{Gesture, NoteDrag, canvas::note_rect};
+use super::{Gesture, NoteDrag};
 use crate::{app::App, model::*, ui::timeline::*};
 use eframe::egui::*;
 use std::collections::BTreeSet;
 pub(super) fn pitch_at(app: &App, rect: Rect, y: f32) -> i32 {
     (app.view.top_pitch - (y - rect.top()) / app.view.row_height).ceil() as i32
 }
-pub(super) fn start_gesture(
-    app: &mut App,
-    ui: &Ui,
-    rect: Rect,
-    groups: &[super::scene::SceneGroup],
-) {
+pub(super) fn start_gesture(app: &mut App, ui: &Ui, rect: Rect) {
     let Some(origin) = ui.input(|i| i.pointer.press_origin()) else {
         return;
     };
     let modifiers = ui.input(|i| i.modifiers);
     app.commit_lyric();
-    if let Some((reference, note)) = super::scene::hit_note(app, groups, rect, origin) {
-        app.editor.select_reference(app.editor.track, reference.id);
-        let r = note_rect(
-            &note,
-            reference.blick_offset,
-            reference.pitch_offset,
-            rect,
-            app,
-        );
-        if !app.editor.selected.contains(&note.id) {
-            app.editor.selected = BTreeSet::from([note.id]);
+    if let Some(hit) = super::scene::hit_note(app, rect, origin) {
+        app.editor.select_reference(app.editor.track, hit.reference);
+        let r = hit.rect;
+        if !app.editor.selected.contains(&hit.note) {
+            app.editor.selected = BTreeSet::from([hit.note]);
         }
         let kind = if origin.x > r.right() - 6.0 {
             NoteDrag::Right
@@ -74,8 +63,8 @@ pub(super) fn start_gesture(
             adjacent,
             kind,
             anchor: match kind {
-                NoteDrag::Right => note.onset + note.duration,
-                _ => note.onset,
+                NoteDrag::Right => hit.end,
+                _ => hit.onset,
             },
         });
     } else if app.piano_tool == super::Tool::NoteDraw || modifiers.ctrl {

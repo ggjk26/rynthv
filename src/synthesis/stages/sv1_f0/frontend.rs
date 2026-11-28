@@ -66,6 +66,21 @@ impl<'a> Frontend<'a> {
         })
     }
 
+    pub(super) fn verify_phone_mapping(
+        &self,
+        language: &str,
+        token: &str,
+        mapped: &str,
+    ) -> Result<()> {
+        crate::synthesis::voice::verify_flat_mapping(
+            &self.languages,
+            self.unified,
+            language,
+            token,
+            mapped,
+        )
+    }
+
     pub fn encode(
         &self,
         notes: &[FrontendNote],

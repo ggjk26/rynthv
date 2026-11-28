@@ -151,13 +151,26 @@ impl Widget for IconButton {
         );
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, self.label));
         let hovered = response.hovered() && enabled;
-        if (self.framed && !self.shared_background) || self.selected || hovered {
-            let fill = if self.selected || response.is_pointer_button_down_on() {
+        if hovered {
+            ui.ctx().data_mut(|data| data.insert_temp(
+                Id::new("toolbar-hover-status"), self.label.to_owned()
+            ));
+        }
+        let hovering = ui.ctx().animate_bool_with_time(
+            response.id.with("hover"), hovered, 0.1
+        );
+        let pressing = ui.ctx().animate_bool_with_time(
+            response.id.with("press"), response.is_pointer_button_down_on(), 0.1
+        );
+        if (self.framed && !self.shared_background) || self.selected
+            || hovering > 0.001 || pressing > 0.001
+        {
+            let base = self.background.unwrap_or(BUTTON);
+            let fill = if self.selected {
                 self.background.unwrap_or(BUTTON_ACTIVE)
-            } else if hovered {
-                BUTTON_HOVER
             } else {
-                self.background.unwrap_or(BUTTON)
+                base.lerp_to_gamma(BUTTON_HOVER, hovering)
+                    .lerp_to_gamma(self.background.unwrap_or(BUTTON_ACTIVE), pressing)
             };
             ui.painter().rect_filled(rect, 3, fill);
         }

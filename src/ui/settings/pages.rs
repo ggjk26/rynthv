@@ -36,12 +36,44 @@ pub(super) fn general(app: &mut App, ui: &mut Ui) {
             ui.ctx().data_mut(|data| data.remove::<f32>(id));
         }
     });
-    fixed(
-        ui,
-        lang.text("图形渲染", "Graphics backend", "描画バックエンド"),
-        "Direct3D 12",
-        lang.text("当前使用 GPU 渲染，暂不支持切换渲染后端", "The graphics backend cannot currently be changed", "現在、描画バックエンドは変更できません"),
-    );
+    section(ui, lang.text("图形与显示", "Graphics & display", "グラフィックス・表示"));
+    row(ui, lang.text("界面图形后端", "UI graphics backend", "UI 描画バックエンド"), |ui| {
+        ComboBox::from_id_salt("graphics-backend")
+            .width(ui.available_width())
+            .selected_text(app.preferences.graphics_backend.label(lang))
+            .show_ui(ui, |ui| {
+                for backend in super::GraphicsBackend::ALL {
+                    if backend.supported() {
+                        ui.selectable_value(
+                            &mut app.preferences.graphics_backend,
+                            backend,
+                            backend.label(lang),
+                        );
+                    }
+                }
+            });
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.weak(lang.text("当前实际运行：", "Currently running:", "現在の使用中："));
+        ui.strong(&app.graphics.active_backend);
+        ui.weak("·");
+        ui.weak(&app.graphics.gpu_name);
+    });
+    if app.preferences.graphics_backend != app.graphics.preference_at_start {
+        ui.colored_label(
+            Color32::from_rgb(240, 188, 116),
+            lang.text(
+                "已更改图形后端。请关闭并重新启动 RynthV 使其生效；当前窗口不会热切换 GPU。",
+                "Graphics backend changed. Restart RynthV to apply it; the current GPU device cannot be hot-swapped.",
+                "描画バックエンドを変更しました。適用するには RynthV を再起動してください。GPU の即時切替はできません。",
+            ),
+        );
+    }
+    ui.weak(lang.text(
+        "Windows 可选择 DirectX 12 或 Vulkan；Linux 可选择 Vulkan。自动模式允许使用系统可用的后端。",
+        "Windows supports DX12 or Vulkan; Linux supports Vulkan. Automatic mode chooses an available backend.",
+        "Windows は DX12 / Vulkan、Linux は Vulkan を選択できます。自動モードは利用可能なバックエンドを選択します。",
+    ));
     section(ui, lang.text("帮助和指导", "Help & guidance", "ヘルプとガイド"));
     toggle(ui, lang.text("显示状态栏", "Show status bar", "ステータスバーを表示"), &mut app.preferences.show_status_bar);
     toggle(ui, lang.text("显示控件操作提示", "Show control hints", "操作ヒントを表示"), &mut app.preferences.control_hints);
@@ -117,7 +149,12 @@ pub(super) fn recording(ui: &mut Ui, lang: super::UiLanguage) {
 
 pub(super) fn rendering(app: &mut App, ui: &mut Ui) {
     let lang = app.preferences.language;
-    crate::ui::voice_library::settings(app, ui);
+    section(ui, lang.text("声库与模型", "Voices & models", "歌声とモデル"));
+    row(ui, lang.text("SV1 / SV2 / Flat 路径", "SV1 / SV2 / Flat folders", "SV1 / SV2 / Flat のパス"), |ui| {
+        if ui.button(lang.text("配置声库目录…", "Configure voice folders…", "歌声フォルダーを設定…")).clicked() {
+            super::open_voice_paths(app, ui.ctx());
+        }
+    });
     row(ui, lang.text("歌声数据库", "Voice database", "歌声データベース"), |ui| {
         if ui.button(lang.text("管理歌声…", "Manage voices…", "歌声を管理…")).clicked() {
             app.settings = false;

@@ -1,6 +1,6 @@
 //! Portable resource locations and the selected voice relative to its library.
 
-use super::voice::VoiceCatalog;
+use super::voice::{VoiceCatalog, VoiceResources};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -15,6 +15,22 @@ pub struct VoiceSelection {
     pub revision: u32,
 }
 
+/// Distinct installation roots. SV1 and SV2 must not be inferred from the
+/// same Synthesizer V installation folder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DurationModelSlot {
+    Sv2,
+    Flat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoiceDirectory {
+    Sv1,
+    Sv2,
+    Flat,
+    FlatModels,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SynthesisSettings {
@@ -22,6 +38,12 @@ pub struct SynthesisSettings {
     pub sv1_databases: Option<PathBuf>,
     pub flat_databases: Option<PathBuf>,
     pub flat_models: Option<PathBuf>,
+    /// External DNNI v3 graph used only when an SV2 voice lacks Duration.
+    #[serde(default)]
+    pub sv2_duration_model: Option<PathBuf>,
+    /// Explicit Flat Timing Model .dnni, matched by the NOFS-JSON model ID.
+    #[serde(default)]
+    pub flat_timing_model: Option<PathBuf>,
     pub dictionaries: Option<PathBuf>,
     pub selected_voice: Option<VoiceSelection>,
     /// Older and third-party RynthV builds stored voicebank locations under
@@ -29,6 +51,16 @@ pub struct SynthesisSettings {
     /// JSON so updating another preference never discards those locations.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "read_legacy_roots")]
     pub roots: Option<serde_json::Value>,
+}
+
+impl SynthesisSettings {
+    pub fn voice_resources(&self) -> VoiceResources {
+        VoiceResources {
+            sv2_duration: self.sv2_duration_model.clone(),
+            flat_models: self.flat_models.clone(),
+            flat_timing: self.flat_timing_model.clone(),
+        }
+    }
 }
 
 /// Collect paths from both the old single-root and multi-root configuration
@@ -159,6 +191,7 @@ impl SynthesisSettings {
                 (&mut settings.databases, documents.join("Dreamtonics/Synthesizer V Studio 2/databases")),
                 (&mut settings.sv1_databases, documents.join("Dreamtonics/Synthesizer V Studio/databases")),
                 (&mut settings.flat_databases, documents.join("OPSV/Dreamtonics/Synthesizer V Studio/databases")),
+                (&mut settings.flat_models, documents.join("OPSV/Dreamtonics/Synthesizer V Studio/models")),
             ] {
                 if candidate.is_dir() {
                     *destination = Some(candidate);

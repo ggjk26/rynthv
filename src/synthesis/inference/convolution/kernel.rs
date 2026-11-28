@@ -2,14 +2,24 @@
 //! dimension always traverses taps, then inputs; no horizontal sum or FMA.
 
 mod parallel;
+#[cfg(target_arch = "x86_64")]
 mod sse2;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+mod neon;
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+mod scalar;
 
 use super::{
     ConvolutionConfig, ConvolutionError,
     packing::{OUTPUT_BLOCK, PackedWeights},
 };
 use crate::synthesis::execution::{self, Cancellation};
+#[cfg(target_arch = "x86_64")]
 use sse2::{Output, accumulate_four, accumulate_one};
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use neon::{Output, accumulate_four, accumulate_one};
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+use scalar::{Output, accumulate_four, accumulate_one};
 
 impl PackedWeights {
     pub(super) fn execute_pending(

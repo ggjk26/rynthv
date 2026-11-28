@@ -1,3 +1,4 @@
+pub mod about;
 pub mod arrangement;
 pub mod arrangement_tracks;
 pub mod chrome;

@@ -1,8 +1,9 @@
+mod export;
+
 use super::controls::*;
 use crate::{
     app::App,
-    model::Extra,
-    synthesis::runtime::ExportRequest,
+    model::{Extra, Track},
     ui::{theme::*, track_color::TrackColors},
 };
 use eframe::egui::*;
@@ -15,23 +16,17 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
         .project
         .tracks
         .iter()
-        .map(|t| {
-            (
-                t.id,
-                t.name.clone(),
-                t.extra
-                    .get("renderEnabled")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(false),
-                TrackColors::new(t).accent,
-            )
-        })
+        .map(track_enabled)
         .collect();
-    let original_tracks = tracks.clone();
-    let mut export_clicked = false;
+    let exporting = app.synthesis.is_exporting();
+    let editing = app.editor.is_editing();
     padded(ui, |ui| {
+        if editing || exporting {
+            ui.disable();
+        }
         ui.weak(lang.text("目标文件夹", "Destination folder", "保存先フォルダー"));
-        let mut directory = string(&config, "destination");
+        let directory_before = string(&config, "destination");
+        let mut directory = directory_before.clone();
         ui.horizontal(|ui| {
             let width = (ui.available_width() - 34.0).max(20.0);
             ui.add_sized(
@@ -42,7 +37,11 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                     .background_color(BORDER),
             );
             if folder_button(ui, lang).clicked() {
-                let mut picker = rfd::FileDialog::new().set_title(lang.text("选择导出文件夹", "Select export folder", "書き出し先を選択"));
+                let mut picker = rfd::FileDialog::new().set_title(lang.text(
+                    "选择导出文件夹",
+                    "Select export folder",
+                    "書き出し先を選択",
+                ));
                 if !directory.is_empty() {
                     picker = picker.set_directory(&directory);
                 }
@@ -51,119 +50,136 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
                 }
             }
         });
-        config.insert("destination".into(), directory.into());
+        if directory != directory_before {
+            config.insert("destination".into(), directory.into());
+        }
         ui.weak(lang.text("文件名称", "File name", "ファイル名"));
         let mut name = string(&config, "filename");
-        field(ui, &mut name);
-        config.insert("filename".into(), name.into());
-        ui.add_space(12.0);
-        let ready = !app.editor.is_editing() && app.synthesis.export_ready(app.editor.revision);
-        let unavailable_reason = app.synthesis.error.as_deref().unwrap_or_else(|| {
-            lang.text(
-                "等待伴奏加载和当前歌声合成完成后导出",
-                "Wait until accompaniment and voice synthesis finish",
-                "伴奏の読み込みと歌声合成の完了後に書き出せます",
-            )
-        });
-        export_clicked = ui
-            .add_enabled(
-                ready,
-                Button::new(lang.text("导出为文件", "Export to files", "ファイルに書き出す")).min_size(vec2(ui.available_width(), 28.0)),
-            )
-            .on_disabled_hover_text(unavailable_reason)
-            .clicked();
-        if !ready && !app.editor.is_editing() {
-            if let Some(message) = &app.synthesis.error {
-                error(ui, message);
-            }
-        }
-        if app.synthesis.is_exporting() {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(lang.text("正在导出…", "Exporting…", "書き出し中…"));
-            });
-        }
-        if let Some(result) = &app.synthesis.export_result {
-            match result {
-                Ok(paths) => {
-                    ui.label(format!("{} {} {}", lang.text("已导出", "Exported", "書き出し済み"), paths.len(), lang.text("个文件", "files", "ファイル")))
-                        .on_hover_text(
-                            paths
-                                .iter()
-                                .map(|p| p.display().to_string())
-                                .collect::<Vec<_>>()
-                                .join("\n"),
-                        );
-                }
-                Err(message) => error(ui, message),
-            }
+        if field(ui, &mut name).changed() {
+            config.insert("filename".into(), name.into());
         }
     });
     section(ui, lang.text("音轨", "Tracks", "トラック"), |ui| {
-        let mut mix = config
+        if editing || exporting {
+            ui.disable();
+        }
+        let before = config
             .get("exportMixDown")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
+        let mut mix = before;
         Frame::new()
             .fill(BACKGROUND)
             .inner_margin(4)
             .show(ui, |ui| {
-                ui.set_min_height(190.0);
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 3.0;
-                track_row(ui, &mut mix, lang.text("混音导出", "Mixdown", "ミックスダウン"), TEXT);
-                for (_, name, enabled, color) in &mut tracks {
-                    track_row(ui, enabled, name, *color);
+                track_row(
+                    ui,
+                    &mut mix,
+                    lang.text("混音导出", "Mixdown", "ミックスダウン"),
+                    TEXT,
+                );
+                for (track, enabled) in app.editor.project.tracks.iter().zip(&mut tracks) {
+                    track_row(ui, enabled, &track.name, TrackColors::new(track).accent);
                 }
             });
-        config.insert("exportMixDown".into(), mix.into());
         pair(ui, |ui, width| {
             if ui
-                .add_sized(vec2(width, 28.0), Button::new(lang.text("全选", "Select all", "すべて選択")))
+                .add_sized(
+                    vec2(width, 28.0),
+                    Button::new(lang.text("全选", "Select all", "すべて選択")),
+                )
                 .clicked()
             {
-                config.insert("exportMixDown".into(), true.into());
-                for (_, _, enabled, _) in &mut tracks {
-                    *enabled = true;
-                }
+                mix = true;
+                tracks.fill(true);
             }
             if ui
-                .add_sized(vec2(width, 28.0), Button::new(lang.text("取消全选", "Deselect all", "すべて解除")))
+                .add_sized(
+                    vec2(width, 28.0),
+                    Button::new(lang.text("取消全选", "Deselect all", "すべて解除")),
+                )
                 .clicked()
             {
-                config.insert("exportMixDown".into(), false.into());
-                for (_, _, enabled, _) in &mut tracks {
-                    *enabled = false;
-                }
+                mix = false;
+                tracks.fill(false);
             }
         });
+        if mix != before {
+            config.insert("exportMixDown".into(), mix.into());
+        }
     });
     section(ui, lang.text("格式", "Format", "形式"), |ui| {
+        if editing || exporting {
+            ui.disable();
+        }
         numeric(
             ui,
             &mut config,
             "numChannels",
             lang.text("声道", "Channels", "チャンネル"),
-            &[(1, lang.text("单声道", "Mono", "モノラル")), (2, lang.text("立体声", "Stereo", "ステレオ"))],
+            &[
+                (1, lang.text("单声道", "Mono", "モノラル")),
+                (2, lang.text("立体声", "Stereo", "ステレオ")),
+            ],
             lang,
         );
         ui.weak(lang.text("气声输出", "Aspiration output", "息成分の書き出し"));
-        ui.small(lang.text("独立气声分轨尚未由合成引擎提供；当前仅支持完整音频。", "Separate aspiration stems are not available from the synthesis engine yet; only full audio can be exported.", "合成エンジンは息成分の個別出力に未対応です。現在は全音声のみ書き出せます。"));
-        let mut aspiration = string(&config, "aspirationFormat");
+        ui.small(lang.text(
+            "基于 vocoder 的 primary / secondary 原始分量导出；分离模式的主音与气声分别保留一致的采样时间、音量和声像。",
+            "Exports native vocoder primary/secondary components with matching sample timing, gain and pan.",
+            "ボコーダーの primary / secondary 成分を同じサンプル時刻、音量、パンで書き出します。",
+        ));
+        let before = match config
+            .get("aspirationFormat")
+            .map(serde_json::Value::as_str)
+        {
+            None | Some(Some("")) => "noAspiration",
+            Some(Some(value)) => value,
+            Some(None) => "",
+        };
+        let mut aspiration = before.to_owned();
         combo(
             ui,
             "aspiration-format",
             &mut aspiration,
-            &[("noAspiration".to_owned(), lang.text("无", "None", "なし"))],
+            &[
+                (
+                    "noAspiration".to_owned(),
+                    lang.text("无（完整混合）", "None (full mix)", "なし（完全ミックス）"),
+                ),
+                (
+                    "separateAspiration".to_owned(),
+                    lang.text("分离", "Separate", "分離"),
+                ),
+                (
+                    "onlyMain".to_owned(),
+                    lang.text("仅主音", "Primary only", "主成分のみ"),
+                ),
+                (
+                    "onlyAspiration".to_owned(),
+                    lang.text("仅气声", "Aspiration only", "息成分のみ"),
+                ),
+            ],
             lang,
         );
-        config.insert("aspirationFormat".into(), aspiration.into());
+        if aspiration != before {
+            config.insert("aspirationFormat".into(), aspiration.into());
+        }
         numeric(
             ui,
             &mut config,
             "bitDepth",
             lang.text("位深度", "Bit depth", "ビット深度"),
-            &[(16, lang.text("16 位", "16-bit", "16ビット")), (24, lang.text("24 位", "24-bit", "24ビット")), (32, lang.text("32 位浮点", "32-bit float", "32ビット浮動小数点"))],
+            &[
+                (16, lang.text("16 位", "16-bit", "16ビット")),
+                (24, lang.text("24 位", "24-bit", "24ビット")),
+                (
+                    32,
+                    lang.text("32 位浮点", "32-bit float", "32ビット浮動小数点"),
+                ),
+            ],
             lang,
         );
         numeric(
@@ -179,54 +195,41 @@ pub(super) fn show(app: &mut App, ui: &mut Ui) {
             lang,
         );
     });
-    if config != app.editor.project.render_config || tracks != original_tracks {
-        app.editor.begin(app.preferences.language.text("渲染设置", "Render settings", "レンダリング設定"));
+    let tracks_changed = app
+        .editor
+        .project
+        .tracks
+        .iter()
+        .map(track_enabled)
+        .ne(tracks.iter().copied());
+    if config != app.editor.project.render_config || tracks_changed {
+        app.editor
+            .begin(lang.text("渲染设置", "Render settings", "レンダリング設定"));
         app.editor.project.render_config = config;
-        for (id, _, enabled, _) in tracks {
-            if let Some(track) = app.editor.project.tracks.iter_mut().find(|t| t.id == id) {
-                track.extra.insert("renderEnabled".into(), enabled.into());
+        for (track, enabled) in app.editor.project.tracks.iter_mut().zip(&tracks) {
+            if track_enabled(track) != *enabled {
+                track
+                    .extra
+                    .insert("renderEnabled".into(), (*enabled).into());
             }
         }
         app.editor.finish();
+        app.synthesis.export_result = None;
     }
-    if export_clicked {
-        start_export(app);
-    }
-    section(ui, lang.text("合成状态", "Synthesis status", "合成ステータス"), |ui| {
-        super::super::synthesis::render_status(app, ui)
-    });
+    export::show(app, ui, tracks.iter().any(|&enabled| enabled));
+    section(
+        ui,
+        lang.text("合成状态", "Synthesis status", "合成ステータス"),
+        |ui| super::super::synthesis::render_status(app, ui),
+    );
 }
 
-fn start_export(app: &mut App) {
-    let lang = app.preferences.language;
-    let request = match ExportRequest::from_project(&app.editor.project) {
-        Ok(request) => request,
-        Err(message) => {
-            app.synthesis.export_result = Some(Err(message));
-            return;
-        }
-    };
-    let existing: Vec<_> = request
-        .outputs
-        .iter()
-        .filter(|(path, _)| path.exists())
-        .map(|(path, _)| path.display().to_string())
-        .collect();
-    if !existing.is_empty()
-        && rfd::MessageDialog::new()
-            .set_title(lang.text("覆盖音频文件", "Overwrite audio files", "音声ファイルを上書き"))
-            .set_description(format!(
-                "{}\n{}",
-                lang.text("以下文件已存在，是否覆盖？", "The following files already exist. Overwrite?", "次のファイルは既に存在します。上書きしますか？"),
-                existing.join("\n")
-            ))
-            .set_buttons(rfd::MessageButtons::YesNo)
-            .show()
-            != rfd::MessageDialogResult::Yes
-    {
-        return;
-    }
-    app.synthesis.export_project(request, app.editor.revision);
+fn track_enabled(track: &Track) -> bool {
+    track
+        .extra
+        .get("renderEnabled")
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
 }
 
 fn string(config: &Extra, key: &str) -> String {
@@ -236,14 +239,23 @@ fn string(config: &Extra, key: &str) -> String {
         .unwrap_or("")
         .to_owned()
 }
-fn numeric(ui: &mut Ui, config: &mut Extra, key: &str, label: &str, values: &[(u64, &str)], lang: crate::ui::settings::UiLanguage) {
+fn numeric(
+    ui: &mut Ui,
+    config: &mut Extra,
+    key: &str,
+    label: &str,
+    values: &[(u64, &str)],
+    lang: crate::ui::settings::UiLanguage,
+) {
     ui.weak(label);
-    let mut value = config
+    let before = config
         .get(key)
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(values[0].0);
+        .map_or(values[0].0, |value| value.as_u64().unwrap_or(0));
+    let mut value = before;
     combo(ui, key, &mut value, values, lang);
-    config.insert(key.into(), value.into());
+    if value != before {
+        config.insert(key.into(), value.into());
+    }
 }
 fn track_row(ui: &mut Ui, checked: &mut bool, name: &str, color: Color32) {
     let row = Frame::new()
@@ -293,5 +305,9 @@ fn folder_button(ui: &mut Ui, lang: crate::ui::settings::UiLanguage) -> Response
         points.into_iter().map(|(x, y)| c + vec2(x, y)).collect(),
         Stroke::new(1.1, MUTED),
     ));
-    response.on_hover_text(lang.text("选择目标文件夹", "Choose destination folder", "書き出し先フォルダーを選択"))
+    response.on_hover_text(lang.text(
+        "选择目标文件夹",
+        "Choose destination folder",
+        "書き出し先フォルダーを選択",
+    ))
 }

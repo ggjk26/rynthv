@@ -15,6 +15,7 @@ use crate::synthesis::{
     plan::{OwnerId, RenderPlan},
     render_cache::{CacheStats, PublishedOwner},
     rendered::{PhonemeSnapshot, VisualPatch, VisualSnapshot},
+    voice::VoiceResources,
 };
 use runner::run;
 use std::{
@@ -98,6 +99,7 @@ impl Worker {
     pub fn spawn(
         path: PathBuf,
         dictionaries: Option<PathBuf>,
+        resources: VoiceResources,
         repaint: eframe::egui::Context,
     ) -> Result<Self, String> {
         let (tx, commands) = mpsc::channel();
@@ -113,6 +115,7 @@ impl Worker {
                 run(
                     path,
                     dictionaries,
+                    resources,
                     commands,
                     Events::new(events, repaint),
                     running,

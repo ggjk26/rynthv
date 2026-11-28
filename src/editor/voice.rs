@@ -48,6 +48,52 @@ impl Editor {
         Ok(())
     }
 
+    /// Apply one voice to the selected group instances as one undoable edit.
+    /// The targets are validated before any group data is changed.
+    pub fn set_references_voice(
+        &mut self,
+        ids: &std::collections::BTreeSet<crate::model::EntityId>,
+        singer: Option<(&str, &str, u32)>,
+    ) -> Result<(), String> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let targets = self.project.tracks.iter()
+            .filter(|track| !track.is_instrumental())
+            .flat_map(|track| track.references())
+            .filter(|reference| ids.contains(&reference.id))
+            .collect::<Vec<_>>();
+        if targets.len() != ids.len() || targets.iter().any(|r| !r.database.is_object()) {
+            return Err("所选音符组包含无效歌声目标".into());
+        }
+        self.begin("设置音符组声库");
+        for track in self.project.tracks.iter_mut()
+            .filter(|track| !track.is_instrumental()) {
+            for reference in std::iter::once(&mut track.main_ref)
+                .chain(track.groups.iter_mut())
+                .filter(|reference| ids.contains(&reference.id)) {
+                let database = reference.database.as_object_mut().expect("validated database");
+                database.remove("id");
+                match singer {
+                    Some((id, name, revision)) => {
+                        database.insert("id".into(), id.into());
+                        database.insert("name".into(), name.into());
+                        database.insert("version".into(), revision.to_string().into());
+                    }
+                    None => {
+                        database.insert("name".into(), "".into());
+                        database.insert("version".into(), "-2".into());
+                    }
+                }
+                for key in ["language", "phoneset", "backendType"] {
+                    database.insert(key.into(), "".into());
+                }
+            }
+        }
+        self.finish();
+        Ok(())
+    }
+
     /// Apply one singer to several vocal tracks in a single undo transaction.
     /// Existing per-reference values follow the standard track voice operation.
     pub fn set_tracks_voice(

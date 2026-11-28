@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   build:
+    # Build and package both Windows and Linux on PRs, including draft PRs.
+    # This produces a Windows ZIP for validating both DX12 and Vulkan startup.
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     strategy:

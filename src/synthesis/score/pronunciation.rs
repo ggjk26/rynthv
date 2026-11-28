@@ -18,9 +18,10 @@ pub(super) fn resolve_note(
     // actual voice phoneme inventory rather than through the word dictionary.
     if note.lyrics.trim().eq_ignore_ascii_case("br")
         && note.phonemes.trim().is_empty()
-        && tree.resolve_phone(language.id(), "br").is_ok()
     {
-        return Ok(vec![vec!["br".to_owned()]]);
+        let supported = tree.resolve_phone(language.id(), "br")
+            .is_ok_and(|phone| !phone.used_silence_fallback);
+        return Ok(vec![vec![if supported { "br" } else { "sil" }.to_owned()]]);
     }
     let explicit = (!note.phonemes.trim().is_empty())
         .then_some(note.phonemes.as_str())
@@ -32,24 +33,31 @@ pub(super) fn resolve_note(
     let syllables = if let Some(phones) = explicit {
         match split_syllables(phones, language, tree) {
             Ok(syllables) => syllables,
-            Err(explicit_error) if !note.phonemes.trim().is_empty() => {
-                // A stale explicit phone need not invalidate the entire phrase
-                // if the note's current lyric has a valid dictionary reading.
-                frontend.resolve(language, &note.lyrics).map_err(|fallback_error| {
-                    VoiceError::new(format!(
-                        "音符 {} · {}：显式音素无效（{explicit_error}），歌词回退失败（{fallback_error}）",
-                        note.id,
-                        language.label()
-                    ))
-                })?
+            Err(_) => {
+                // A malformed explicit pronunciation is discarded as a whole:
+                // never send only its valid prefix to the duration model.
+                // Re-read the lyric; when that too is unavailable, silence
+                // this note instead of breaking synthesis for the whole song.
+                match frontend.resolve(language, &note.lyrics) {
+                    Ok(syllables) => syllables,
+                    Err(_) => vec![vec!["sil".to_owned()]],
+                }
             }
-            Err(error) => return Err(error),
         }
     } else {
-        frontend.resolve(language, &note.lyrics).map_err(|error| {
-            VoiceError::new(format!("音符 {} · {}：{error}", note.id, language.label()))
-        })?
+        // Unknown ordinary lyrics (including unsupported silent tokens)
+        // should affect only this note, not abort the whole phrase/song.
+        frontend.resolve(language, &note.lyrics)
+            .unwrap_or_else(|_| vec![vec!["sil".to_owned()]])
     };
+    // A dictionary may be valid in its source phoneme alphabet but still
+    // yield a phone missing from this particular voicebank. Replace the
+    // entire note with silence before entering the strict neural frontend,
+    // rather than failing the complete owner at score preparation.
+    let mut syllables = syllables;
+    if !supported_syllables(&syllables, language, tree)? {
+        syllables = vec![vec!["sil".to_owned()]];
+    }
     if note
         .attributes
         .get("evenSyllableDuration")
@@ -62,6 +70,28 @@ pub(super) fn resolve_note(
     }
 }
 
+fn supported_syllables(
+    syllables: &[Vec<String>],
+    language: Language,
+    tree: &PreparedTree,
+) -> Result<bool> {
+    if syllables.is_empty() {
+        return Ok(false);
+    }
+    for syllable in syllables {
+        if syllable.is_empty() {
+            return Ok(false);
+        }
+        for token in syllable {
+            let phone = tree.resolve_phone(language.id(), token)?;
+            if phone.used_silence_fallback {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
 fn split_syllables(
     phones: &str,
     language: Language,
@@ -71,6 +101,9 @@ fn split_syllables(
     let mut nuclei = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
         let phone = tree.resolve_phone(language.id(), token)?;
+        if phone.used_silence_fallback && token != "sil" {
+            return Err(VoiceError::new(format!("无效音素：{token}")));
+        }
         if matches!(phone.source_class, Some("vowel" | "diphthong")) {
             nuclei.push(index);
         }

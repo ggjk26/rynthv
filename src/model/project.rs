@@ -210,7 +210,7 @@ impl Track {
     pub fn audio_clip(&self) -> Option<&AudioClip> {
         self.instrumental.as_ref()?.clip.as_ref()
     }
-    pub fn visible_references(&self) -> impl Iterator<Item = &GroupRef> {
+    pub fn visible_references(&self) -> impl DoubleEndedIterator<Item = &GroupRef> {
         std::iter::once(&self.main_ref)
             .filter(|_| !self.main_group.notes.is_empty())
             .chain(&self.groups)

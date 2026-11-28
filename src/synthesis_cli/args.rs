@@ -1,4 +1,4 @@
-use rynthv::synthesis::settings::SynthesisSettings;
+use rynthv::synthesis::{settings::SynthesisSettings, voice::VoiceResources};
 use std::{ffi::OsString, path::PathBuf};
 
 use super::context::ContextImport;
@@ -18,8 +18,11 @@ pub const HELP: &str = r#"RynthV synthesis tools
 
 OPTIONS: --voice PATH --output REPORT.json
 Omitting --voice uses the voice selected in the saved RynthV synthesis settings.
---voice names an exact SV2 revision directory or an original SV1 .nofs file.
-A native SV1 voice directory with a single .nofs file is also accepted.
+--voice names an exact SV2 revision, binary SV1 NOFS, or Flat NOFS-JSON file.
+A voice directory with a single .nofs file is also accepted.
+--flat-models DIR overrides the configured Flat models directory.
+--flat-timing FILE overrides the selected Flat Timing model by matching its ID.
+For Flat legacy DNNI v3, set RYNTHV_FLAT_LEGACY_KEY to the local 64-digit hex key.
 import-context saves a model condition for the selected SV2 or SV2-compatible
 voice. Provide exactly one source: --context-file reads a RynthV context file;
 --identity accepts a decimal or 0x-prefixed hexadecimal U64. Both work on all
@@ -56,6 +59,7 @@ pub enum Command {
 pub struct Args {
     pub command: Command,
     pub voice: PathBuf,
+    pub resources: VoiceResources,
     pub output: Option<PathBuf>,
     pub project: Option<PathBuf>,
     pub module: Option<ModuleArgs>,
@@ -115,6 +119,8 @@ impl Args {
                 .filter(|key| {
                     [
                         "--voice",
+                        "--flat-models",
+                        "--flat-timing",
                         "--process-id",
                         "--session-file",
                         "--context-file",
@@ -148,10 +154,19 @@ impl Args {
         } else {
             None
         };
+        let settings = SynthesisSettings::load();
         let voice = match values.remove("--voice") {
             Some(path) => PathBuf::from(path),
-            None => SynthesisSettings::load()?.selected_directory()?,
+            None => settings.as_ref().map_err(Clone::clone)?.selected_directory()?,
         };
+        let mut resources = settings.as_ref().map(SynthesisSettings::voice_resources)
+            .unwrap_or_default();
+        if let Some(path) = values.remove("--flat-models") {
+            resources.flat_models = Some(PathBuf::from(path));
+        }
+        if let Some(path) = values.remove("--flat-timing") {
+            resources.flat_timing = Some(PathBuf::from(path));
+        }
         let output = values.remove("--output").map(PathBuf::from);
         let project = if command == Command::Plan {
             Some(PathBuf::from(
@@ -230,6 +245,7 @@ impl Args {
         Ok(Some(Self {
             command,
             voice,
+            resources,
             output,
             project,
             module,

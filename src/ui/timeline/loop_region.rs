@@ -16,6 +16,7 @@ enum Part {
     Start,
     End,
     Body,
+    Range,
 }
 
 #[derive(Clone, Copy)]
@@ -28,6 +29,17 @@ struct Drag {
 
 fn position(beat: f64, step: Option<f64>) -> i64 {
     ticks(step.map_or(beat, |step| (beat / step).round() * step)).max(0)
+}
+
+/// When zoomed far out, do not snap boundaries to subdivisions smaller
+/// than a few screen pixels: they would be impossible to select accurately.
+fn readable_step(view: &Viewport, step: Option<f64>) -> Option<f64> {
+    step.map(|mut size| {
+        while size * f64::from(view.beat_width) < 6.0 {
+            size *= 2.0;
+        }
+        size
+    })
 }
 
 fn marker_rect(ruler: Rect, view: &Viewport, transport: &Transport) -> Rect {
@@ -67,35 +79,40 @@ pub fn show(
     transport: &mut Transport,
     options: RulerOptions,
     lang: crate::ui::settings::UiLanguage,
-) {
+) -> bool {
     let response = ui.interact(ruler, id, Sense::click_and_drag());
     let drag_id = id.with("loop-drag");
     let menu_id = id.with("loop-menu-position");
-    let (primary_pressed, primary_down, focused, pointer, alt) = ui.input(|input| {
+    let (primary_pressed, primary_down, focused, pointer, alt, shift) = ui.input(|input| {
         (
             input.pointer.button_pressed(PointerButton::Primary),
             input.pointer.button_down(PointerButton::Primary),
             input.focused,
             input.pointer.interact_pos(),
             input.modifiers.alt,
+            input.modifiers.shift,
         )
     });
     let mut drag = ui.ctx().data(|data| data.get_temp::<Drag>(drag_id));
     let enabled = options.enabled && focused && ui.is_enabled();
-    if !enabled || !transport.looping {
+    if !enabled {
         drag = None;
     } else if primary_pressed {
-        // Capture the original hit, before egui's drag threshold is crossed.
-        drag = pointer
-            .filter(|_| response.contains_pointer())
-            .and_then(|pointer| {
-                hit(marker_rect(ruler, view, transport), ruler, pointer).map(|part| Drag {
-                    part,
-                    pointer_beat: beat_at(ruler, view, pointer.x),
-                    start: transport.loop_region.start(),
-                    end: transport.loop_region.end(),
-                })
-            });
+        // Capture the original hit before crossing the drag threshold. Holding
+        // Shift on empty ruler space creates a new loop interval, including
+        // when looping was previously disabled.
+        drag = pointer.filter(|_| response.contains_pointer()).and_then(|pointer| {
+            let old = transport.looping.then(|| {
+                hit(marker_rect(ruler, view, transport), ruler, pointer)
+            }).flatten();
+            let part = old.or_else(|| shift.then_some(Part::Range))?;
+            Some(Drag {
+                part,
+                pointer_beat: beat_at(ruler, view, pointer.x),
+                start: transport.loop_region.start(),
+                end: transport.loop_region.end(),
+            })
+        });
     }
 
     if enabled {
@@ -105,7 +122,7 @@ pub fn show(
                 && let Some(pointer) = pointer
             {
                 let delta = beat_at(ruler, view, pointer.x) - drag.pointer_beat;
-                let step = if alt { None } else { options.marker_step };
+                let step = if alt { None } else { readable_step(view, options.marker_step) };
                 match drag.part {
                     Part::Start => transport
                         .loop_region
@@ -116,6 +133,16 @@ pub fn show(
                     Part::Body => transport
                         .loop_region
                         .move_to(position(beats(drag.start) + delta, step)),
+                    Part::Range => {
+                        let anchor = position(drag.pointer_beat, step);
+                        let pointer = position(beat_at(ruler, view, pointer.x), step);
+                        let start = anchor.min(pointer);
+                        let end = anchor.max(pointer)
+                            .max(start.saturating_add(crate::model::QUARTER));
+                        transport.loop_region.place_start(start);
+                        transport.loop_region.set_end(end);
+                        transport.looping = true;
+                    }
                 }
             }
         } else if (response.clicked() || response.dragged_by(PointerButton::Primary))
@@ -129,7 +156,7 @@ pub fn show(
         {
             let at = position(
                 beat_at(ruler, view, pointer.x),
-                if alt { None } else { options.marker_step },
+                if alt { None } else { readable_step(view, options.marker_step) },
             );
             ui.ctx().data_mut(|data| data.insert_temp(menu_id, at));
         }
@@ -164,8 +191,8 @@ pub fn show(
         if let Some(part) = part {
             ui.ctx().set_cursor_icon(match part {
                 Part::Start | Part::End => CursorIcon::ResizeHorizontal,
-                Part::Body if primary_down => CursorIcon::Grabbing,
-                Part::Body => CursorIcon::Grab,
+                Part::Body | Part::Range if primary_down => CursorIcon::Grabbing,
+                Part::Body | Part::Range => CursorIcon::Grab,
             });
         }
         let painter = ui.painter().with_clip_rect(ruler.intersect(ui.clip_rect()));
@@ -177,6 +204,8 @@ pub fn show(
             StrokeKind::Inside,
         );
     }
+    let scrubbing = enabled && transport.playing && drag.is_none()
+        && response.dragged_by(PointerButton::Primary);
     ui.ctx().data_mut(|data| {
         if let Some(drag) = drag.filter(|_| primary_down && enabled) {
             data.insert_temp(drag_id, drag);
@@ -184,4 +213,5 @@ pub fn show(
             data.remove::<Drag>(drag_id);
         }
     });
+    scrubbing
 }

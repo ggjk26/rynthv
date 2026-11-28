@@ -13,30 +13,36 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::scene::SceneGroup;
 use crate::{
     app::App,
-    model::{beats, ticks},
+    model::{GroupRef, beats, ticks},
     synthesis::plan::{GlobalBlick, OwnerId, OwnerInput, TempoMapping},
     ui::timeline,
 };
 use eframe::egui::*;
 
-pub fn waveforms(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
+pub fn waveforms(app: &App, ui: &Ui, canvas: Rect, references: &[GroupRef]) {
     if !app.show_waveform {
         return;
     }
     let now = Instant::now();
     let mut animating = false;
-    for group in groups {
-        let Some(visuals) = app.synthesis.visuals(OwnerId(group.reference.id)) else {
+    for reference in references {
+        let Some(visuals) = app.synthesis.visuals(OwnerId(reference.id)) else {
             continue;
         };
         for piece in visuals.pieces() {
             let painter = painter(ui, canvas, app, &piece.snapshot.input, &piece.range);
             if painter.clip_rect().is_positive() {
-                animating |=
-                    waveform::draw(app, &painter, canvas, group, &piece.snapshot, visuals, now);
+                animating |= waveform::draw(
+                    app,
+                    &painter,
+                    canvas,
+                    reference,
+                    &piece.snapshot,
+                    visuals,
+                    now,
+                );
             }
         }
     }
@@ -45,18 +51,18 @@ pub fn waveforms(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
     }
 }
 
-pub fn pitch(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
+pub fn pitch(app: &App, ui: &Ui, canvas: Rect, references: &[GroupRef]) {
     if !app.show_pitch {
         return;
     }
-    for group in groups {
-        let Some(visuals) = app.synthesis.visuals(OwnerId(group.reference.id)) else {
+    for reference in references {
+        let Some(visuals) = app.synthesis.visuals(OwnerId(reference.id)) else {
             continue;
         };
         for piece in visuals.pieces() {
             let painter = painter(ui, canvas, app, &piece.snapshot.input, &piece.range);
             if painter.clip_rect().is_positive() {
-                pitch::draw(app, &painter, canvas, group, &piece.snapshot);
+                pitch::draw(app, &painter, canvas, reference, &piece.snapshot);
             }
         }
     }

@@ -3,8 +3,11 @@ use super::{
     Sort, State,
 };
 use crate::{
-    app::App,
-    synthesis::{settings::VoiceSelection, voice::VoiceCatalogEntry},
+    synthesis::{
+        settings::VoiceSelection,
+        voice::{VoiceCatalog, VoiceCatalogEntry},
+    },
+    ui::settings::UiLanguage,
 };
 use std::collections::BTreeMap;
 
@@ -15,41 +18,50 @@ pub(super) fn selection(entry: &VoiceCatalogEntry) -> VoiceSelection {
     }
 }
 
-pub(super) fn entries(app: &App, state: &State) -> Vec<VoiceCatalogEntry> {
+pub(super) fn is_selected(entry: &VoiceCatalogEntry, current: Option<&VoiceSelection>) -> bool {
+    current
+        .is_some_and(|key| key.database_id == entry.database_id && key.revision == entry.revision)
+}
+
+pub(super) fn entries<'a>(
+    catalog: &'a VoiceCatalog,
+    state: &State,
+    current: Option<&VoiceSelection>,
+    language: UiLanguage,
+) -> Vec<&'a VoiceCatalogEntry> {
     let mut banks: BTreeMap<&str, &VoiceCatalogEntry> = BTreeMap::new();
     let query = state.query.trim().to_lowercase();
-    if let Some(catalog) = app.synthesis.library.catalog() {
-        let rank = |entry: &VoiceCatalogEntry| {
-            (
-                state.versions.get(&entry.database_id) == Some(&entry.revision),
-                app.voice_selection().as_ref() == Some(&selection(entry)),
-                entry.availability.is_loadable(),
-                entry.revision,
-            )
-        };
-        for entry in &catalog.entries {
-            if !state.language.is_empty() && !entry.languages.contains(&state.language)
-                || !state.vendor.is_empty() && entry.vendor != state.vendor
-            {
-                continue;
-            }
-            let matches = query.is_empty()
-                || entry.display_name.to_lowercase().contains(&query)
-                || entry.vendor.to_lowercase().contains(&query)
-                || family_name(entry, app.preferences.language).to_lowercase().contains(&query)
-                || entry.languages.iter().any(|s| {
-                    language_name(s, app.preferences.language).to_lowercase().contains(&query) || s.to_lowercase().contains(&query)
-                });
-            if !matches {
-                continue;
-            }
-            let current = banks.entry(&entry.database_id).or_insert(entry);
-            if rank(entry) > rank(current) {
-                *current = entry;
-            }
+    let rank = |entry: &VoiceCatalogEntry| {
+        (
+            state.versions.get(&entry.database_id) == Some(&entry.revision),
+            is_selected(entry, current),
+            entry.availability.is_loadable(),
+            entry.revision,
+        )
+    };
+    for entry in &catalog.entries {
+        if !state.language.is_empty() && !entry.languages.contains(&state.language)
+            || !state.vendor.is_empty() && entry.vendor != state.vendor
+        {
+            continue;
+        }
+        let matches = query.is_empty()
+            || entry.display_name.to_lowercase().contains(&query)
+            || entry.vendor.to_lowercase().contains(&query)
+            || family_name(entry, language).to_lowercase().contains(&query)
+            || entry.languages.iter().any(|s| {
+                language_name(s, language).to_lowercase().contains(&query)
+                    || s.to_lowercase().contains(&query)
+            });
+        if !matches {
+            continue;
+        }
+        let best = banks.entry(&entry.database_id).or_insert(entry);
+        if rank(entry) > rank(best) {
+            *best = entry;
         }
     }
-    let mut entries: Vec<_> = banks.into_values().cloned().collect();
+    let mut entries: Vec<_> = banks.into_values().collect();
     entries.sort_by(|a, b| {
         let names = || {
             a.display_name

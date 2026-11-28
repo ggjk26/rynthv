@@ -1,4 +1,7 @@
-use super::{PreparedTree, PreparedTreeSummary, Result, VoiceError, VoiceFamily};
+use super::{FlatRenderProfile, PreparedTree, PreparedTreeSummary, Result, VoiceError, VoiceFamily};
+use crate::synthesis::stages::{
+    sv1_duration::Sv1DurationStage, sv1_f0::Sv1F0Stage, sv1_timbre::Sv1TimbreNetwork,
+};
 use serde::Serialize;
 use std::sync::{Arc, OnceLock};
 
@@ -9,6 +12,7 @@ pub struct PreparedVoice {
     pub family: VoiceFamily,
     pub f0_enhancement: Option<f32>,
     pub style_names: Vec<String>,
+    flat_profile: Option<Arc<FlatRenderProfile>>,
     summary: OnceLock<PreparationSummary>,
 }
 
@@ -49,12 +53,14 @@ impl PreparedVoice {
         family: VoiceFamily,
         f0_enhancement: Option<f32>,
         style_names: Vec<String>,
+        flat_profile: Option<Arc<FlatRenderProfile>>,
     ) -> Self {
         let model = Self {
             files,
             family,
             f0_enhancement,
             style_names,
+            flat_profile,
             summary: OnceLock::new(),
         };
         // Metadata is prepared with weights on the loader thread, not per UI frame.
@@ -90,20 +96,15 @@ impl PreparedVoice {
 
     fn prepare_stages(&self) -> Result<()> {
         use crate::synthesis::stages::{
-            compatible_duration::CompatibleDurationStage, f0::F0Stage, sv1_f0::Sv1F0Stage,
-            sv1_timbre::Sv1TimbreNetwork, timbre::TimbreNetwork, vocoder::VocoderStage,
+            compatible_duration::CompatibleDurationStage, f0::F0Stage,
+            timbre::TimbreNetwork, vocoder::VocoderStage,
         };
         let duration = self.model("duration")?;
         match self.family {
             VoiceFamily::Sv1 => {
-                crate::synthesis::stages::sv1_duration::Sv1DurationStage::prepare(duration)?;
-                let enhancement = self.f0_enhancement.ok_or_else(|| {
-                    VoiceError::new(
-                        "SV1 voice is missing the researched F0 enhancement configuration",
-                    )
-                })?;
-                Sv1F0Stage::prepare_native(self.model("f0")?, enhancement)?;
-                Sv1TimbreNetwork::prepare_native(self.model("timbre")?)?;
+                self.sv1_duration()?;
+                self.sv1_pitch()?;
+                self.sv1_timbre()?;
             }
             VoiceFamily::Sv2Compatible => {
                 CompatibleDurationStage::validate(duration)?;
@@ -124,6 +125,32 @@ impl PreparedVoice {
         }
         VocoderStage::prepare(self.model("vocoder")?)?;
         Ok(())
+    }
+
+    pub(crate) fn sv1_duration(&self) -> Result<Sv1DurationStage<'_>> {
+        let tree = self.model("duration")?;
+        match self.flat_profile.as_deref() {
+            Some(profile) => Sv1DurationStage::prepare_style(tree, Some(&profile.duration)),
+            None => Sv1DurationStage::prepare(tree),
+        }
+    }
+
+    pub(crate) fn sv1_pitch(&self) -> Result<Sv1F0Stage<'_>> {
+        Sv1F0Stage::prepare_native_style(
+            self.model("f0")?,
+            self.f0_enhancement.ok_or_else(|| {
+                VoiceError::new("SV1 voice lacks its native F0 enhancement configuration")
+            })?,
+            self.flat_profile.as_ref().map(|profile| profile.f0.as_slice()),
+        )
+    }
+
+    pub(crate) fn sv1_timbre(&self) -> Result<Sv1TimbreNetwork<'_>> {
+        let tree = self.model("timbre")?;
+        match self.flat_profile.as_deref() {
+            Some(profile) => Sv1TimbreNetwork::prepare_flat_styles(tree, profile),
+            None => Sv1TimbreNetwork::prepare_native(tree),
+        }
     }
 
     /// Models are identified by their registered resource role, independently

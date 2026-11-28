@@ -114,15 +114,15 @@ impl PreparedTree {
     }
 
     pub(crate) fn prepare_embedded(bytes: &[u8]) -> Result<Self> {
-        let records = super::embedded::parse(bytes)?;
+        Self::prepare_embedded_records(super::embedded::parse(bytes)?.into())
+    }
+
+    pub(super) fn prepare_embedded_records(records: Arc<[super::embedded::Record]>) -> Result<Self> {
         let root = records.len() - 1;
-        let mut nodes = Vec::with_capacity(records.len());
-        let mut resources = Vec::with_capacity(records.len());
-        for (index, record) in records.into_iter().enumerate() {
-            nodes.push((index, record.children));
-            resources.push(record.bytes);
-        }
-        Self::prepare_source(source::ModelSource::Inline(resources), nodes, root)
+        let nodes = records.iter().enumerate()
+            .map(|(index, record)| (index, record.children.clone()))
+            .collect();
+        Self::prepare_source(source::ModelSource::Inline(records), nodes, root)
     }
 
     fn prepare_source(

@@ -366,7 +366,12 @@ pub fn shortcuts(app: &mut App, ctx: &Context) {
         super::retakes::create(app, RetakeComponent::All);
         return;
     }
-    if command(Key::A, ctrl) {
+    if command(Key::F, Modifiers::SHIFT) {
+        super::piano::fit_song(app, ctx);
+    }
+    if command(Key::A, shift) {
+        app.editor.select_all_notes();
+    } else if command(Key::A, ctrl) {
         edit::select_all(app);
     }
     if command(Key::D, ctrl) {

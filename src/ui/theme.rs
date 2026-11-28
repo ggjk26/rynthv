@@ -26,6 +26,9 @@ pub fn install(ctx: &Context) {
         visuals: Visuals::dark(),
         ..Default::default()
     };
+    // Shared UI transitions: 100 ms for egui controls and all widgets using
+    // the central animation clock, rather than the framework's 200 ms default.
+    style.animation_time = 0.1;
     style.visuals.panel_fill = PANEL;
     style.visuals.window_fill = PANEL;
     style.visuals.extreme_bg_color = BACKGROUND;

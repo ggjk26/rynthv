@@ -43,6 +43,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     if canvas.height() < 8.0 {
         return;
     }
+    ui.ctx().data_mut(|data| data.insert_temp(Id::new("piano-canvas-width"), canvas.width()));
     let pan = app.view_pan.drag(
         ui,
         crate::ui::view_pan::Target::Piano,
@@ -51,7 +52,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     );
     app.view.piano.start =
         (app.view.piano.start - pan.x as f64 / app.view.piano.beat_width as f64).max(0.0);
-    let response = ui.interact(canvas, Id::new("piano-canvas"), Sense::click_and_drag());
+    // Reserve the rightmost strip for the vertical scrollbar so a scrollbar
+    // drag never starts a note, pitch or playhead gesture underneath it.
+    let edit_canvas = Rect::from_min_max(canvas.min, pos2(canvas.right() - 7.0, canvas.bottom()));
+    let response = ui.interact(edit_canvas, Id::new("piano-canvas"), Sense::click_and_drag());
     let vertical = if phoneme_dragging
         || matches!(app.gesture, Some(Gesture::Pitch(_) | Gesture::Anchor(_)))
     {
@@ -65,8 +69,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     // Explicit wheel/pan activity takes priority over playback following.
     let center_pause = Id::new("piano-auto-pitch-pause");
     let now = ui.input(|input| input.time);
-    if vertical.abs() > f32::EPSILON || app.view_pan.is_active() {
-        ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 2.0));
+    let wheel_used = ui.input(|input| {
+        input.pointer.hover_pos().is_some_and(|point| canvas.contains(point))
+            && input.raw.events.iter().any(|event| matches!(event, Event::MouseWheel { .. }))
+    });
+    if vertical.abs() > f32::EPSILON || wheel_used || app.view_pan.is_active() {
+        ui.ctx().data_mut(|data| data.insert_temp(center_pause, now + 1.2));
     }
     let pause_until = ui.ctx().data_mut(|data| data.get_temp::<f64>(center_pause)).unwrap_or(0.0);
     if app.view.auto_pitch_center
@@ -80,20 +88,35 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         && let Some(median) = median_playback_pitch(app)
     {
         let centered = median as f32 + canvas.height() / (2.0 * app.view.row_height);
-        app.view.top_pitch = centered.clamp(12.0, 127.0);
+        let target = centered.clamp(12.0, 127.0);
+        // Keep the current view while the median pitch stays inside a
+        // three-semitone dead zone. Follow larger movement smoothly.
+        let delta = target - app.view.top_pitch;
+        if delta.abs() > 3.0 {
+            app.view.top_pitch = (app.view.top_pitch + delta * 0.18).clamp(12.0, 127.0);
+            ui.ctx().request_repaint();
+        }
     }
+    let follow_id = Id::new("piano-followed-playhead-position");
+    let previous = ui.ctx().data_mut(|d| d.get_temp::<i64>(follow_id));
+    let paused_seek = !app.editor.transport.playing
+        && previous.is_some_and(|old| old != app.editor.transport.position);
+    let follow = app.editor.transport.playing || paused_seek;
     follow_playhead(
         ui,
         Rect::from_min_max(ruler.min, canvas.max),
         &mut app.view.piano,
         app.editor.transport.position,
-        app.editor.transport.playing
+        follow
             && app.gesture.is_none()
             && app.group_gesture.is_none()
             && app.audio_drag.is_none()
             && !phoneme_dragging
             && !app.view_pan.is_active(),
     );
+    if !ui.input(|i| i.pointer.any_down()) && !app.view_pan.is_active() {
+        ui.ctx().data_mut(|d| d.insert_temp(follow_id, app.editor.transport.position));
+    }
     super::background::draw(app, ui, canvas);
     super::keyboard::show(app, ui, all, canvas);
     super::scale_guide::draw_tonic_lines(app, ui, canvas);
@@ -104,7 +127,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         &app.editor.project.time,
         app.view.step(),
     );
-    loop_region::show(
+    app.scrubbing_playhead |= loop_region::show(
         ui,
         Id::new("piano-ruler"),
         ruler,
@@ -128,7 +151,6 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         &app.editor.project.time,
         app.view.step(),
     );
-    let groups = scene::snapshot(app);
     if !app.editor.current_track().is_instrumental()
         && app.group_gesture.is_none()
         && !app.view_pan.is_active()
@@ -139,20 +161,20 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         } else if app.piano_tool == super::Tool::PitchAnchor {
             super::pitch_anchor::interaction(app, ui, &response, canvas);
         } else {
-            interaction(app, ui, &response, canvas, &groups);
+            interaction(app, ui, &response, canvas);
         }
     }
-    let groups = scene::snapshot(app);
+    let references = scene::references(app);
     super::background_notes::draw(app, ui, canvas);
-    super::rendered::waveforms(app, ui, canvas, &groups);
-    scene::draw_notes(app, ui, canvas, &groups);
-    super::rendered::phonemes(app, ui, canvas, &groups);
+    super::rendered::waveforms(app, ui, canvas, &references);
+    scene::draw_notes(app, ui, canvas, &references);
+    super::rendered::phonemes(app, ui, canvas, &references);
     super::rendered::text_editor(app, ui, canvas);
-    super::rendered::pitch(app, ui, canvas, &groups);
-    super::pitch_edit::draw(app, ui, canvas, &groups);
+    super::rendered::pitch(app, ui, canvas, &references);
+    super::pitch_edit::draw(app, ui, canvas, &references);
     super::pitch_anchor::draw(app, ui, canvas);
-    super::retakes::show(app, ui, canvas, &groups);
-    scene::headers(app, ui, canvas, &groups);
+    super::retakes::show(app, ui, canvas, &references);
+    scene::headers(app, ui, canvas, &references);
     if let Some(Gesture::Select { origin, .. }) = &app.gesture
         && let Some(p) = ui.input(|i| i.pointer.interact_pos())
     {
@@ -193,30 +215,34 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     if (app.view.top_pitch - before_scrollbar).abs() > f32::EPSILON {
         let now = ui.input(|input| input.time);
         ui.ctx().data_mut(|data| {
-            data.insert_temp(Id::new("piano-auto-pitch-pause"), now + 2.0)
+            data.insert_temp(Id::new("piano-auto-pitch-pause"), now + 1.2)
         });
     }
 }
 
-/// Prefer notes near the playback cursor; fall back to the current visible
-/// group when the cursor is between phrases. Using a median ignores outliers.
+/// Center on the median pitch of currently sounding notes across all
+/// visible group instances in the selected vocal track. Explicitly muted
+/// notes/instances are excluded; rests keep the existing viewport.
 fn median_playback_pitch(app: &App) -> Option<i32> {
-    let reference = app.editor.active_ref()?;
     let cursor = app.editor.transport.position;
-    let window = crate::model::QUARTER.saturating_mul(2);
-    let mut pitches: Vec<i32> = app.editor.notes().iter()
-        .filter_map(|note| {
-            let (start, end) = reference.note_range(note)?;
-            (start <= cursor.saturating_add(window)
-                && end >= cursor.saturating_sub(window))
-                .then_some(note.pitch + reference.pitch_offset)
-        })
-        .collect();
-    if pitches.is_empty() {
-        pitches = app.editor.notes().iter()
-            .filter(|note| reference.note_range(note).is_some())
-            .map(|note| note.pitch + reference.pitch_offset)
-            .collect();
+    let mut pitches = Vec::new();
+    for reference in app.editor.current_track().visible_references() {
+        if reference.mute || !reference.contains(cursor) {
+            continue;
+        }
+        let Some(group) = app.editor.project.group(&reference.group_id) else {
+            continue;
+        };
+        for note in &group.notes {
+            if note.muted() {
+                continue;
+            }
+            if let Some((begin, end)) = reference.note_range(note)
+                && begin <= cursor && cursor < end
+            {
+                pitches.push(note.pitch + reference.pitch_offset);
+            }
+        }
     }
     if pitches.is_empty() {
         return None;
@@ -224,37 +250,33 @@ fn median_playback_pitch(app: &App) -> Option<i32> {
     pitches.sort_unstable();
     Some(pitches[pitches.len() / 2])
 }
-fn interaction(
-    app: &mut App,
-    ui: &mut Ui,
-    response: &Response,
-    canvas: Rect,
-    groups: &[scene::SceneGroup],
-) {
+fn interaction(app: &mut App, ui: &mut Ui, response: &Response, canvas: Rect) {
     let lang = app.preferences.language;
     let hit = response
         .interact_pointer_pos()
-        .and_then(|p| scene::hit_note(app, groups, canvas, p));
-    if let Some(p) = ui.input(|i| i.pointer.hover_pos())
-        && let Some((r, n)) = scene::hit_note(app, groups, canvas, p)
+        .and_then(|point| scene::hit_note(app, canvas, point));
+    if response.hovered()
+        && let Some(p) = ui.input(|i| i.pointer.hover_pos())
+        && let Some(rect) = hit
+            .as_ref()
+            .map(|hit| hit.rect)
+            .or_else(|| scene::hit_note(app, canvas, p).map(|hit| hit.rect))
+        && ((p.x - rect.left()).abs() < 6.0 || (p.x - rect.right()).abs() < 6.0)
     {
-        let rect = note_rect(&n, r.blick_offset, r.pitch_offset, canvas, app);
-        if (p.x - rect.left()).abs() < 6.0 || (p.x - rect.right()).abs() < 6.0 {
-            response
-                .clone()
-                .on_hover_cursor(CursorIcon::ResizeHorizontal);
-        }
+        response
+            .clone()
+            .on_hover_cursor(CursorIcon::ResizeHorizontal);
     }
     if response.double_clicked()
         && let Some(p) = response.interact_pointer_pos()
     {
         app.commit_lyric();
-        if super::rendered::begin_text_edit(app, canvas, groups, p) {
+        if super::rendered::begin_text_edit(app, canvas, p) {
             // Editing a rendered phoneme label takes precedence over creating
             // a note at the same double-click location.
-        } else if let Some((reference, note)) = hit {
-            app.editor.select_reference(app.editor.track, reference.id);
-            app.editor.selected = BTreeSet::from([note.id]);
+        } else if let Some(hit) = &hit {
+            app.editor.select_reference(app.editor.track, hit.reference);
+            app.editor.selected = BTreeSet::from([hit.note]);
             app.edit_lyric();
         } else {
             app.editor.begin(app.preferences.language.text("创建音符", "Create note", "ノートを作成"));
@@ -272,14 +294,14 @@ fn interaction(
         && let Some(p) = response.interact_pointer_pos()
     {
         app.commit_lyric();
-        if let Some((reference, note)) = hit {
-            app.editor.select_reference(app.editor.track, reference.id);
+        if let Some(hit) = &hit {
+            app.editor.select_reference(app.editor.track, hit.reference);
             if ui.input(|i| i.modifiers.ctrl || i.modifiers.shift) {
-                if !app.editor.selected.remove(&note.id) {
-                    app.editor.selected.insert(note.id);
+                if !app.editor.selected.remove(&hit.note) {
+                    app.editor.selected.insert(hit.note);
                 }
             } else {
-                app.editor.selected = BTreeSet::from([note.id]);
+                app.editor.selected = BTreeSet::from([hit.note]);
             }
         } else {
             let at = ticks(beat_at(canvas, &app.view.piano, p.x));
@@ -292,13 +314,12 @@ fn interaction(
         }
     }
     if response.secondary_clicked()
-        && let Some(p) = response.interact_pointer_pos()
-        && let Some((reference, note)) = scene::hit_note(app, groups, canvas, p)
+        && let Some(hit) = hit
     {
         app.commit_lyric();
-        app.editor.select_reference(app.editor.track, reference.id);
-        if !app.editor.selected.contains(&note.id) {
-            app.editor.selected = BTreeSet::from([note.id]);
+        app.editor.select_reference(app.editor.track, hit.reference);
+        if !app.editor.selected.contains(&hit.note) {
+            app.editor.selected = BTreeSet::from([hit.note]);
         }
     }
     response.context_menu(|ui| {
@@ -351,7 +372,7 @@ fn interaction(
         }
     });
     if response.drag_started_by(PointerButton::Primary) {
-        start_gesture(app, ui, canvas, groups);
+        start_gesture(app, ui, canvas);
     }
     if response.dragged_by(PointerButton::Primary) {
         update_gesture(app, ui, canvas);

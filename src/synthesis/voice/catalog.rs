@@ -62,11 +62,22 @@ impl VoiceCatalog {
         Self::scan_with_models(root, None)
     }
 
-    /// Optional separate Flat model directory is for diagnostics, not synthesis.
+    /// Optionally locate the models referenced by Flat NOFS-JSON voices.
     pub fn scan_with_models(root: &Path, flat_models: Option<&Path>) -> Result<Self> {
+        Self::scan_with_resources(root, flat_models, None, None)
+    }
+
+    /// Distinguish external SV2 Duration and Flat Timing references. Neither
+    /// file type is assumed to be compatible with the other model generation.
+    pub fn scan_with_resources(
+        root: &Path,
+        flat_models: Option<&Path>,
+        sv2_duration: Option<&Path>,
+        flat_timing: Option<&Path>,
+    ) -> Result<Self> {
         let mut catalog = Self::default();
         if super::nofs::is_file(root) {
-            match entry_nofs(root, flat_models) {
+            match entry_nofs(root, flat_models, flat_timing) {
                 Ok(entry) => catalog.entries.push(entry),
                 Err(error) => catalog.warnings.push(format!(
                     "声库文件 {} 解析失败：{error}", root.display()
@@ -75,7 +86,7 @@ impl VoiceCatalog {
             return Ok(catalog);
         }
         for path in super::nofs::paths(root)? {
-            match entry_nofs(&path, flat_models) {
+            match entry_nofs(&path, flat_models, flat_timing) {
                 Ok(entry) => catalog.entries.push(entry),
                 Err(error) => catalog.warnings.push(format!(
                     "声库文件 {} 解析失败：{error}", path.display()
@@ -86,7 +97,7 @@ impl VoiceCatalog {
         // Also accept a standalone, human-named folder containing DNNI
         // models (common in manually extracted voicebank collections).
         // Official UUID/revision installations remain handled below.
-        if let Some(entry) = dnni::scan_named(root, &metadata)? {
+        if let Some(entry) = dnni::scan_named(root, &metadata, sv2_duration)? {
             catalog.entries.push(entry);
         }
         for database in fs::read_dir(root)? {
@@ -110,13 +121,13 @@ impl VoiceCatalog {
                 }
             }
             if let Ok(database_id) = uuid::Uuid::parse_str(&database.file_name().to_string_lossy()) {
-                if let Err(error) = dnni::scan(&database.path(), database_id, &mut catalog, &metadata) {
+                if let Err(error) = dnni::scan(&database.path(), database_id, &mut catalog, &metadata, sv2_duration) {
                     catalog.warnings.push(format!(
                         "声库 {} 的模型版本扫描失败：{error}", database.path().display()
                     ));
                 }
             } else {
-                match dnni::scan_named(&database.path(), &metadata) {
+                match dnni::scan_named(&database.path(), &metadata, sv2_duration) {
                     Ok(Some(entry)) => catalog.entries.push(entry),
                     Ok(None) => {}
                     Err(error) => catalog.warnings.push(format!(
@@ -127,7 +138,7 @@ impl VoiceCatalog {
             match super::nofs::paths(&database.path()) {
                 Ok(paths) => {
                     for path in paths {
-                        match entry_nofs(&path, flat_models) {
+                        match entry_nofs(&path, flat_models, flat_timing) {
                             Ok(entry) => catalog.entries.push(entry),
                             Err(error) => catalog.warnings.push(format!(
                                 "声库文件 {} 解析失败：{error}", path.display()
@@ -171,7 +182,7 @@ impl VoiceCatalog {
                         match super::nofs::paths(&revision.path()) {
                             Ok(paths) => {
                                 for path in paths {
-                                    match entry_nofs(&path, flat_models) {
+                                    match entry_nofs(&path, flat_models, flat_timing) {
                                         Ok(entry) => catalog.entries.push(entry),
                                         Err(error) => catalog.warnings.push(format!(
                                             "声库文件 {} 解析失败：{error}", path.display()
@@ -216,9 +227,13 @@ impl VoiceCatalog {
 }
 
 
-fn entry_nofs(path: &Path, models: Option<&Path>) -> Result<VoiceCatalogEntry> {
+fn entry_nofs(
+    path: &Path,
+    models: Option<&Path>,
+    flat_timing: Option<&Path>,
+) -> Result<VoiceCatalogEntry> {
     if flat::is_flat(path) || flat::is_flat_package(path) {
-        flat::entry(path, models)
+        flat::entry(path, models, flat_timing)
     } else {
         nofs::entry(path)
     }

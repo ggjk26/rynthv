@@ -2,6 +2,7 @@ mod cards;
 mod catalog;
 mod details;
 mod feedback;
+mod flat_probe;
 mod header;
 mod toolbar;
 
@@ -111,8 +112,7 @@ fn show(app: &mut App, ctx: &Context, state: &mut State) {
                 .show(&mut content, |ui| {
                     ui.set_width(ui.available_width());
                     toolbar::show(app, ui, state);
-                    ui.add_space(28.0);
-                    let entries = catalog::entries(app, state);
+                    ui.add_space(16.0);
                     if app.synthesis.library.is_scanning() {
                         ui.horizontal(|ui| {
                             ui.spinner();
@@ -148,12 +148,31 @@ fn show(app: &mut App, ctx: &Context, state: &mut State) {
                         });
                         ui.add_space(12.0);
                     }
+                    let Some(catalog) = app.synthesis.library.catalog_snapshot() else {
+                        empty(app, ui, state);
+                        return;
+                    };
+                    let lang = app.preferences.language;
+                    feedback::scan_warnings(ui, &catalog, lang);
+                    let current = app.voice_selection();
+                    let entries = catalog::entries(&catalog, state, current.as_ref(), lang);
                     if entries.is_empty() {
                         empty(app, ui, state);
                     } else {
+                        ui.weak(format!(
+                            "{} {}",
+                            entries.len(),
+                            lang.text("个声库", "voicebanks", "件の歌声")
+                        ));
                         ui.spacing_mut().item_spacing.y = 16.0;
-                        for entry in &entries {
-                            cards::show(app, ui, entry, state);
+                        for entry in entries {
+                            cards::show(
+                                app,
+                                ui,
+                                entry,
+                                state,
+                                catalog::is_selected(entry, current.as_ref()),
+                            );
                         }
                     }
                 });

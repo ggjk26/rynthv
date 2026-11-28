@@ -1,9 +1,10 @@
 //! Safe Flat JSON NOFS and SFPK sidecar discovery.
-//! This is deliberately metadata-only until the native model stages support
-//! Base Model conditioning and all Flat embedding spaces.
+//! DDS readiness checks inspect model headers only; full validation occurs on load.
 use super::{VoiceAvailability, VoiceCatalogEntry};
-use crate::synthesis::voice::{flat::{FlatManifest, FlatVoice, locate_model, valid_model_id}, Result, VoiceError};
-use sha2::{Digest, Sha256};
+use crate::synthesis::voice::{
+    Result, VoiceError, VoiceFamily,
+    flat::{FlatManifest, FlatVoice, locate_model, matching_model_path, render, valid_model_id},
+};
 use std::{
     fs::{self, File},
     io::Read,
@@ -29,10 +30,16 @@ pub(in crate::synthesis::voice) fn is_flat_package(path: &Path) -> bool {
     path.file_name().is_some_and(|name| name.eq_ignore_ascii_case("info.nofs"))
 }
 
-pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatalogEntry> {
-    let canonical = fs::canonicalize(path)?;
-    let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
-    let id = format!("svflat:{}", crate::synthesis::voice::hex(&digest[..12]));
+pub(super) fn entry(
+    path: &Path,
+    model_root: Option<&Path>,
+    timing_override: Option<&Path>,
+) -> Result<VoiceCatalogEntry> {
+    let inferred_root = model_root.is_none()
+        .then(|| FlatVoice::nearby_model_root(path))
+        .flatten();
+    let model_root = model_root.or(inferred_root.as_deref());
+    let id = render::database_id(path)?;
     let icon_path = path.parent().and_then(|parent| {
         let exact = parent.join("profile.png");
         if exact.is_file() {
@@ -71,15 +78,26 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
     if is_flat(path) {
         match FlatVoice::open(path, model_root) {
             Ok(voice) => {
+                entry.availability = match voice.check_render_files(timing_override) {
+                    Ok(()) => {
+                        entry.family = Some(VoiceFamily::Sv1);
+                        entry.model_version = Some(1);
+                        VoiceAvailability::Loadable
+                    }
+                    Err(error) => VoiceAvailability::Unsupported(error.to_string()),
+                };
                 entry.revision = revision(&voice.version);
                 entry.version_label = Some(voice.version.clone());
                 entry.display_name = voice.name;
                 entry.vendor = voice.vendor;
                 entry.languages = voice.supported_languages;
-                entry.styles = voice.styles.iter().map(|style| style.name.clone()).collect();
+                let base_name = voice.styles.iter().find(|style| style.name == "(base)")
+                    .or_else(|| voice.styles.first()).map(|style| &style.name);
+                entry.styles = voice.styles.iter().filter(|style| Some(&style.name) != base_name)
+                    .map(|style| style.name.clone()).collect();
                 entry.model_dependencies = voice.models.iter()
                     .map(|model| {
-                        let status = if model.installed {
+                        let status = if model.resolved_path(timing_override).is_some() {
                             "已找到文件"
                         } else if model_root.is_some() {
                             "未找到文件"
@@ -89,18 +107,6 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                         format!("{}：{}（{status}）", model.role, model.id)
                     })
                     .collect();
-                let installed = voice.models.iter().filter(|item| item.installed).count();
-                let checks = if let Some(root) = model_root {
-                    format!("模型检查 {installed}/{}（{}）", voice.models.len(), root.display())
-                } else {
-                    "模型目录未配置".to_owned()
-                };
-                let notes = if voice.notes.is_empty() { String::new() }
-                    else { format!("；{}", voice.notes.join("；")) };
-                entry.availability = VoiceAvailability::Unsupported(format!(
-                    "Flat NOFS-JSON v{}：{}{}。声码器及原生 Flat 音色条件推理尚未实现，暂不能试听/导出",
-                    voice.version, checks, notes
-                ));
             }
             Err(error) => entry.availability = VoiceAvailability::Unsupported(
                 format!("Flat NOFS-JSON 解析失败：{error}")
@@ -133,7 +139,9 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                 entry.model_dependencies = manifest.model_ids.iter().enumerate()
                     .map(|(i, id)| {
                         let role = manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown");
-                        let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id));
+                        let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id))
+                            || (is_timing_role(role)
+                                && timing_override.is_some_and(|path| matching_model_path(path, id)));
                         if found { installed += 1; }
                         let status = if found {
                             "已找到文件"
@@ -145,7 +153,7 @@ pub(super) fn entry(path: &Path, model_root: Option<&Path>) -> Result<VoiceCatal
                         format!("{role}：{id}（{status}）")
                     })
                     .collect();
-                let check = if model_root.is_some() {
+                let check = if model_root.is_some() || timing_override.is_some() {
                     format!("依赖模型 {installed}/{} 已找到", manifest.model_ids.len())
                 } else {
                     "未配置 Flat 模型目录".to_owned()
@@ -168,6 +176,10 @@ fn revision(version: &str) -> u32 {
     // identifier is represented by the integer field.
     version.chars().take_while(|ch| ch.is_ascii_digit())
         .collect::<String>().parse().unwrap_or(0)
+}
+
+fn is_timing_role(role: &str) -> bool {
+    matches!(role.to_ascii_lowercase().as_str(), "duration" | "timing_model")
 }
 
 /// Read-only, bounded lookup: never use arbitrary manifest strings as paths.

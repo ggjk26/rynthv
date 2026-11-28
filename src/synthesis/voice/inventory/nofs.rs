@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, path::Path, sync::OnceLock};
 
 use sha2::{Digest, Sha256};
 
-use super::{GraphSummary, LoadedModel, TensorSummary, VoiceFile, VoiceInventory, inspect};
-use crate::synthesis::voice::{Result, VoiceError, embedded, hex, nofs, tensor};
+use super::{LoadedModel, TensorSummary, VoiceFile, VoiceInventory, inspect};
+use crate::synthesis::voice::{Result, VoiceError, embedded, hex, nofs};
 
 pub(super) fn load(path: &Path) -> Result<VoiceInventory> {
     let mut archive = nofs::NofsArchive::open(path)?;
@@ -23,30 +23,8 @@ pub(super) fn load(path: &Path) -> Result<VoiceInventory> {
         digest.update((bytes.len() as u64).to_le_bytes());
         digest.update(&bytes);
         let records = embedded::parse(&bytes)?;
-        let root = records
-            .last()
-            .ok_or_else(|| VoiceError::new("SV1 model is empty"))?;
-        let mut depths = Vec::<usize>::with_capacity(records.len());
-        for record in &records {
-            let depth = record.children.iter().try_fold(0usize, |depth, child| {
-                depths
-                    .get(*child)
-                    .map(|child_depth| depth.max(child_depth + 1))
-                    .ok_or_else(|| VoiceError::new("SV1 model is not in postorder"))
-            })?;
-            depths.push(depth);
-            if tensor::is_known(&record.bytes) {
-                inspect::count_tensor(&record.bytes, 0, &mut tensors)?;
-            }
-        }
-        graphs.push(GraphSummary {
-            resource_index: index,
-            nodes: records.len(),
-            root_children: root.children.len(),
-            maximum_depth: *depths.last().expect("nonempty model"),
-            role,
-        });
-        trees.push(bytes);
+        graphs.push(inspect::inline_graph(&records, index, role, 0, &mut tensors)?);
+        trees.push(records.into());
     }
     let content_hash = hex(&digest.finalize());
     let graph_count = graphs.len();
@@ -85,7 +63,8 @@ pub(super) fn load(path: &Path) -> Result<VoiceInventory> {
         tensor_count,
         files: vec![file],
         configuration: Some(description.configuration),
-        _models: vec![LoadedModel::Nofs { trees }],
+        _models: vec![LoadedModel::Inline { trees }],
+        flat_profile: None,
         preparation: OnceLock::new(),
     })
 }

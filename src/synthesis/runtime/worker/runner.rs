@@ -10,7 +10,7 @@ use crate::synthesis::{
     rendered::RenderedClip,
     runtime::{VoiceState, control::Control, events::Events},
     score::{self, LyricFrontend},
-    voice::{self, PreparedVoice, VoiceError, VoiceInventory},
+    voice::{self, PreparedVoice, VoiceError, VoiceInventory, VoiceResources},
 };
 use std::{
     path::PathBuf,
@@ -25,6 +25,7 @@ use std::{
 pub(super) fn run(
     path: PathBuf,
     dictionaries: Option<PathBuf>,
+    resources: VoiceResources,
     commands: Receiver<Command>,
     events: Events,
     alive: Arc<AtomicBool>,
@@ -41,7 +42,7 @@ pub(super) fn run(
         }
     };
     let started = Instant::now();
-    let loaded = VoiceInventory::load(&path).and_then(|inventory| {
+    let loaded = VoiceInventory::load_with_resources(&path, &resources).and_then(|inventory| {
         loading_checkpoint()?;
         let prepared = inventory.prepare()?;
         loading_checkpoint()?;

@@ -6,7 +6,6 @@ use crate::synthesis::{
         compatible_duration::CompatibleDurationStage,
         duration::DurationStage,
         f0::{F0Stage, PitchInputControls, TimedPhone},
-        sv1_duration::Sv1DurationStage,
         timbre::TimbreNetwork,
     },
     voice::{PreparedVoice, Result, VoiceError, VoiceFamily},
@@ -52,8 +51,7 @@ pub fn prepare_acoustics(
                     "SV1 duration does not accept an identity condition",
                 ));
             }
-            let native = Sv1DurationStage::prepare(voice.model("duration")?)?
-                .predict_explicit(&phrase.records)?;
+            let native = voice.sv1_duration()?.predict_explicit(&phrase.records)?;
             if native.record_seconds.len() != prepared_phrase.notes.len() {
                 return Err(VoiceError::new(
                     "SV1 derived note durations differ from the phrase",

@@ -1,7 +1,19 @@
 //! Flat voicebank metadata and finite embedding vectors.
 //!
-//! Does not decrypt, synthesize, or write protected model resources. A Flat
-//! voicebank is metadata plus references to separately installed base models.
+//! A Flat voicebank stores metadata and references to separately installed
+//! models. Individual adapters validate the model graphs before inference.
+mod acoustic;
+pub(super) mod inline;
+mod legacy;
+mod phones;
+pub mod pitch;
+pub mod probe;
+pub(super) mod render;
+mod score;
+
+pub use acoustic::FlatAcoustics;
+pub use score::FlatTimedScore;
+
 use super::{Result, VoiceError};
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -11,6 +23,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const MAX_STAGE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_JSON_BYTES: u64 = 1024 * 1024;
 const MAX_STYLES: usize = 256;
 
@@ -20,6 +33,22 @@ pub struct FlatModelReference {
     pub id: String,
     pub installed: bool,
     pub path: Option<PathBuf>,
+}
+
+impl FlatModelReference {
+    pub(super) fn resolved_path<'a>(&'a self, timing: Option<&'a Path>) -> Option<&'a Path> {
+        timing
+            .filter(|path| self.role == "duration" && matching_model_path(path, &self.id))
+            .or(self.path.as_deref())
+    }
+}
+
+pub(super) fn matching_model_path(path: &Path, id: &str) -> bool {
+    valid_model_id(id)
+        && path.is_file()
+        && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni"))
+        && path.file_stem().and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case(id))
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -41,7 +70,63 @@ pub struct FlatVoice {
     pub styles: Vec<FlatStyle>,
     pub pitch: Option<Vec<f32>>,
     pub timing: Option<Vec<f32>>,
+    /// Native Flat per-voice F0 style vector (32 float32 components).
+    pub f0_style: Option<Vec<f32>>,
+    /// Native Flat duration style vector (128 float32 components).
+    pub duration_style: Option<Vec<f32>>,
     pub notes: Vec<String>,
+}
+
+/// Explicit, immutable conditioning inputs for a future native Flat render
+/// session. These are the source bank's recorded vectors; the interpreter
+/// must still validate graph topology and input slots before execution.
+#[derive(Clone, Debug, Serialize)]
+pub struct FlatConditioning {
+    pub language: crate::model::Language,
+    pub phoneset: String,
+    pub style_name: String,
+    pub acoustic_style: Vec<f32>,
+    pub style_extra: Option<f32>,
+    pub f0_style: Option<Vec<f32>>,
+    pub duration_style: Option<Vec<f32>>,
+}
+
+impl FlatVoice {
+    /// Select a single existing Flat vocal style. Do not invent interpolation
+    /// or copy a 32D embedding into a 128D Duration input; both operations
+    /// require verified model-specific input contracts.
+    pub fn conditioning(&self, style_name: Option<&str>) -> Result<FlatConditioning> {
+        let language = crate::model::Language::parse(&self.language)
+            .ok_or_else(|| VoiceError::new(format!(
+                "Flat 默认语言暂不支持：{}", self.language
+            )))?;
+        let style = match style_name {
+            Some(name) => self.styles.iter()
+                .find(|style| style.name == name)
+                .ok_or_else(|| VoiceError::new(format!("未找到 Flat 唱法：{name}")))?,
+            None => self.styles.iter()
+                .find(|style| style.name == "(base)")
+                .or_else(|| self.styles.first())
+                .ok_or_else(|| VoiceError::new("Flat 声库不包含可使用的唱法向量"))?,
+        };
+        let phoneset = self.phoneset.clone()
+            .unwrap_or_else(|| language.phoneme_alphabet().to_owned());
+        if phoneset != language.phoneme_alphabet() {
+            return Err(VoiceError::new(format!(
+                "Flat 的音素字母表 {phoneset} 与默认语言 {} 不匹配",
+                language.id()
+            )));
+        }
+        Ok(FlatConditioning {
+            language,
+            phoneset,
+            style_name: style.name.clone(),
+            acoustic_style: style.vector.clone(),
+            style_extra: style.extra,
+            f0_style: self.f0_style.clone(),
+            duration_style: self.duration_style.clone(),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -58,23 +143,45 @@ impl FlatVoice {
     /// Only parses a self-contained text NOFS-JSON file. Model references are
     /// inspectable without reading their contents.
     pub fn open(path: &Path, model_root: Option<&Path>) -> Result<Self> {
+        let inferred_root = model_root.is_none()
+            .then(|| Self::nearby_model_root(path))
+            .flatten();
+        let model_root = model_root.or(inferred_root.as_deref());
         let value = read_json(path)?;
         let object = value.as_object().ok_or_else(|| {
             VoiceError::new("Flat NOFS-JSON 顶层必须是对象")
         })?;
         let mut notes = Vec::new();
         let mut models = Vec::new();
-        for (key, role, folder) in [
-            ("base_model", "base_model", "acoustic"),
-            ("sing_model", "sing_model", "pitch"),
-            ("timing_model", "timing_model", "duration"),
-            ("f0_model", "f0_model", "f0"),
+        // Flat v200 databases (e.g. Kasane Teto AI 2) use the short
+        // acoustic/vocoder/duration/f0 keys. Older manifests also appear
+        // with base_model/sing_model/timing_model/f0_model. Recognize both
+        // rather than reporting every dependency as missing.
+        for (aliases, role, folder) in [
+            (&["acoustic", "base_model"][..], "acoustic", "acoustic"),
+            (&["vocoder"][..], "vocoder", "vocoder"),
+            (&["duration", "timing_model"][..], "duration", "duration"),
+            (&["f0", "f0_model"][..], "f0", "f0"),
+            (&["sing_model"][..], "sing_model", "pitch"),
         ] {
-            let Some(id) = optional_text(object, key)? else {
-                notes.push(format!("{key} 未指定；需要根据具体 Flat 版本确认默认值"));
+            let mut id = None;
+            for &key in aliases {
+                if let Some(candidate) = optional_text(object, key)? {
+                    let candidate = verify_model_id(candidate, key)?;
+                    if id.as_ref().is_some_and(|previous| previous != &candidate) {
+                        return Err(VoiceError::new(format!(
+                            "Flat {role} 有两个冲突的模型标识"
+                        )));
+                    }
+                    id = Some(candidate);
+                }
+            }
+            let Some(id) = id else {
+                if role != "sing_model" && role != "vocoder" {
+                    notes.push(format!("{role} 未指定；请检查所用 Flat 版本的模型清单"));
+                }
                 continue;
             };
-            let id = verify_model_id(id, key)?;
             let path = model_root.and_then(|root| locate_model(root, &id, folder));
             models.push(FlatModelReference {
                 role, id, installed: path.is_some(), path,
@@ -116,11 +223,17 @@ impl FlatVoice {
                     )?;
                     let extra = match item.get("extra") {
                         None | Some(Value::Null) => None,
+                        // Flat v200 stores this as 4 little-endian float32
+                        // bytes written as eight hexadecimal characters.
+                        Some(Value::String(hex)) => {
+                            let field = format!("styles[{index}].extra");
+                            Some(parse_hex_vector(hex, 1, &field)?[0])
+                        }
                         Some(number) => {
                             let value = number.as_f64()
                                 .filter(|value| value.is_finite() && value.abs() <= 1_000_000.0)
                                 .ok_or_else(|| VoiceError::new(format!(
-                                    "styles[{index}].extra 必须是有限的数值"
+                                    "styles[{index}].extra 必须是有限的数值或 float32 十六进制字符串"
                                 )))?;
                             Some(value as f32)
                         }
@@ -133,6 +246,8 @@ impl FlatVoice {
         };
         let pitch = optional_vector(object, "pitch", 32)?;
         let timing = optional_vector(object, "timing", 128)?;
+        let f0_style = optional_vector(object, "f0_style", 32)?;
+        let duration_style = optional_vector(object, "duration_style", 128)?;
         let language = optional_text(object, "language")?.unwrap_or_default().to_owned();
         let mut supported_languages = text_array(object, "support_languages")?;
         if !language.is_empty() && !supported_languages.iter().any(|s| s == &language) {
@@ -145,8 +260,25 @@ impl FlatVoice {
             language,
             supported_languages,
             phoneset: optional_text(object, "phoneset")?.map(str::to_owned),
-            models, styles, pitch, timing, notes,
+            models, styles, pitch, timing, f0_style, duration_style, notes,
         })
+    }
+}
+
+impl FlatVoice {
+    /// Discover a Flat model cache beside the database installation without
+    /// relying on a fixed Windows username or on Documents not being moved.
+    /// Only inspect parent folders; never interpret NOFS model IDs as paths.
+    pub fn nearby_model_root(path: &Path) -> Option<PathBuf> {
+        for ancestor in path.parent()?.ancestors().take(8) {
+            if ancestor.file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("databases"))
+            {
+                let root = ancestor.parent()?.join("models");
+                return root.is_dir().then_some(root);
+            }
+        }
+        None
     }
 }
 
@@ -340,4 +472,91 @@ fn read_json(path: &Path) -> Result<Value> {
     let content = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes);
     serde_json::from_slice(content)
         .map_err(|error| VoiceError::new(format!("Flat JSON 无法解析：{error}")))
+}
+
+#[cfg(test)]
+mod v200_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parses_flat_v200_and_keeps_distinct_style_spaces() {
+        let id = "7b0ea690ada94b4484b50d9d64a21cae";
+        let document = json!({
+            "name": "Synthetic Flat v200 test",
+            "version": "200",
+            "vendor": "Fixture",
+            "language": "japanese",
+            "phoneset": "romaji",
+            "support_languages": ["japanese", "mandarin"],
+            "acoustic": "2c233d8e9b19f1f4dc0276ba3a5542c1",
+            "vocoder": "b0dbc93ad9636601a8a24425788a884e",
+            "duration": id,
+            "f0": "dcee89442f69984189a5b2aedbf9f090",
+            "styles": [
+                {"name": "(base)", "data": "00000000".repeat(32)},
+                {"name": "Joyful", "data": "0000803F".repeat(32), "extra": "0000A040"}
+            ],
+            "f0_style": "00000000".repeat(32),
+            "duration_style": "00000000".repeat(128)
+        });
+        let path = std::env::temp_dir().join(format!(
+            "rynthv-flat-v200-{}-{}.nofs",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        ));
+        std::fs::write(&path, document.to_string()).unwrap();
+        let voice = FlatVoice::open(&path, None).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(voice.models.len(), 4);
+        assert_eq!(voice.models.iter().find(|v| v.role == "duration").unwrap().id, id);
+        assert_eq!(voice.duration_style.as_ref().unwrap().len(), 128);
+        assert_eq!(voice.f0_style.as_ref().unwrap().len(), 32);
+        let base = voice.conditioning(None).unwrap();
+        assert_eq!(base.style_name, "(base)");
+        assert_eq!(base.acoustic_style.len(), 32);
+        assert_eq!(base.duration_style.unwrap().len(), 128);
+        let joyful = voice.conditioning(Some("Joyful")).unwrap();
+        assert_eq!(joyful.style_extra, Some(5.0));
+        assert_eq!(joyful.acoustic_style[0], 1.0);
+        assert_eq!(joyful.language, crate::model::Language::Japanese);
+        assert!(voice.conditioning(Some("does-not-exist")).is_err());
+    }
+
+    #[test]
+    fn detects_models_directory_beside_databases_without_settings() {
+        let id = "7b0ea690ada94b4484b50d9d64a21cae";
+        let root = std::env::temp_dir().join(format!(
+            "rynthv-flat-nearby-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        ));
+        let database = root.join("databases/voice");
+        let models = root.join("models/duration");
+        std::fs::create_dir_all(&database).unwrap();
+        std::fs::create_dir_all(&models).unwrap();
+        std::fs::write(models.join(format!("{id}.dnni")), b"not an executable model").unwrap();
+        let path = database.join("info.200.nofs");
+        std::fs::write(&path, json!({
+            "name": "test",
+            "version": "200",
+            "language": "japanese",
+            "duration": id
+        }).to_string()).unwrap();
+        let voice = FlatVoice::open(&path, None).unwrap();
+        assert_eq!(voice.models.len(), 1);
+        assert!(voice.models[0].installed);
+        assert_eq!(voice.models[0].id, id);
+        // A discovered file isn't verified: the runtime model preflight
+        // must still reject its deliberately invalid DNNI content.
+        let preflight = voice.preflight(None);
+        assert!(!preflight.synthesis_supported);
+        assert_ne!(
+            preflight.stages[0].state,
+            super::probe::StageState::NativeResourceFound
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

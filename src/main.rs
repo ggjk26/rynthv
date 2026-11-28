@@ -7,16 +7,36 @@ mod ui;
 use rynthv::{midi, model, storage, synthesis};
 
 fn main() -> eframe::Result {
-    let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
+    use ui::settings::{GraphicsBackend, Preferences};
+
+    // Parsing occurs before eframe creates the graphics device. A project
+    // path can still be supplied as the first positional argument.
+    let mut path = None;
+    let mut override_backend = None;
+    for arg in std::env::args_os().skip(1) {
+        if let Some(value) = arg.to_str().and_then(|text| text.strip_prefix("--graphics=")) {
+            match GraphicsBackend::parse_flag(value) {
+                Some(value) if value.supported() => override_backend = Some(value),
+                _ => eprintln!("Unsupported graphics backend {value:?}; try --graphics=auto"),
+            }
+        } else if path.is_none() {
+            path = Some(std::path::PathBuf::from(arg));
+        }
+    }
+    let configured = rynthv::platform::config_directory()
+        .ok()
+        .and_then(|dir| Preferences::load(&dir.join("preferences.json")).ok())
+        .map(|prefs| prefs.graphics_backend)
+        .unwrap_or_default();
+    let selected = override_backend.unwrap_or(configured).on_this_platform();
+
     let mut gpu = eframe::egui_wgpu::WgpuSetupCreateNew::without_display_handle();
+    gpu.instance_descriptor.backends = selected.backends();
     #[cfg(windows)]
     {
-        gpu.instance_descriptor.backends = wgpu::Backends::DX12;
+        // DX12 uses the Windows shader compiler already supported by RynthV.
+        // The option is ignored when the Vulkan backend was selected.
         gpu.instance_descriptor.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::Fxc;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        gpu.instance_descriptor.backends = wgpu::Backends::VULKAN | wgpu::Backends::GL;
     }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
@@ -38,6 +58,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "RynthV",
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, path)))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, path, selected)))),
     )
 }

@@ -95,6 +95,7 @@ impl Runtime {
                 worker::Worker::spawn(
                     entry.directory.clone(),
                     dictionaries,
+                    self.library.settings.voice_resources(),
                     self.repaint.clone(),
                 )
             })();

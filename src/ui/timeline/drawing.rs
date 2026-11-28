@@ -33,11 +33,12 @@ pub fn grid(ui: &Ui, rect: Rect, view: &Viewport, time: &TimeAxis, step: f64) {
             ),
         );
     }
-    for (beat, _, _, _) in time.bars(visible_end(rect, view) + 1.0) {
+    for (beat, index, _, _) in time.bars(visible_end(rect, view) + 1.0) {
         painter.vline(
             x_at(rect, view, beat),
             rect.y_range(),
-            Stroke::new(1.0, BAR_LINE),
+            Stroke::new(if index % 4 == 0 { 1.65 } else { 1.0 },
+                if index % 4 == 0 { TEXT.gamma_multiply(0.65) } else { BAR_LINE }),
         );
     }
 }
@@ -55,7 +56,9 @@ pub fn draw_ruler(ui: &Ui, rect: Rect, view: &Viewport, time: &TimeAxis, step: f
     }
     for (beat, index, _, _) in time.bars(visible_end(rect, view) + 1.0) {
         let x = x_at(rect, view, beat);
-        painter.vline(x, baseline - 32.0..=baseline, Stroke::new(1.0, BAR_LINE));
+        painter.vline(x, baseline - 32.0..=baseline,
+            Stroke::new(if index % 4 == 0 { 1.7 } else { 1.0 },
+                if index % 4 == 0 { TEXT.gamma_multiply(0.75) } else { BAR_LINE }));
         let text =
             painter.layout_no_wrap((index + 1).to_string(), FontId::proportional(12.0), TEXT);
         let pos = pos2(x + 7.0, baseline - 25.0 - text.size().y / 2.0);

@@ -27,29 +27,7 @@ pub(super) fn file(path: &Path, archive: &Archive) -> Result<(VoiceFile, Vec<Loa
             let role = embedded_role(resource.id)
                 .ok_or_else(|| VoiceError::new("Unidentified embedded voice model resource"))?;
             let records = embedded::parse(&archive.read(index, None)?)?;
-            let root = records
-                .last()
-                .ok_or_else(|| VoiceError::new("Embedded model tree is empty"))?;
-            let mut depths = Vec::<usize>::with_capacity(records.len());
-            for record in &records {
-                let depth = record.children.iter().try_fold(0, |depth, child| {
-                    depths
-                        .get(*child)
-                        .map(|child_depth| depth.max(child_depth + 1))
-                        .ok_or_else(|| VoiceError::new("Embedded model child is not in postorder"))
-                })?;
-                depths.push(depth);
-                if tensor::is_known(&record.bytes) {
-                    count_tensor(&record.bytes, resource.flag, &mut tensors)?;
-                }
-            }
-            graphs.push(GraphSummary {
-                resource_index: index,
-                nodes: records.len(),
-                root_children: root.children.len(),
-                maximum_depth: *depths.last().expect("nonempty model"),
-                role,
-            });
+            graphs.push(inline_graph(&records, index, role, resource.flag, &mut tensors)?);
             trees.push(LoadedTree::Embedded {
                 resource_index: index,
             });
@@ -157,4 +135,36 @@ fn indexed_role(id: ResourceId) -> &'static str {
         0xa95bea71e057b1ae3b7924462d6ca9aa => "vocoder",
         _ => "unconfirmed",
     }
+}
+
+pub(super) fn inline_graph(
+    records: &[embedded::Record],
+    index: usize,
+    role: &'static str,
+    flag: u32,
+    tensors: &mut BTreeMap<&'static str, TensorSummary>,
+) -> Result<GraphSummary> {
+    let root = records
+        .last()
+        .ok_or_else(|| VoiceError::new("Embedded model tree is empty"))?;
+    let mut depths = Vec::<usize>::with_capacity(records.len());
+    for record in records {
+        let depth = record.children.iter().try_fold(0, |depth, child| {
+            depths
+                .get(*child)
+                .map(|child_depth| depth.max(child_depth + 1))
+                .ok_or_else(|| VoiceError::new("Embedded model child is not in postorder"))
+        })?;
+        depths.push(depth);
+        if tensor::is_known(&record.bytes) {
+            count_tensor(&record.bytes, flag, tensors)?;
+        }
+    }
+    Ok(GraphSummary {
+        resource_index: index,
+        nodes: records.len(),
+        root_children: root.children.len(),
+        maximum_depth: *depths.last().expect("nonempty model"),
+        role,
+    })
 }

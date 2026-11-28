@@ -1,10 +1,9 @@
-use super::scene::SceneGroup;
 use crate::{
     app::App,
     editor::RetakeSelection,
-    model::TakeSet,
+    model::{GroupRef, TakeSet},
     ui::{
-        group_geometry::visible_note_rect,
+        group_geometry::{clip_rect, visible_note_rect},
         icons::Icon,
         retakes::{self, Target},
         theme::CANVAS,
@@ -13,30 +12,36 @@ use crate::{
 };
 use eframe::egui::*;
 
-pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) {
+pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, references: &[GroupRef]) {
     if !app.show_retakes || app.gesture.is_some() || app.group_gesture.is_some() {
         return;
     }
     let colors = TrackColors::new(app.editor.current_track());
     let idle_color = colors.accent.lerp_to_gamma(CANVAS, 0.30);
-    for group in groups {
-        for note in &group.notes {
-            let Ok(takes) = TakeSet::from_extra(&note.extra) else {
-                continue;
-            };
-            if takes.takes.len() < 2 {
-                continue;
-            }
-            let Some(note_rect) = visible_note_rect(
-                note,
-                &group.reference,
-                canvas,
-                &app.view.piano,
-                app.view.top_pitch,
-                app.view.row_height,
-            ) else {
-                continue;
-            };
+    for reference in references {
+        if !clip_rect(reference, canvas, &app.view.piano).is_positive() {
+            continue;
+        }
+        let Some(group) = app.editor.project.group(&reference.group_id) else {
+            continue;
+        };
+        let visible_takes: Vec<_> = group
+            .notes
+            .iter()
+            .filter_map(|note| {
+                let rect = visible_note_rect(
+                    note,
+                    reference,
+                    canvas,
+                    &app.view.piano,
+                    app.view.top_pitch,
+                    app.view.row_height,
+                )?;
+                let takes = TakeSet::from_extra(&note.extra).ok()?;
+                (takes.takes.len() >= 2).then_some((note.id, rect, takes))
+            })
+            .collect();
+        for (id, note_rect, takes) in visible_takes {
             let text = if takes.active_take_id == 0 {
                 String::new()
             } else {
@@ -58,7 +63,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGrou
             }
             let response = ui.interact(
                 clipped,
-                Id::new(("note-retake", group.reference.id, note.id)),
+                Id::new(("note-retake", reference.id, id)),
                 Sense::click_and_drag(),
             );
             let color = if response.hovered() || response.is_pointer_button_down_on() {
@@ -67,11 +72,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGrou
                 idle_color
             };
             let painter = ui.painter().with_clip_rect(clipped);
-            let mut child = crate::ui::child(
-                ui,
-                clipped,
-                ("note-retake-icon", group.reference.id, note.id),
-            );
+            let mut child = crate::ui::child(ui, clipped, ("note-retake-icon", reference.id, id));
             child.set_clip_rect(clipped);
             Icon::Retake.paint(
                 &child,
@@ -85,15 +86,7 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGrou
             );
             let selection = RetakeSelection::from_set(&takes);
             Popup::menu(&response).width(220.0).show(|ui| {
-                retakes::choices_at(
-                    app,
-                    ui,
-                    &selection,
-                    Target::Note {
-                        reference: &group.reference,
-                        id: note.id,
-                    },
-                );
+                retakes::choices_at(app, ui, &selection, Target::Note { reference, id });
             });
             response
                 .on_hover_cursor(CursorIcon::Default)

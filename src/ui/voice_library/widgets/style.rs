@@ -15,18 +15,30 @@ pub(crate) fn style(
     let id = ui.make_persistent_id(("vocal-mode", name));
     let expanded_id = id.with("expanded");
     let expanded = ui.data_mut(|data| data.get_temp::<bool>(expanded_id).unwrap_or(false));
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 100.0), Sense::hover());
+    // Collapsed vocal styles are lightweight summary rows; the controls
+    // expand to the full three-component editor only when requested.
+    let height = if expanded { 100.0 } else { 38.0 };
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     ui.painter().rect_filled(rect, 3, STYLE_FILL);
     ui.painter().text(
-        rect.min + vec2(12.0, 10.0),
-        Align2::LEFT_TOP,
+        if expanded {
+            rect.min + vec2(12.0, 10.0)
+        } else {
+            pos2(rect.left() + 12.0, rect.center().y)
+        },
+        if expanded { Align2::LEFT_TOP } else { Align2::LEFT_CENTER },
         name,
         FontId::proportional(13.0),
-        MUTED,
+        TEXT,
     );
+    let row = if expanded {
+        None
+    } else {
+        Some(ui.interact(rect, id.with("summary-row"), Sense::click())
+            .on_hover_cursor(CursorIcon::PointingHand))
+    };
     let toggle_rect = Rect::from_center_size(
-        pos2(rect.right() - 17.0, rect.top() + 18.0),
-        Vec2::splat(24.0),
+        pos2(rect.right() - 17.0, rect.top() + 18.0), Vec2::splat(24.0)
     );
     let toggle = ui.interact(toggle_rect, id.with("expand"), Sense::click());
     let color = if toggle.hovered() { TEXT } else { MUTED };
@@ -41,7 +53,7 @@ pub(crate) fn style(
             Stroke::new(1.3, color),
         );
     }
-    if toggle.clicked() {
+    if toggle.clicked() || row.as_ref().is_some_and(Response::clicked) {
         ui.data_mut(|data| data.insert_temp(expanded_id, !expanded));
         ui.ctx().request_repaint();
     }
@@ -50,44 +62,22 @@ pub(crate) fn style(
         .on_hover_text(if expanded {
             lang.text("收起独立唱法参数", "Collapse style controls", "歌唱スタイルの設定を閉じる")
         } else {
-            lang.text("分别调整音高、音色与发音", "Adjust pitch, timbre and pronunciation separately", "ピッチ・声色・発音を個別に調整")
+            lang.text("展开音高、音色与发音参数", "Expand pitch, timbre and pronunciation", "ピッチ・声色・発音の設定を展開")
         });
     if expanded {
-        return components(ui, id, rect, values, enabled_components, lang);
+        components(ui, id, rect, values, enabled_components, lang)
+    } else {
+        let level = numeric::mean(values, &enabled_components);
+        let summary = format!("{level:.0}%");
+        ui.painter().text(
+            pos2(rect.right() - 45.0, rect.center().y),
+            Align2::RIGHT_CENTER,
+            summary,
+            FontId::proportional(12.0),
+            MUTED,
+        );
+        ControlResponse::default()
     }
-    let center = pos2(rect.center().x, rect.top() + 57.0);
-    let result = numeric::control(
-        ui,
-        id.with("master"),
-        values,
-        &enabled_components,
-        Geometry {
-            pointer: Rect::from_center_size(center, Vec2::splat(66.0)),
-            number: Rect::from_center_size(pos2(center.x, rect.top() + 89.0), vec2(80.0, 20.0)),
-            vertical: true,
-            centered: true,
-        },
-        percentage(),
-        lang,
-    );
-    for ((value, enabled), radius) in values
-        .iter()
-        .zip(enabled_components)
-        .zip([20.0, 25.0, 30.0])
-    {
-        arc(ui.painter(), center, radius, 1.0, BUTTON);
-        if enabled && *value > 0.0 {
-            arc(ui.painter(), center, radius, (*value / 150.0) as f32, MUTED);
-        }
-    }
-    dial(
-        ui.painter(),
-        center,
-        16.0,
-        numeric::mean(values, &enabled_components),
-        TEXT,
-    );
-    result
 }
 
 fn components(

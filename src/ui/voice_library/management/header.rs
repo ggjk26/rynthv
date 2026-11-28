@@ -53,6 +53,15 @@ pub(super) fn show(app: &mut App, ui: &mut Ui, rect: Rect) -> bool {
                 .show(|ui| {
                     ui.with_layout(Layout::top_down(Align::Min), |ui| {
                         ui.spacing_mut().item_spacing.y = 8.0;
+                        if ui.button(app.preferences.language.text(
+                            "打开完整声库目录设置…",
+                            "Open full voice folder settings…",
+                            "歌声フォルダーの詳細設定を開く…",
+                        )).clicked() {
+                            crate::ui::settings::open_voice_paths(app, ui.ctx());
+                            ui.close();
+                        }
+                        ui.separator();
                         ScrollArea::vertical()
                             .id_salt("voice-manager-directories")
                             .max_height((ui.ctx().content_rect().height() - 100.0).max(120.0))

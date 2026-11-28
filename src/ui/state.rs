@@ -126,7 +126,7 @@ impl Default for ViewState {
             },
             top_pitch: 74.0,
             auto_pitch_center: false,
-            row_height: 24.0,
+            row_height: 28.0,
             grid: 16,
             triplet: false,
             snap: true,
@@ -183,7 +183,7 @@ impl ViewState {
                 v.start.is_finite()
                     && v.start >= 0.0
                     && v.beat_width.is_finite()
-                    && (4.0..=640.0).contains(&v.beat_width)
+                    && (2.0..=640.0).contains(&v.beat_width)
             })
             && self.top_pitch.is_finite()
             && (12.0..=127.0).contains(&self.top_pitch)

@@ -24,6 +24,23 @@ pub(super) fn show(
     }
     let colors = TrackColors::new(app.editor.current_track());
     let painter = ui.painter().with_clip_rect(clip);
+    // One-grid preparation region precedes the first note. It is input
+    // timing space (not a separately exported silent PCM segment).
+    if let Some(first) = mapping.input.notes.iter().min_by_key(|note| note.onset.0) {
+        let onset = first.onset.0.saturating_add(mapping.input.content_offset.0);
+        let preparatory = onset.saturating_sub(crate::model::ticks(mapping.preparation_step));
+        let left = crate::ui::timeline::x_at(
+            mapping.canvas, &mapping.viewport, crate::model::beats(preparatory)
+        );
+        let right = crate::ui::timeline::x_at(
+            mapping.canvas, &mapping.viewport, crate::model::beats(onset)
+        );
+        let zone = Rect::from_x_y_ranges(left..=right, mapping.canvas.y_range())
+            .intersect(clip);
+        if zone.is_positive() {
+            painter.rect_filled(zone, 0, colors.accent.gamma_multiply(0.11));
+        }
+    }
     for phone in phones {
         let Some(rect) = visible_phone(mapping, phone, clip) else {
             continue;
@@ -99,13 +116,18 @@ fn token(painter: &Painter, mapping: &Mapping, phone: &RenderedPhoneme, rect: Re
 }
 
 fn boundary(painter: &Painter, x: f32, rect: Rect, hovered: bool, color: Color32) {
+    if hovered {
+        // Layered low-alpha widths create a soft timing-boundary glow.
+        for (width, opacity) in [(9.0, 0.07), (5.0, 0.18), (2.5, 0.4)] {
+            painter.vline(x, rect.y_range(),
+                Stroke::new(width, color.gamma_multiply(opacity)));
+        }
+    }
     painter.vline(
         x,
         rect.y_range(),
-        Stroke::new(
-            if hovered { 1.5 } else { 1.0 },
-            if hovered { color } else { PHONE_BOUNDARY },
-        ),
+        Stroke::new(if hovered { 1.5 } else { 1.0 },
+            if hovered { color } else { PHONE_BOUNDARY }),
     );
 }
 

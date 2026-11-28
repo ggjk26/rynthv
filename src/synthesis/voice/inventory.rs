@@ -1,3 +1,4 @@
+mod flat;
 mod inspect;
 mod nofs;
 
@@ -12,10 +13,11 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use super::{
-    Result, VoiceError,
+    Result, VoiceError, embedded,
     archive::Archive,
     config::{CONFIGURATION_ID, VoiceConfiguration},
     format::FormatContext,
+    flat::render::FlatRenderProfile,
     preparation::{PreparedFile, PreparedModel, PreparedVoice},
     prepared::PreparedTree,
     tree::ModuleTree,
@@ -36,6 +38,8 @@ pub struct VoiceInventory {
     #[serde(skip)]
     _models: Vec<LoadedModel>,
     #[serde(skip)]
+    flat_profile: Option<Arc<FlatRenderProfile>>,
+    #[serde(skip)]
     preparation: OnceLock<Result<Arc<PreparedVoice>>>,
 }
 
@@ -45,9 +49,17 @@ enum LoadedModel {
         archive: Arc<Archive>,
         trees: Vec<LoadedTree>,
     },
-    Nofs {
-        trees: Vec<Vec<u8>>,
+    Inline {
+        trees: Vec<Arc<[embedded::Record]>>,
     },
+}
+
+/// External model paths configured independently for each voice format.
+#[derive(Clone, Default)]
+pub struct VoiceResources {
+    pub sv2_duration: Option<PathBuf>,
+    pub flat_models: Option<PathBuf>,
+    pub flat_timing: Option<PathBuf>,
 }
 
 enum LoadedTree {
@@ -117,8 +129,8 @@ impl VoiceInventory {
                                             )?
                                         }
                                     },
-                                    LoadedModel::Nofs { trees } => {
-                                        PreparedTree::prepare_embedded(&trees[index])?
+                                    LoadedModel::Inline { trees } => {
+                                        PreparedTree::prepare_embedded_records(Arc::clone(&trees[index]))?
                                     }
                                 };
                                 Ok(PreparedModel {
@@ -142,6 +154,7 @@ impl VoiceInventory {
                     configuration.family,
                     configuration.f0_enhancement,
                     configuration.styles.clone(),
+                    self.flat_profile.clone(),
                 )))
             })
             .clone()
@@ -158,14 +171,15 @@ impl VoiceInventory {
     /// Load exactly the selected revision directory. Catalog selection, not
     /// the model loader, resolves a database root and its installed revisions.
     pub fn load(directory: &Path) -> Result<Self> {
+        Self::load_with_resources(directory, &VoiceResources::default())
+    }
+
+    pub fn load_with_resources(
+        directory: &Path,
+        resources: &VoiceResources,
+    ) -> Result<Self> {
         if super::nofs::is_file(directory) {
-            if super::catalog::flat::is_flat(directory)
-                || super::catalog::flat::is_flat_package(directory) {
-                return Err(VoiceError::new(
-                    "SV Flat NOFS-JSON 仅包含声库配置与模型引用；尚未实现 Flat 基础模型推理，无法直接加载合成"
-                ));
-            }
-            return nofs::load(directory);
+            return Self::load_nofs(directory, resources);
         }
         let nofs_files = super::nofs::paths(directory)?;
         if !nofs_files.is_empty() {
@@ -189,13 +203,7 @@ impl VoiceInventory {
                     "目录同时包含 SV1 与 SV2 模型，请选择明确的声库文件或版本目录",
                 ));
             }
-            if super::catalog::flat::is_flat(&nofs_files[0])
-                || super::catalog::flat::is_flat_package(&nofs_files[0]) {
-                return Err(VoiceError::new(
-                    "SV Flat NOFS-JSON 已识别；必须实现其外部基础模型推理才能合成"
-                ));
-            }
-            return nofs::load(&nofs_files[0]);
+            return Self::load_nofs(&nofs_files[0], resources);
         }
         let context = FormatContext::dnni_v3();
         let mut paths = fs::read_dir(directory)?
@@ -230,6 +238,7 @@ impl VoiceInventory {
             graph_count: 0,
             tensor_count: 0,
             _models: Vec::new(),
+            flat_profile: None,
             preparation: OnceLock::new(),
         };
         for path in paths {
@@ -273,14 +282,14 @@ impl VoiceInventory {
             file.graphs.iter().any(|graph| graph.role == "duration")
         });
         if !has_duration {
-            if let Some(archive) = super::bundled::duration()? {
+            if let Some((archive, source)) = super::shared_duration::selected(resources.sv2_duration.as_deref())? {
                 if archive.index(CONFIGURATION_ID).is_some() {
                     return Err(VoiceError::new(
-                        "内嵌时长模型包含独立声库配置，不能作为共享 Duration 注入",
+                        "共享时长模型包含独立声库配置，不能作为 SV2 Duration 注入",
                     ));
                 }
                 let (file, trees) = inspect::file(
-                    Path::new("bundled-duration.dnni"), &archive,
+                    Path::new(&source), &archive,
                 )?;
                 if !file.graphs.iter().any(|graph| graph.role == "duration")
                     || file.graphs.iter().any(|graph| {
@@ -288,7 +297,7 @@ impl VoiceInventory {
                     })
                 {
                     return Err(VoiceError::new(
-                        "内嵌模型不是独立的 SV2 Duration 阶段",
+                        "所选共享模型不是独立的 SV2 Duration 阶段",
                     ));
                 }
                 inventory.files.push(file);
@@ -314,5 +323,16 @@ impl VoiceInventory {
             |configuration| configuration.name.clone(),
         );
         Ok(inventory)
+    }
+
+    fn load_nofs(path: &Path, resources: &VoiceResources) -> Result<Self> {
+        use super::catalog::flat::{is_flat, is_flat_package};
+        if is_flat(path) {
+            flat::load(path, resources)
+        } else if is_flat_package(path) {
+            Err(VoiceError::new("Flat 二进制 info.nofs 暂不支持合成，请选择文本 NOFS-JSON 声库"))
+        } else {
+            nofs::load(path)
+        }
     }
 }

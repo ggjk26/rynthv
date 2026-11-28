@@ -1,13 +1,13 @@
 use super::{pitch_y, seconds_at_x, x_at_seconds};
 use crate::{
     app::App,
+    model::GroupRef,
     synthesis::{
         plan::TempoMapping,
         rendered::{PitchTrack, VisualSnapshot},
     },
     ui::{
         group_geometry::visible_note_rect,
-        piano::scene::SceneGroup,
         track_color::{TrackColors, foreground},
     },
 };
@@ -17,15 +17,19 @@ pub(super) fn draw(
     app: &App,
     painter: &Painter,
     canvas: Rect,
-    group: &SceneGroup,
+    reference: &GroupRef,
     snapshot: &VisualSnapshot,
 ) {
     let pitch = &snapshot.data.pitch;
     let tempo = &snapshot.input.tempo;
-    let active = app.editor.reference == Some(group.reference.id);
+    let active = app.editor.reference == Some(reference.id);
     let color = Color32::from_rgba_unmultiplied(213, 210, 213, if active { 150 } else { 78 });
     curve(app, painter, canvas, pitch, tempo, Stroke::new(1.0, color));
-    if active && !app.piano_tool.is_pitch() {
+    if active
+        && !app.piano_tool.is_pitch()
+        && !app.editor.selected.is_empty()
+        && let Some(group) = app.editor.project.group(&reference.group_id)
+    {
         let selected_ink = foreground(TrackColors::new(app.editor.current_track()).accent);
         // Current note rectangles affect only contrast over the selection;
         // the curve's geometry always uses its completed render's tempo map.
@@ -36,7 +40,7 @@ pub(super) fn draw(
         {
             let Some(rect) = visible_note_rect(
                 note,
-                &group.reference,
+                reference,
                 canvas,
                 &app.view.piano,
                 app.view.top_pitch,

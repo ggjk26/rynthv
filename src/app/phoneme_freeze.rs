@@ -1,10 +1,36 @@
 //! Commit automatic pronunciation only after the current voice has produced
 //! a matching phoneme snapshot. Do not guess pronunciation from lyrics here.
 use super::App;
-use crate::{model::EntityId, synthesis::plan::OwnerId};
+use crate::{
+    model::{EntityId, Group, GroupRef},
+    synthesis::{plan::OwnerId, rendered::PhonemeSnapshot},
+};
 use std::collections::BTreeMap;
 
 impl App {
+    pub(crate) fn matching_phonemes(
+        &self,
+        reference: &GroupRef,
+        group: &Group,
+    ) -> Option<&PhonemeSnapshot> {
+        let owner = OwnerId(reference.id);
+        if !self.editor.is_editing()
+            && let Some(snapshot) = self.synthesis.phonemes_current(owner, self.editor.revision)
+        {
+            return Some(snapshot);
+        }
+        let snapshot = self.synthesis.phonemes(owner)?;
+        snapshot
+            .input
+            .matches_project(
+                &self.editor.project,
+                self.editor.current_track(),
+                reference,
+                group,
+            )
+            .then_some(snapshot)
+    }
+
     pub(super) fn freeze_rendered_phonemes(&mut self) {
         if self.editor.is_editing()
             || self.editor.transport.playing
@@ -21,15 +47,19 @@ impl App {
         let Some(group) = self.editor.group() else {
             return;
         };
-        let Some(snapshot) = self.synthesis.phonemes(OwnerId(reference.id)) else {
+        let Some(snapshot) = self.matching_phonemes(reference, group) else {
             return;
         };
-        if !snapshot.input.matches_project(
-            &self.editor.project,
-            self.editor.current_track(),
-            reference,
-            group,
-        ) {
+        let missing = group
+            .notes
+            .iter()
+            .filter(|note| note.phonemes.trim().is_empty());
+        if !missing.clone().any(|note| {
+            snapshot
+                .data
+                .label(note.id)
+                .is_some_and(|text| !text.is_empty())
+        }) {
             return;
         }
         // A linked group shared by multiple instances may have different
@@ -42,30 +72,12 @@ impl App {
         if shared {
             return;
         }
-        let mut phones: BTreeMap<EntityId, Vec<(usize, String)>> = BTreeMap::new();
-        for phone in snapshot.data.phones.iter() {
-            phones.entry(phone.source.note_id).or_default()
-                .push((phone.source.phone_index, phone.token.clone()));
-        }
-        let updates: BTreeMap<EntityId, String> = group.notes.iter()
-            .filter(|note| note.phonemes.trim().is_empty())
+        let updates: BTreeMap<EntityId, String> = missing
             .filter_map(|note| {
-                let tokens = phones.get(&note.id)?;
-                if tokens.is_empty() {
-                    return None;
-                }
-                let mut tokens = tokens.clone();
-                tokens.sort_unstable_by_key(|(index, _)| *index);
-                let text = tokens.into_iter()
-                    .map(|(_, token)| token)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                (!text.is_empty()).then_some((note.id, text))
+                let text = snapshot.data.label(note.id)?;
+                (!text.is_empty()).then(|| (note.id, text.to_owned()))
             })
             .collect();
-        if updates.is_empty() {
-            return;
-        }
         self.editor.begin("固定首次渲染音素");
         if let Some(group) = self.editor.group_mut() {
             for note in &mut group.notes {

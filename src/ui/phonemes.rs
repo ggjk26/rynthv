@@ -132,6 +132,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     canvas,
                     input: snapshot.input.clone(),
                     viewport: app.view.piano.clone(),
+                    preparation_step: app.view.step(),
                 },
                 snapshot.data.phones.clone(),
             )

@@ -10,11 +10,8 @@ pub(super) fn encode(
     children: &[usize; 6],
     configuration: Configuration,
     phones: &[PhoneFeatures],
+    style: &[f32],
 ) -> Result<Vec<f32>> {
-    let constant = tree
-        .tensor(children[5])?
-        .vector()
-        .ok_or_else(|| VoiceError::new("SV1 duration constant is not a float vector"))?;
     let capacity = configuration
         .width
         .checked_mul(phones.len())
@@ -51,7 +48,7 @@ pub(super) fn encode(
         )?;
         sinusoidal(phone.duration, configuration.duration, &mut output);
         sinusoidal(phone.pitch, configuration.pitch, &mut output);
-        output.extend_from_slice(constant);
+        output.extend_from_slice(style);
     }
     Ok(output)
 }

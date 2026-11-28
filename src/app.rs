@@ -29,6 +29,7 @@ pub struct App {
     pub synthesis: synthesis::runtime::Runtime,
     pub view: ViewState,
     pub preferences: ui::settings::Preferences,
+    pub graphics: ui::settings::GraphicsInfo,
     pub path: Option<PathBuf>,
     pub error: Option<String>,
     pub settings: bool,
@@ -46,6 +47,10 @@ pub struct App {
     pub piano_audition: ui::piano::KeyboardAudition,
     pub view_pan: ui::view_pan::ViewPan,
     pub selected_tracks: BTreeSet<EntityId>,
+    pub selected_groups: BTreeSet<EntityId>,
+    /// UI gesture flag: while dragging the playing ruler the editor retains
+    /// its playing state, but the audio device is stopped until release.
+    pub scrubbing_playhead: bool,
     pub gesture: Option<ui::piano::Gesture>,
     pub group_gesture: Option<ui::group_edit::GroupGesture>,
     pub audio_drag: Option<ui::instrumental::AudioDrag>,
@@ -66,7 +71,11 @@ pub struct App {
     last_persist: Instant,
 }
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, path: Option<PathBuf>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        path: Option<PathBuf>,
+        backend: ui::settings::GraphicsBackend,
+    ) -> Self {
         ui::theme::install(&cc.egui_ctx);
         egui_extras::install_image_loaders(&cc.egui_ctx);
         let mut error = ui::theme::fonts(&cc.egui_ctx).err();
@@ -109,11 +118,17 @@ impl App {
             .options_mut(|options| options.zoom_with_keyboard = false);
         let last_preferences =
             serde_json::to_string_pretty(&preferences).expect("valid interface preferences");
+        let graphics = ui::settings::GraphicsInfo::from_context(
+            cc,
+            backend,
+            preferences.graphics_backend,
+        );
         let mut app = Self {
             editor: Editor::new(Project::default()),
             synthesis: synthesis::runtime::Runtime::new(cc.egui_ctx.clone()),
             view,
             preferences,
+            graphics,
             path: None,
             error,
             settings: false,
@@ -131,6 +146,8 @@ impl App {
             piano_audition: ui::piano::KeyboardAudition::default(),
             view_pan: ui::view_pan::ViewPan::default(),
             selected_tracks: BTreeSet::new(),
+            selected_groups: BTreeSet::new(),
+            scrubbing_playhead: false,
             gesture: None,
             group_gesture: None,
             audio_drag: None,
@@ -166,6 +183,7 @@ impl App {
                 self.path = Some(path);
                 self.gesture = None;
                 self.selected_tracks.clear();
+        self.selected_groups.clear();
                 self.piano_anchor = ui::piano::AnchorSelection::default();
                 self.parameter_lane = ui::lanes::ParameterSelection::default();
                 self.phoneme_editing = ui::phonemes::PhonemeEditing::default();
@@ -259,6 +277,7 @@ impl App {
         self.midi_import = None;
         self.gesture = None;
         self.selected_tracks.clear();
+        self.selected_groups.clear();
         self.piano_anchor = ui::piano::AnchorSelection::default();
         self.parameter_lane = ui::lanes::ParameterSelection::default();
         self.phoneme_editing = ui::phonemes::PhonemeEditing::default();
@@ -382,15 +401,7 @@ impl App {
             });
         }
         if self.about {
-            Modal::new(Id::new("about")).show(ctx, |ui| {
-                ui.heading(format!("RynthV {}", env!("CARGO_PKG_VERSION")));
-                ui.label(lang.text("Rust + egui 歌声合成引擎", "Rust + egui singing synthesis engine", "Rust + egui 歌声合成エンジン"));
-                ui.label(lang.text("多音轨编辑、歌词与音高调整、MIDI 导入和 WAV 导出。", "Multitrack editing, lyrics, pitch control, MIDI import and WAV export.", "マルチトラック編集、歌詞とピッチ調整、MIDI 読み込み、WAV 書き出しに対応。"));
-                ui.label(lang.text("支持 Windows 和 Linux。", "Supports Windows and Linux.", "Windows と Linux に対応。"));
-                if ui.button(lang.text("关闭", "Close", "閉じる")).clicked() {
-                    self.about = false;
-                }
-            });
+            ui::about::show(self, ctx);
         }
         if self.settings {
             ui::settings::show(self, ctx);
@@ -402,6 +413,9 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let lang = self.preferences.language;
         let ctx = ui.ctx().clone();
+        ctx.data_mut(|data| data.insert_temp(
+            Id::new("toolbar-hover-status"), String::new()
+        ));
         ui::piano::begin_keyboard_frame(self, &ctx);
         self.synthesis.poll();
         self.poll_audio_import();
@@ -411,11 +425,19 @@ impl eframe::App for App {
             self.request_file(FileAction::Close, &ctx);
         }
         let audio_seconds = self.synthesis.playback_clock(self.editor.transport.playing);
-        let looped = self.editor.transport.update(
-            &self.editor.project.time,
-            self.editor.project.end().max(32 * QUARTER),
-            audio_seconds,
-        );
+        let was_scrubbing = self.scrubbing_playhead;
+        let looped = if was_scrubbing {
+            // The device has been silenced for an interactive seek. Do not
+            // overwrite the user's cursor with a stale playback clock.
+            false
+        } else {
+            self.editor.transport.update(
+                &self.editor.project.time,
+                self.editor.project.end().max(32 * QUARTER),
+                audio_seconds,
+            )
+        };
+        self.scrubbing_playhead = false;
         let transport_position = self.editor.transport.position;
         if self.editor.transport.playing {
             ctx.request_repaint_after(Duration::from_millis(16));
@@ -474,7 +496,11 @@ impl eframe::App for App {
         if self.preferences.show_status_bar {
             let mut status_ui = ui::child(ui, status.shrink2(vec2(8.0, 1.0)), "status");
             status_ui.horizontal(|ui| {
-                let hint = if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchAnchor {
+                let hovered = ctx.data(|data| data.get_temp::<String>(Id::new("toolbar-hover-status")))
+                    .unwrap_or_default();
+                let hint = if !hovered.is_empty() {
+                    hovered.as_str()
+                } else if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchAnchor {
                     lang.text("双击创建控制点 · 拖动框选 / 移动 · 四边手柄缩放 · Delete 删除 · Esc 取消 · Ctrl+Z 撤销", "Double-click to add control points · Drag to select / move · Resize by handles · Delete · Esc · Ctrl+Z", "ダブルクリックで制御点を追加 · ドラッグで選択／移動 · ハンドルで拡縮 · Delete · Esc · Ctrl+Z")
                 } else if self.status.is_empty() && self.piano_tool == ui::piano::Tool::PitchDraw {
                     lang.text("左键拖动绘制音高 · 右键拖动擦除 · Esc 取消本次绘制 · Ctrl+Z 撤销 · 中键拖动视野", "Drag left button to draw pitch · Right button to erase · Esc cancel · Ctrl+Z undo · Middle button to pan", "左ドラッグでピッチ描画 · 右ドラッグで消去 · Esc キャンセル · Ctrl+Z 元に戻す · 中ドラッグで移動")
@@ -490,6 +516,11 @@ impl eframe::App for App {
                             .size(11.0)
                             .color(ui::theme::MUTED),
                     );
+                    ui.label(
+                        RichText::new(format!("{} ·", self.graphics.active_backend))
+                            .size(11.0)
+                            .color(ui::theme::GREEN.gamma_multiply(0.75)),
+                    ).on_hover_text(&self.graphics.gpu_name);
                 });
             });
         }
@@ -522,13 +553,14 @@ impl eframe::App for App {
                 .loop_seconds(&self.editor.project.time),
         );
         self.synthesis.sync_transport(
-            self.editor.transport.playing,
+            self.editor.transport.playing && !self.scrubbing_playhead,
             self.editor
                 .project
                 .time
                 .seconds_at(self.editor.transport.position)
                 .max(0.0),
-            looped || self.editor.transport.position != transport_position,
+            looped || self.editor.transport.position != transport_position
+                || was_scrubbing || self.scrubbing_playhead,
         );
         if self.last_persist.elapsed() > Duration::from_secs(3) {
             self.persist_layout();

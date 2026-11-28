@@ -1,5 +1,6 @@
 mod pages;
 mod preferences;
+mod graphics;
 mod shortcuts;
 mod widgets;
 
@@ -13,6 +14,7 @@ use crate::{
 };
 use eframe::egui::*;
 pub use preferences::{Preferences, UiLanguage};
+pub use graphics::{GraphicsBackend, GraphicsInfo};
 
 const FILL: Color32 = Color32::from_rgb(61, 59, 63);
 const DIVIDER: Color32 = Color32::from_rgb(76, 74, 78);
@@ -25,16 +27,18 @@ enum Page {
     Editing,
     Recording,
     Rendering,
+    Voicebanks,
     Shortcuts,
 }
 
 impl Page {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::General,
         Self::Audio,
         Self::Editing,
         Self::Recording,
         Self::Rendering,
+        Self::Voicebanks,
         Self::Shortcuts,
     ];
     fn label(self, language: UiLanguage) -> &'static str {
@@ -44,9 +48,18 @@ impl Page {
             Self::Editing => language.text("编辑", "Editing", "編集"),
             Self::Recording => language.text("录制", "Recording", "録音"),
             Self::Rendering => language.text("渲染", "Rendering", "レンダリング"),
+            Self::Voicebanks => language.text("声库目录", "Voice folders", "歌声フォルダー"),
             Self::Shortcuts => language.text("快捷键", "Shortcuts", "ショートカット"),
         }
     }
+}
+
+/// Open an immediately accessible dedicated page for all voicebank roots.
+pub fn open_voice_paths(app: &mut App, ctx: &Context) {
+    ctx.data_mut(|data| data.insert_temp(Id::new("settings-page"), Page::Voicebanks));
+    app.voice_manager = false;
+    app.settings = true;
+    ctx.request_repaint();
 }
 
 pub fn show(app: &mut App, ctx: &Context) {
@@ -68,6 +81,11 @@ pub fn show(app: &mut App, ctx: &Context) {
         .show(ctx, |ui| {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             let header = Rect::from_min_size(rect.min, vec2(rect.width(), 50.0));
+            ui.painter().rect_filled(
+                Rect::from_min_size(header.min, vec2(header.width(), 3.0)),
+                2.0,
+                GREEN.gamma_multiply(0.85),
+            );
             let mut title = child(ui, header.shrink2(vec2(18.0, 10.0)), "settings-title");
             title.spacing_mut().interact_size.y = 30.0;
             title.horizontal(|ui| {
@@ -137,6 +155,7 @@ pub fn show(app: &mut App, ctx: &Context) {
                         Page::Editing => pages::editing(app, ui),
                         Page::Recording => pages::recording(ui, app.preferences.language),
                         Page::Rendering => pages::rendering(app, ui),
+                        Page::Voicebanks => crate::ui::voice_library::settings(app, ui),
                         Page::Shortcuts => shortcuts::show(ui, app.preferences.language),
                     }
                 });
@@ -152,9 +171,28 @@ pub fn show(app: &mut App, ctx: &Context) {
 
 fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
-    if selected || response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 4, if selected { BUTTON_ACTIVE } else { BUTTON });
+    let hover = ui.ctx().animate_bool_with_time(
+        response.id.with("navigation-hover"),
+        response.hovered() && !selected,
+        0.1,
+    );
+    if selected || hover > 0.001 {
+        ui.painter().rect_filled(
+            rect,
+            5,
+            if selected {
+                BUTTON_ACTIVE
+            } else {
+                FILL.lerp_to_gamma(BUTTON_HOVER, hover)
+            },
+        );
+    }
+    if selected {
+        ui.painter().rect_filled(
+            Rect::from_min_size(rect.min + vec2(1.0, 6.0), vec2(3.0, rect.height() - 12.0)),
+            1.0,
+            GREEN,
+        );
     }
     let icon = Rect::from_center_size(rect.left_center() + vec2(19.0, 0.0), Vec2::splat(18.0));
     match page {
@@ -165,6 +203,7 @@ fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> 
                 .circle_stroke(icon.center(), 7.0, Stroke::new(1.0, MUTED));
         }
         Page::Rendering => Icon::Render.paint(ui, icon, MUTED),
+        Page::Voicebanks => Icon::Microphone.paint(ui, icon, MUTED),
         Page::Audio => widgets::speaker(ui, icon),
         Page::Shortcuts => widgets::keyboard(ui, icon),
     }
@@ -177,7 +216,7 @@ fn navigation(ui: &mut Ui, page: Page, selected: bool, language: UiLanguage) -> 
         } else {
             FontId::proportional(12.0)
         },
-        TEXT,
+        if selected { TEXT } else { MUTED.lerp_to_gamma(TEXT, hover) },
     );
     response.widget_info(|| {
         WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, page.label(language))

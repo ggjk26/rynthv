@@ -10,62 +10,107 @@ use crate::{
     },
 };
 use eframe::egui::*;
+use std::collections::HashSet;
 
-pub struct SceneGroup {
-    pub reference: GroupRef,
-    pub notes: Vec<Note>,
-}
-pub fn snapshot(app: &App) -> Vec<SceneGroup> {
-    let mut groups: Vec<_> = app
+pub fn references(app: &App) -> Vec<GroupRef> {
+    let mut references: Vec<_> = app
         .editor
         .current_track()
         .visible_references()
-        .filter_map(|r| {
-            app.editor.project.group(&r.group_id).map(|g| SceneGroup {
-                reference: r.clone(),
-                notes: g.notes.clone(),
+        .cloned()
+        .collect();
+    references.sort_by_key(|reference| app.editor.reference == Some(reference.id));
+    references
+}
+
+pub struct NoteHit {
+    pub reference: EntityId,
+    pub note: EntityId,
+    pub rect: Rect,
+    pub onset: i64,
+    pub end: i64,
+}
+
+pub fn hit_note(app: &App, canvas: Rect, pos: Pos2) -> Option<NoteHit> {
+    let hit_in_group = |reference: &GroupRef| {
+        if !clip_rect(reference, canvas, &app.view.piano).contains(pos) {
+            return None;
+        }
+        let group = app.editor.project.group(&reference.group_id)?;
+        group.notes.iter().rev().find_map(|note| {
+            let visible = visible_note_rect(
+                note,
+                reference,
+                canvas,
+                &app.view.piano,
+                app.view.top_pitch,
+                app.view.row_height,
+            )?;
+            visible.contains(pos).then(|| NoteHit {
+                reference: reference.id,
+                note: note.id,
+                rect: super::canvas::note_rect(
+                    note,
+                    reference.blick_offset,
+                    reference.pitch_offset,
+                    canvas,
+                    app,
+                ),
+                onset: note.onset,
+                end: note.onset.saturating_add(note.duration),
             })
         })
-        .collect();
-    groups.sort_by_key(|g| app.editor.reference == Some(g.reference.id));
-    groups
-}
-pub fn hit_note(
-    app: &App,
-    groups: &[SceneGroup],
-    canvas: Rect,
-    pos: Pos2,
-) -> Option<(GroupRef, Note)> {
-    groups.iter().rev().find_map(|g| {
-        g.notes
-            .iter()
+    };
+    let track = app.editor.current_track();
+    app.editor.active_ref().and_then(hit_in_group).or_else(|| {
+        track
+            .visible_references()
             .rev()
-            .find(|n| {
-                visible_note_rect(
-                    n,
-                    &g.reference,
-                    canvas,
-                    &app.view.piano,
-                    app.view.top_pitch,
-                    app.view.row_height,
-                )
-                .is_some_and(|r| r.contains(pos))
-            })
-            .map(|n| (g.reference.clone(), n.clone()))
+            .filter(|reference| app.editor.reference != Some(reference.id))
+            .find_map(hit_in_group)
     })
 }
-pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
+
+fn overlapping_notes(notes: &[Note]) -> HashSet<EntityId> {
+    let mut intervals: Vec<_> = notes.iter().filter(|note| note.duration > 0).collect();
+    intervals.sort_unstable_by_key(|note| note.onset);
+    let mut previous_end = i64::MIN;
+    let mut overlaps = HashSet::new();
+    for (index, note) in intervals.iter().enumerate() {
+        let end = note.onset.saturating_add(note.duration);
+        // An earlier note overlaps if its maximum end reaches this onset.
+        // A later note overlaps if the very next onset precedes this end.
+        if end > note.onset
+            && (previous_end > note.onset
+                || intervals
+                    .get(index + 1)
+                    .is_some_and(|next| next.onset < end))
+        {
+            overlaps.insert(note.id);
+        }
+        previous_end = previous_end.max(end);
+    }
+    overlaps
+}
+
+pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, references: &[GroupRef]) {
     let colors = TrackColors::new(app.editor.current_track());
     let drawing_pitch = app.piano_tool.is_pitch();
-    for g in groups {
-        let active = app.editor.reference == Some(g.reference.id);
-        let painter = ui.painter().with_clip_rect(
-            clip_rect(&g.reference, canvas, &app.view.piano).intersect(ui.clip_rect()),
-        );
-        for note in &g.notes {
+    for reference in references {
+        let clip = clip_rect(reference, canvas, &app.view.piano).intersect(ui.clip_rect());
+        if !clip.is_positive() {
+            continue;
+        }
+        let Some(group) = app.editor.project.group(&reference.group_id) else {
+            continue;
+        };
+        let active = app.editor.reference == Some(reference.id);
+        let painter = ui.painter().with_clip_rect(clip);
+        let overlaps = std::cell::OnceCell::new();
+        for note in &group.notes {
             if visible_note_rect(
                 note,
-                &g.reference,
+                reference,
                 canvas,
                 &app.view.piano,
                 app.view.top_pitch,
@@ -77,8 +122,8 @@ pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
             }
             let r = super::canvas::note_rect(
                 note,
-                g.reference.blick_offset,
-                g.reference.pitch_offset,
+                reference.blick_offset,
+                reference.pitch_offset,
                 canvas,
                 app,
             );
@@ -108,9 +153,9 @@ pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
                     r,
                     corner_radius,
                     Stroke::new(
-                        0.7,
+                        if selected { 1.5 } else { 0.7 },
                         if selected {
-                            colors.highlight
+                            Color32::WHITE
                         } else {
                             colors
                                 .accent
@@ -119,32 +164,68 @@ pub fn draw_notes(app: &App, ui: &Ui, canvas: Rect, groups: &[SceneGroup]) {
                     ),
                     StrokeKind::Inside,
                 );
+                if selected {
+                    for x in [r.left() + 1.0, r.right() - 1.0] {
+                        painter.vline(x, r.y_range(), Stroke::new(1.0, Color32::WHITE));
+                    }
+                }
+                if note.muted() {
+                    painter.hline(
+                        r.left()..=r.right(),
+                        r.bottom() - 1.0,
+                        Stroke::new(2.0, Color32::from_rgb(241, 90, 92)),
+                    );
+                }
+                if overlaps
+                    .get_or_init(|| overlapping_notes(&group.notes))
+                    .contains(&note.id)
+                {
+                    let size = r.width().min(r.height()).min(10.0);
+                    painter.add(Shape::convex_polygon(
+                        vec![
+                            r.right_top(),
+                            pos2(r.right() - size, r.top()),
+                            pos2(r.right(), r.top() + size),
+                        ],
+                        Color32::from_rgb(243, 170, 67),
+                        Stroke::NONE,
+                    ));
+                }
             }
-            painter
-                .with_clip_rect(r.intersect(painter.clip_rect()))
-                .text(
-                    r.left_center() + vec2(6.0, 0.0),
-                    Align2::LEFT_CENTER,
-                    &note.lyrics,
-                    FontId::proportional(12.0),
-                    if drawing_pitch || (note.muted() && active) {
-                        TEXT
-                    } else if active {
-                        foreground(color)
-                    } else {
-                        MUTED
-                    },
+            if r.width() <= 10.0 || note.lyrics.is_empty() {
+                continue;
+            }
+            // Short notes hide text instead of letting lyrics spill into
+            // adjacent note rectangles. Long notes center their labels.
+            let ink = if drawing_pitch || (note.muted() && active) {
+                TEXT
+            } else if active {
+                foreground(color)
+            } else {
+                MUTED
+            };
+            let label =
+                painter.layout_no_wrap(note.lyrics.clone(), FontId::proportional(12.0), ink);
+            if label.size().x + 10.0 <= r.width() && label.size().y <= r.height() {
+                painter.galley(
+                    pos2(
+                        r.center().x - label.size().x * 0.5,
+                        r.center().y - label.size().y * 0.5,
+                    ),
+                    label,
+                    ink,
                 );
+            }
         }
     }
 }
-pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) {
+pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, references: &[GroupRef]) {
     let track = app.editor.track;
     let colors = TrackColors::new(app.editor.current_track());
     let drawing_pitch = app.piano_tool.is_pitch();
-    for g in groups {
-        let r = group_rect(&g.reference, canvas, &app.view.piano);
-        let color = if app.editor.reference == Some(g.reference.id) {
+    for reference in references {
+        let r = group_rect(reference, canvas, &app.view.piano);
+        let color = if app.editor.reference == Some(reference.id) {
             colors.accent
         } else {
             colors.note
@@ -159,10 +240,16 @@ pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) 
         let name = app
             .editor
             .project
-            .group(&g.reference.group_id)
+            .group(&reference.group_id)
             .map(|g| g.name.as_str())
             .unwrap_or("");
-        let name = if name == "main" { app.preferences.language.text("主音符组", "Main group", "メイングループ") } else { name };
+        let name = if name == "main" {
+            app.preferences
+                .language
+                .text("主音符组", "Main group", "メイングループ")
+        } else {
+            name
+        };
         let ink = foreground(color);
         let text = painter.layout_no_wrap(name.into(), FontId::proportional(12.0), ink);
         if let Some(tag) = label_rect(r, canvas, text.size().x + 12.0) {
@@ -183,7 +270,7 @@ pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) 
             );
             let response = ui.interact(
                 tag,
-                Id::new(("group-label", g.reference.id)),
+                Id::new(("group-label", reference.id)),
                 if drawing_pitch {
                     Sense::click()
                 } else {
@@ -192,16 +279,16 @@ pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) 
             );
             if response.clicked() || response.secondary_clicked() {
                 app.commit_lyric();
-                app.editor.select_reference(track, g.reference.id);
+                app.editor.select_reference(track, reference.id);
             }
             if !drawing_pitch
                 && response.drag_started_by(PointerButton::Primary)
-                && g.reference.blick_absolute_end >= 0
+                && reference.blick_absolute_end >= 0
                 && let Some(origin) = ui.input(|i| i.pointer.press_origin())
             {
                 group_edit::start(
                     app,
-                    &g.reference,
+                    reference,
                     track,
                     origin,
                     GroupEdit::Move,
@@ -209,9 +296,9 @@ pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) 
                     false,
                 );
             }
-            response.context_menu(|ui| group_edit::context_menu(app, ui, &g.reference));
+            response.context_menu(|ui| group_edit::context_menu(app, ui, reference));
         }
-        if !drawing_pitch && g.reference.blick_absolute_end >= 0 {
+        if !drawing_pitch && reference.blick_absolute_end >= 0 {
             for (side, x, kind) in [
                 ("left", r.left(), GroupEdit::Left),
                 ("right", r.right(), GroupEdit::Right),
@@ -225,7 +312,7 @@ pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) 
                 let response = ui
                     .interact(
                         edge,
-                        Id::new(("piano-group-edge", g.reference.id, side)),
+                        Id::new(("piano-group-edge", reference.id, side)),
                         Sense::drag(),
                     )
                     .on_hover_cursor(CursorIcon::ResizeHorizontal);
@@ -234,7 +321,7 @@ pub fn headers(app: &mut App, ui: &mut Ui, canvas: Rect, groups: &[SceneGroup]) 
                 {
                     group_edit::start(
                         app,
-                        &g.reference,
+                        reference,
                         track,
                         origin,
                         kind,
