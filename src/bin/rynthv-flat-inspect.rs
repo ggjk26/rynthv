@@ -43,7 +43,7 @@ fn inspect() -> Result<(), String> {
                 "用法：rynthv-flat-inspect <NOFS-JSON|info.nofs|config.json|目录> [--models 模型目录] [--timing 时长模型.dnni] [--probe-models]"
             );
             println!(
-                "默认只读取元数据。--probe-models 会校验本地 DNNI v3 容器索引及资源完整性，并检查可读的内联 F0 和声学图，可能需要较长时间和较多内存；不执行歌声合成。"
+                "默认只读取元数据。--probe-models 会检查四个 DDS 阶段，或校验签名 DNNI v3 容器的索引及资源完整性，可能需要较长时间和较多内存；不执行歌声合成。"
             );
             println!(
                 "实验性 F0：rynthv-flat-inspect <NOFS-JSON> --models <目录> --phonesets <目录> --pitch-score <已标注时长的乐谱.json>"
@@ -51,7 +51,7 @@ fn inspect() -> Result<(), String> {
             println!(
                 "实验性 F0 + 声学：使用 --acoustic-score <乐谱.json> [--style <NOFS 唱法名>] 代替 --pitch-score。"
             );
-            println!("实验需要可读的 DNNI v1/v2 DDS 模型，输出音高或声学帧 JSON。");
+            println!("支持 DNNI v1/v2 和 legacy v3（需要 RYNTHV_FLAT_LEGACY_KEY），输出音高或声学帧 JSON。");
             println!(
                 "直接预检：rynthv-flat-inspect --probe-file <acoustic|duration|f0|vocoder> <路径>（可重复）"
             );
@@ -208,7 +208,7 @@ fn inspect() -> Result<(), String> {
             let preflight = voice.preflight(timing.as_deref());
             let conditioning = match voice.conditioning(None) {
                 Ok(controls) => json!({
-                    "status": "parsed_only",
+                    "status": "parsed",
                     "inputs": controls,
                 }),
                 Err(error) => json!({

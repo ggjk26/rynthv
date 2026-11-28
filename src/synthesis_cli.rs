@@ -35,7 +35,8 @@ fn run() -> Result<(), String> {
         return Ok(());
     };
     let start = Instant::now();
-    let inventory = VoiceInventory::load(&args.voice).map_err(|e| e.to_string())?;
+    let inventory = VoiceInventory::load_with_resources(&args.voice, &args.resources)
+        .map_err(|e| e.to_string())?;
     let load_ms = start.elapsed().as_secs_f64() * 1000.0;
     if let Some(import) = args.context {
         return write_report(args.output, &import.run(&inventory)?);

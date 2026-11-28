@@ -26,6 +26,23 @@ pub struct VoiceConfiguration {
 }
 
 impl VoiceConfiguration {
+    pub(super) fn from_flat(voice: &super::flat::FlatVoice, styles: Vec<String>) -> Self {
+        Self {
+            family: VoiceFamily::Sv1,
+            model_version: 1,
+            f0_enhancement: Some(0.0),
+            name: voice.name.clone(),
+            version: voice.version.clone(),
+            vendor: voice.vendor.clone(),
+            default_language: voice.language.clone(),
+            supported_languages: voice.supported_languages.clone(),
+            styles,
+            additional_fields: 0,
+            parser_scope: "Flat NOFS-JSON with external DDS stages",
+            _uninterpreted: BTreeMap::new(),
+        }
+    }
+
     pub(super) fn parse(bytes: &[u8]) -> Result<Self> {
         let text = std::str::from_utf8(bytes)
             .map_err(|_| VoiceError::new("Voice configuration is not UTF-8"))?;

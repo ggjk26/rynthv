@@ -62,7 +62,7 @@ impl VoiceCatalog {
         Self::scan_with_models(root, None)
     }
 
-    /// Optional separate Flat model directory is for diagnostics, not synthesis.
+    /// Optionally locate the models referenced by Flat NOFS-JSON voices.
     pub fn scan_with_models(root: &Path, flat_models: Option<&Path>) -> Result<Self> {
         Self::scan_with_resources(root, flat_models, None, None)
     }

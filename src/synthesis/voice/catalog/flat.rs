@@ -1,9 +1,10 @@
 //! Safe Flat JSON NOFS and SFPK sidecar discovery.
-//! This is deliberately metadata-only until the native model stages support
-//! Base Model conditioning and all Flat embedding spaces.
+//! DDS readiness checks inspect model headers only; full validation occurs on load.
 use super::{VoiceAvailability, VoiceCatalogEntry};
-use crate::synthesis::voice::{flat::{FlatManifest, FlatVoice, locate_model, valid_model_id}, Result, VoiceError};
-use sha2::{Digest, Sha256};
+use crate::synthesis::voice::{
+    Result, VoiceError, VoiceFamily,
+    flat::{FlatManifest, FlatVoice, locate_model, matching_model_path, render, valid_model_id},
+};
 use std::{
     fs::{self, File},
     io::Read,
@@ -38,9 +39,7 @@ pub(super) fn entry(
         .then(|| FlatVoice::nearby_model_root(path))
         .flatten();
     let model_root = model_root.or(inferred_root.as_deref());
-    let canonical = fs::canonicalize(path)?;
-    let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
-    let id = format!("svflat:{}", crate::synthesis::voice::hex(&digest[..12]));
+    let id = render::database_id(path)?;
     let icon_path = path.parent().and_then(|parent| {
         let exact = parent.join("profile.png");
         if exact.is_file() {
@@ -78,50 +77,27 @@ pub(super) fn entry(
     };
     if is_flat(path) {
         match FlatVoice::open(path, model_root) {
-            Ok(mut voice) => {
-                if voice.f0_style.is_some() {
-                    voice.notes.push("F0 风格向量：32 维 Float32 已解析".to_owned());
-                }
-                if voice.duration_style.is_some() {
-                    voice.notes.push("时长风格向量：128 维 Float32 已解析".to_owned());
-                }
-                // An explicitly selected Flat timing model is a read-only
-                // dependency override. It must match this voicebank's declared
-                // 32-hex model ID, not just have a .dnni extension.
-                if let Some(override_path) = timing_override {
-                    if model_root.is_none() {
-                        // Avoid saying all models were unchecked when the
-                        // explicitly selected Timing file was checked.
-                        voice.notes.retain(|note| note != "尚未配置 Flat 模型目录，未进行模型文件检查");
-                        voice.notes.push("其余 Flat 模型请在「Flat 模型目录」设置后检查".to_owned());
+            Ok(voice) => {
+                entry.availability = match voice.check_render_files(timing_override) {
+                    Ok(()) => {
+                        entry.family = Some(VoiceFamily::Sv1);
+                        entry.model_version = Some(1);
+                        VoiceAvailability::Loadable
                     }
-                    if let Some(model) = voice.models.iter_mut().find(|model| model.role == "duration") {
-                        if override_matches(override_path, &model.id) {
-                            model.installed = true;
-                            model.path = Some(override_path.to_owned());
-                            voice.notes.push(format!(
-                                "Flat Timing：已从手动路径定位模型 {}",
-                                override_path.display()
-                            ));
-                        } else {
-                            voice.notes.push(format!(
-                                "手动指定的 Flat Timing 文件与声库声明的模型 {} 不匹配：{}",
-                                model.id, override_path.display()
-                            ));
-                        }
-                    } else {
-                        voice.notes.push("当前 Flat 声库未声明 Duration / Timing Model，无法匹配手动文件".into());
-                    }
-                }
+                    Err(error) => VoiceAvailability::Unsupported(error.to_string()),
+                };
                 entry.revision = revision(&voice.version);
                 entry.version_label = Some(voice.version.clone());
                 entry.display_name = voice.name;
                 entry.vendor = voice.vendor;
                 entry.languages = voice.supported_languages;
-                entry.styles = voice.styles.iter().map(|style| style.name.clone()).collect();
+                let base_name = voice.styles.iter().find(|style| style.name == "(base)")
+                    .or_else(|| voice.styles.first()).map(|style| &style.name);
+                entry.styles = voice.styles.iter().filter(|style| Some(&style.name) != base_name)
+                    .map(|style| style.name.clone()).collect();
                 entry.model_dependencies = voice.models.iter()
                     .map(|model| {
-                        let status = if model.installed {
+                        let status = if model.resolved_path(timing_override).is_some() {
                             "已找到文件"
                         } else if model_root.is_some() {
                             "未找到文件"
@@ -131,18 +107,6 @@ pub(super) fn entry(
                         format!("{}：{}（{status}）", model.role, model.id)
                     })
                     .collect();
-                let installed = voice.models.iter().filter(|item| item.installed).count();
-                let checks = if model_root.is_some() || timing_override.is_some() {
-                    format!("模型检查 {installed}/{}（已指定模型目录或 Timing 文件）", voice.models.len())
-                } else {
-                    "模型目录未配置".to_owned()
-                };
-                let notes = if voice.notes.is_empty() { String::new() }
-                    else { format!("；{}", voice.notes.join("；")) };
-                entry.availability = VoiceAvailability::Unsupported(format!(
-                    "Flat NOFS-JSON v{}：{}{}。声码器及原生 Flat 音色条件推理尚未实现，暂不能试听/导出",
-                    voice.version, checks, notes
-                ));
             }
             Err(error) => entry.availability = VoiceAvailability::Unsupported(
                 format!("Flat NOFS-JSON 解析失败：{error}")
@@ -177,7 +141,7 @@ pub(super) fn entry(
                         let role = manifest.model_types.get(i).map(String::as_str).unwrap_or("unknown");
                         let found = model_root.is_some_and(|root| manifest_model_exists(root, role, id))
                             || (is_timing_role(role)
-                                && timing_override.is_some_and(|path| override_matches(path, id)));
+                                && timing_override.is_some_and(|path| matching_model_path(path, id)));
                         if found { installed += 1; }
                         let status = if found {
                             "已找到文件"
@@ -216,14 +180,6 @@ fn revision(version: &str) -> u32 {
 
 fn is_timing_role(role: &str) -> bool {
     matches!(role.to_ascii_lowercase().as_str(), "duration" | "timing_model")
-}
-
-fn override_matches(path: &Path, id: &str) -> bool {
-    valid_model_id(id)
-        && path.is_file()
-        && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni"))
-        && path.file_stem().and_then(|name| name.to_str())
-            .is_some_and(|name| name.eq_ignore_ascii_case(id))
 }
 
 /// Read-only, bounded lookup: never use arbitrary manifest strings as paths.

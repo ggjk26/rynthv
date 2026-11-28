@@ -139,21 +139,13 @@ fn stage_status(state: &StageState, lang: UiLanguage) -> (&'static str, Color32)
             ),
             amber,
         ),
-        StageState::InlineF0GraphReady => (
-            lang.text(
-                "内联 F0 图已装配",
-                "Inline F0 graph prepared",
-                "インライン F0 グラフ構築済み",
-            ),
+        StageState::InlineDdsReady => (
+            lang.text("DDS 阶段就绪", "DDS stage ready", "DDS ステージ準備完了"),
             GREEN,
         ),
-        StageState::InlineAcousticGraphReady => (
-            lang.text(
-                "内联声学图已装配",
-                "Inline acoustic graph prepared",
-                "インライン音響グラフ構築済み",
-            ),
-            GREEN,
+        StageState::LegacyDecodeRejected => (
+            lang.text("Legacy 模型读取失败", "Legacy model could not be read", "Legacy モデルの読み込み失敗"),
+            amber,
         ),
         StageState::InvalidInlineGraph => (
             lang.text(

@@ -95,9 +95,9 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
             "SV Flat フォルダー（OPSV / databases）"));
     ui.add_space(10.0);
     voice_root_editor(app, ui, VoiceDirectory::FlatModels,
-        lang.text("Flat 模型目录（可选，仅依赖扫描）",
-            "Flat models (optional, dependencies only)",
-            "Flat モデル（任意、依存関係のみ）"));
+        lang.text("Flat 模型目录",
+            "Flat model directory",
+            "Flat モデルフォルダー"));
     ui.add_space(12.0);
     text(ui, RichText::new(lang.text(
         "时长模型（.dnni）",
@@ -105,9 +105,9 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
         "Duration / Timing モデル (.dnni)",
     )).strong());
     weak(ui, lang.text(
-        "SV2 Duration 用于声库缺少独立 Duration 阶段时的合成；Flat Timing 仅用于依赖检查，不能直接替代 SV2 Duration。",
-        "SV2 Duration can fill a missing SV2 synthesis stage. Flat Timing is metadata-only and cannot replace SV2 Duration.",
-        "SV2 Duration は SV2 歌声の不足モデルを補います。Flat Timing は依存関係の検査専用で SV2 Duration の代わりにはなりません。",
+        "SV2 Duration 补充缺少时长模型的 SV2 声库。Flat Timing 按模型 ID 匹配 NOFS-JSON 声库。",
+        "SV2 Duration fills a missing SV2 stage. Flat Timing is matched by model ID in the NOFS-JSON voice.",
+        "SV2 Duration は SV2 歌声の不足モデルを補います。Flat Timing は NOFS-JSON のモデル ID と照合されます。",
     ));
     duration_model_editor(app, ui, DurationModelSlot::Sv2,
         lang.text("SV2 时长模型 DNNI（可选）",
@@ -115,9 +115,9 @@ pub fn settings(app: &mut App, ui: &mut Ui) {
             "SV2 Duration DNNI（任意）"));
     ui.add_space(8.0);
     duration_model_editor(app, ui, DurationModelSlot::Flat,
-        lang.text("Flat Timing Model DNNI（仅检查）",
-            "Flat Timing DNNI (inspection only)",
-            "Flat Timing DNNI（検査のみ）"));
+        lang.text("Flat Timing Model DNNI（可选）",
+            "Flat Timing DNNI (optional)",
+            "Flat Timing DNNI（任意）"));
     ui.add_space(8.0);
     text(ui, lang.text("可选外部发音词典（不设置则使用内置普通话 / 日语 / 英语词典）", "External pronunciation dictionaries (optional; Mandarin, Japanese and English are built in)", "外部発音辞書（任意、中国語・日本語・英語は内蔵）"));
     path_label(ui, app.synthesis.dictionaries(), lang);

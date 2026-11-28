@@ -1,11 +1,11 @@
 use std::{borrow::Cow, sync::Arc};
 
-use crate::synthesis::voice::{Result, VoiceError, archive::Archive};
+use crate::synthesis::voice::{Result, VoiceError, archive::Archive, embedded::Record};
 
 /// Immutable verified resources, independent of their enclosing file grammar.
 pub(super) enum ModelSource {
     Indexed(Arc<Archive>),
-    Inline(Vec<Vec<u8>>),
+    Inline(Arc<[Record]>),
 }
 
 impl ModelSource {
@@ -14,7 +14,7 @@ impl ModelSource {
             Self::Indexed(archive) => archive.read(index, None),
             Self::Inline(records) => records
                 .get(index)
-                .map(|bytes| Cow::Borrowed(bytes.as_slice()))
+                .map(|record| Cow::Borrowed(record.bytes.as_slice()))
                 .ok_or_else(|| VoiceError::new("Embedded model resource is absent")),
         }
     }

@@ -1,6 +1,6 @@
 //! Portable resource locations and the selected voice relative to its library.
 
-use super::voice::VoiceCatalog;
+use super::voice::{VoiceCatalog, VoiceResources};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -41,8 +41,7 @@ pub struct SynthesisSettings {
     /// External DNNI v3 graph used only when an SV2 voice lacks Duration.
     #[serde(default)]
     pub sv2_duration_model: Option<PathBuf>,
-    /// Explicit Flat Timing Model .dnni for metadata dependency checking.
-    /// This is never silently injected into the SV2 Duration stage.
+    /// Explicit Flat Timing Model .dnni, matched by the NOFS-JSON model ID.
     #[serde(default)]
     pub flat_timing_model: Option<PathBuf>,
     pub dictionaries: Option<PathBuf>,
@@ -52,6 +51,16 @@ pub struct SynthesisSettings {
     /// JSON so updating another preference never discards those locations.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "read_legacy_roots")]
     pub roots: Option<serde_json::Value>,
+}
+
+impl SynthesisSettings {
+    pub fn voice_resources(&self) -> VoiceResources {
+        VoiceResources {
+            sv2_duration: self.sv2_duration_model.clone(),
+            flat_models: self.flat_models.clone(),
+            flat_timing: self.flat_timing_model.clone(),
+        }
+    }
 }
 
 /// Collect paths from both the old single-root and multi-root configuration

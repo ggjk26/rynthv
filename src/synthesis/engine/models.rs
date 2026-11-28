@@ -11,15 +11,9 @@ pub(super) fn required_identity(identity: Option<u64>) -> Result<u64> {
 }
 
 pub(super) fn dds_pitch(voice: &PreparedVoice) -> Result<Sv1F0Stage<'_>> {
-    let tree = voice.model("f0")?;
     match voice.family {
-        VoiceFamily::Sv1 => Sv1F0Stage::prepare_native(
-            tree,
-            voice.f0_enhancement.ok_or_else(|| {
-                VoiceError::new("SV1 voice lacks its native F0 enhancement configuration")
-            })?,
-        ),
-        VoiceFamily::Sv2Compatible => Sv1F0Stage::prepare(tree),
+        VoiceFamily::Sv1 => voice.sv1_pitch(),
+        VoiceFamily::Sv2Compatible => Sv1F0Stage::prepare(voice.model("f0")?),
         VoiceFamily::Sv2 => Err(VoiceError::new(
             "SV2 voice does not use the DDS pitch program",
         )),
@@ -27,10 +21,9 @@ pub(super) fn dds_pitch(voice: &PreparedVoice) -> Result<Sv1F0Stage<'_>> {
 }
 
 pub(super) fn dds_timbre(voice: &PreparedVoice) -> Result<Sv1TimbreNetwork<'_>> {
-    let tree = voice.model("timbre")?;
     match voice.family {
-        VoiceFamily::Sv1 => Sv1TimbreNetwork::prepare_native(tree),
-        VoiceFamily::Sv2Compatible => Sv1TimbreNetwork::prepare(tree),
+        VoiceFamily::Sv1 => voice.sv1_timbre(),
+        VoiceFamily::Sv2Compatible => Sv1TimbreNetwork::prepare(voice.model("timbre")?),
         VoiceFamily::Sv2 => Err(VoiceError::new(
             "SV2 voice does not use the DDS acoustic program",
         )),

@@ -1,7 +1,10 @@
 //! Read-only Flat model preflight with container checks and optional
 //! preparation of readable inline DDS F0 and timbre graphs.
-use super::{FlatVoice, MAX_STAGE_BYTES, acoustic::inline_acoustic_tree, pitch::inline_f0_tree};
-use crate::synthesis::stages::{sv1_f0::Sv1F0Stage, sv1_timbre::Sv1TimbreNetwork};
+use super::{FlatVoice, MAX_STAGE_BYTES, inline, legacy, render::STAGES};
+use crate::synthesis::stages::{
+    sv1_duration::Sv1DurationStage, sv1_f0::Sv1F0Stage, sv1_timbre::Sv1TimbreNetwork,
+    vocoder::VocoderStage,
+};
 use crate::synthesis::voice::{
     Result, VoiceError,
     archive::{Archive, ArchiveLoadError, ResourceId},
@@ -26,8 +29,8 @@ pub enum StageState {
     HeaderSignatureRejected,
     InvalidNativeIndex,
     ResourceDigestRejected,
-    InlineF0GraphReady,
-    InlineAcousticGraphReady,
+    InlineDdsReady,
+    LegacyDecodeRejected,
     InvalidInlineGraph,
     StageResourceNotFound,
     NativeResourceFound,
@@ -51,7 +54,7 @@ pub struct FlatPreflight {
     pub stages: Vec<FlatStageCheck>,
     pub located: usize,
     pub native_resource_identified: usize,
-    /// Experimental graphs do not establish end-to-end Flat synthesis.
+    /// All four DDS programs and the manifest conditions passed preflight.
     pub synthesis_supported: bool,
     pub next_step: String,
 }
@@ -61,34 +64,27 @@ impl FlatVoice {
     /// Call from a CLI command or worker, never directly in an egui frame.
     pub fn preflight(&self, timing_override: Option<&Path>) -> FlatPreflight {
         let stages: Vec<_> = self.models.iter().map(|model| {
-            let mut path = model.path.clone();
-            if model.role == "duration" {
-                if let Some(override_path) = timing_override {
-                    let matching = override_path.file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .is_some_and(|stem| stem.eq_ignore_ascii_case(&model.id));
-                    if matching
-                        && override_path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni"))
-                        && override_path.is_file()
-                    {
-                        path = Some(override_path.to_path_buf());
-                    }
-                }
-            }
-            probe_file(model.role, Some(&model.id), path)
+            probe_file(model.role, Some(&model.id), model.resolved_path(timing_override).map(Path::to_owned))
         }).collect();
         let located = stages.iter().filter(|stage| stage.path.is_some()).count();
         let native_resource_identified = stages.iter()
             .filter(|stage| stage.state == StageState::NativeResourceFound)
             .count();
+        let synthesis_supported = self.render_profile().is_ok() && STAGES.iter().all(|(role, _, _)| {
+            stages.iter().any(|stage| stage.role == *role && stage.state == StageState::InlineDdsReady)
+        });
         FlatPreflight {
             voice: self.name.clone(),
             version: self.version.clone(),
             stages,
             located,
             native_resource_identified,
-            synthesis_supported: false,
-            next_step: "Flat 的 F0 和声学实验可使用可读的内联图。整曲输出仍需接通 Flat 时长模型与声码器，并支持所用 DNNI 容器。".to_owned(),
+            synthesis_supported,
+            next_step: if synthesis_supported {
+                "四个 DDS 阶段已通过预检，可加载文本 NOFS-JSON 并渲染乐谱。"
+            } else {
+                "请检查缺失的模型、容器类型和 NOFS-JSON 条件向量。"
+            }.to_owned(),
         }
     }
 }
@@ -147,32 +143,39 @@ fn probe_file(role: &str, id: Option<&str>, path: Option<PathBuf>) -> FlatStageC
         check.details = format!("无法读取 DNNI 文件头：{error}");
         return check;
     }
-    if matches!(role, "f0" | "acoustic")
-        && magic[..4] == DNNI_V3_MAGIC[..4]
-        && matches!(u32::from_le_bytes(magic[4..].try_into().unwrap()), 1 | 2)
-    {
-        check.container = format!("Inline DNNI v{}", magic[4]);
-        let prepared = if role == "f0" {
-            inline_f0_tree(&path)
-                .and_then(|tree| Sv1F0Stage::prepare_native(&tree, 0.0).map(|_| ()))
-                .map(|()| (StageState::InlineF0GraphReady, "--pitch-score"))
-        } else {
-            inline_acoustic_tree(&path)
-                .and_then(|tree| Sv1TimbreNetwork::prepare_native(&tree).map(|_| ()))
-                .map(|()| (StageState::InlineAcousticGraphReady, "--acoustic-score"))
-        };
-        match prepared {
-            Ok((state, argument)) => {
-                check.state = state;
-                check.details =
-                    format!("DDS {role} 计算图已装配，使用 {argument} 可验证显式时长乐谱");
-            }
-            Err(error) => {
-                check.state = StageState::InvalidInlineGraph;
-                check.details = format!("内联 DDS {role} 计算图装配失败：{error}");
+    let version = inline::version(&magic);
+    let legacy_key = (version == Some(3) && legacy::plausible_length(metadata.len()))
+        .then(legacy::key);
+    let mut legacy_failure = None;
+    if let Some((_, stage, root)) = STAGES.into_iter().find(|(name, _, _)| *name == role) {
+        if matches!(version, Some(1 | 2)) || legacy_key.as_ref().is_some_and(Result::is_ok) {
+            check.container = if version == Some(3) {
+                "Flat legacy DNNI v3".into()
+            } else {
+                format!("Inline DNNI v{}", magic[4])
+            };
+            let result = inline::load(&path, root, role).and_then(|tree| {
+                match stage {
+                    "duration" => Sv1DurationStage::prepare(&tree).map(|_| ()),
+                    "f0" => Sv1F0Stage::prepare_native(&tree, 0.0).map(|_| ()),
+                    "timbre" => Sv1TimbreNetwork::prepare_native(&tree).map(|_| ()),
+                    _ => VocoderStage::prepare(&tree).map(|_| ()),
+                }
+            });
+            match result {
+                Ok(()) => {
+                    check.state = StageState::InlineDdsReady;
+                    check.details = format!("DDS {role} 阶段已装配");
+                    return check;
+                }
+                Err(error) if version != Some(3) => {
+                    check.state = StageState::InvalidInlineGraph;
+                    check.details = error.to_string();
+                    return check;
+                }
+                Err(error) => legacy_failure = Some(error),
             }
         }
-        return check;
     }
     if magic != DNNI_V3_MAGIC {
         check.state = StageState::UnsupportedFormat;
@@ -204,8 +207,17 @@ fn probe_file(role: &str, id: Option<&str>, path: Option<PathBuf>) -> FlatStageC
                 ArchiveLoadError::Signature(error) => (StageState::HeaderSignatureRejected, error),
                 ArchiveLoadError::Index(error) => (StageState::InvalidNativeIndex, error),
             };
-            check.state = state;
-            check.details = details.to_string();
+            if let Some(legacy_error) = legacy_failure {
+                check.state = StageState::LegacyDecodeRejected;
+                check.container = "DNNI v3".into();
+                check.details = legacy_error.to_string();
+            } else {
+                check.state = state;
+                check.details = details.to_string();
+                if let Some(Err(key_error)) = legacy_key {
+                    check.details.push_str(&format!("。{key_error}"));
+                }
+            }
             return check;
         }
     };

@@ -3,10 +3,12 @@
 //! A Flat voicebank stores metadata and references to separately installed
 //! models. Individual adapters validate the model graphs before inference.
 mod acoustic;
-mod inline;
+pub(super) mod inline;
+mod legacy;
 mod phones;
 pub mod pitch;
 pub mod probe;
+pub(super) mod render;
 mod score;
 
 pub use acoustic::FlatAcoustics;
@@ -31,6 +33,22 @@ pub struct FlatModelReference {
     pub id: String,
     pub installed: bool,
     pub path: Option<PathBuf>,
+}
+
+impl FlatModelReference {
+    pub(super) fn resolved_path<'a>(&'a self, timing: Option<&'a Path>) -> Option<&'a Path> {
+        timing
+            .filter(|path| self.role == "duration" && matching_model_path(path, &self.id))
+            .or(self.path.as_deref())
+    }
+}
+
+pub(super) fn matching_model_path(path: &Path, id: &str) -> bool {
+    valid_model_id(id)
+        && path.is_file()
+        && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dnni"))
+        && path.file_stem().and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case(id))
 }
 
 #[derive(Clone, Debug, Serialize)]
